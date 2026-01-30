@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Bookmarks Search",
+  "description": "快速搜索Chrome书签、标签页、历史记录和下载内容",
+  "version": "1.4.0",
+  "permissions": [
+    "bookmarks",
+    "tabs",
+    "history",
+    "downloads",
+    "storage",
+    "favicon"
+  ],
+  "host_permissions": [
+    "*://*/*",
+    "https://www.google.com/s2/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+B",
+        "mac": "Alt+B"
+      },
+      "description": "打开搜索窗口"
+    }
+  }
+}

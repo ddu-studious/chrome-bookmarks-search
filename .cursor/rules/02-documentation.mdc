@@ -1,0 +1,352 @@
+---
+alwaysApply: true
+---
+# Chrome Bookmarks Search - 开发规范
+
+## 项目结构规范
+
+### 文件组织
+
+```
+chrome-bookmarks-search/
+├── manifest.json          # 必须在根目录
+├── popup.html             # 弹出窗口入口
+├── background.js          # Service Worker
+├── css/                   # 样式文件
+│   └── popup.css
+├── js/                    # JavaScript 模块
+│   ├── popup.js           # 主逻辑
+│   ├── settings.js        # 设置模块
+│   ├── search-parser.js   # 搜索解析器
+│   └── smart-sort.js      # 排序模块
+├── icons/                 # 图标资源
+│   ├── icon.svg           # 源文件
+│   ├── icon16.png
+│   ├── icon48.png
+│   └── icon128.png
+├── README.md              # 项目说明（允许在根目录）
+├── PUBLISH.md             # 发布文档（允许在根目录）
+└── ROADMAP.md             # 路线图（允许在根目录）
+```
+
+### 命名规范
+
+| 类型 | 规范 | 示例 |
+|------|------|------|
+| 文件名 | kebab-case | `search-parser.js` |
+| 变量/函数 | camelCase | `searchInput`, `loadBookmarks()` |
+| 类名 | PascalCase | `SearchParser`, `SmartSort` |
+| CSS 类名 | kebab-case | `.result-item`, `.search-box` |
+| CSS 变量 | kebab-case | `--color-primary`, `--font-size-base` |
+
+---
+
+## JavaScript 开发规范
+
+### 模块化设计
+
+每个功能模块导出到 `window` 对象：
+
+```javascript
+// 模块定义示例 (search-parser.js)
+class SearchParser {
+  static COMMANDS = { /* ... */ };
+  static parse(searchText) { /* ... */ }
+  static filter(items, searchText) { /* ... */ }
+}
+
+// 导出到全局
+window.SearchParser = SearchParser;
+```
+
+### 异步处理
+
+优先使用 `async/await`：
+
+```javascript
+// ✅ 推荐
+async function loadBookmarks() {
+  const bookmarkTree = await chrome.bookmarks.getTree();
+  // ...
+}
+
+// ❌ 避免回调地狱
+chrome.bookmarks.getTree(function(tree) {
+  chrome.history.search({}, function(history) {
+    // ...
+  });
+});
+```
+
+### Chrome API 使用
+
+```javascript
+// 书签
+const bookmarks = await chrome.bookmarks.getTree();
+await chrome.bookmarks.search({ query: 'keyword' });
+
+// 标签页
+const tabs = await chrome.tabs.query({});
+await chrome.tabs.create({ url: 'https://...' });
+
+// 历史记录
+chrome.history.search({ text: '', maxResults: 1000 }, (results) => {});
+chrome.history.getVisits({ url: '...' }, (visits) => {});
+
+// 下载
+chrome.downloads.search({ limit: 1000 }, (downloads) => {});
+
+// 存储
+const result = await chrome.storage.sync.get('settings');
+await chrome.storage.sync.set({ settings: {...} });
+```
+
+### 错误处理
+
+```javascript
+try {
+  const url = new URL(item.url);
+  icon.src = `https://www.google.com/s2/favicons?domain=${url.hostname}`;
+} catch (e) {
+  icon.src = 'icons/icon16.png';
+}
+```
+
+---
+
+## CSS 开发规范
+
+### 主题变量
+
+使用 CSS 变量定义主题，便于深色/浅色切换：
+
+```css
+:root {
+  /* 基础变量 */
+  --font-size-base: 14px;
+  --line-height-base: 1.5;
+  --transition-duration: 0.3s;
+  
+  /* 亮色主题 */
+  --color-bg: #ffffff;
+  --color-text: #202124;
+  --color-primary: #1a73e8;
+  /* ... */
+}
+
+/* 深色主题 */
+.dark-theme {
+  --color-bg: #202124;
+  --color-text: #e8eaed;
+  --color-primary: #8ab4f8;
+  /* ... */
+}
+```
+
+### 响应式布局
+
+扩展固定宽度，但需要考虑内容自适应：
+
+```css
+body {
+  width: 480px; /* 固定宽度 */
+}
+
+.container {
+  height: 600px; /* 固定高度 */
+  display: flex;
+  flex-direction: column;
+}
+
+.results-container {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+```
+
+### 过渡动画
+
+使用变量控制动画，支持用户禁用：
+
+```css
+.result-item {
+  transition: all var(--transition-duration) ease-out;
+}
+
+/* 用户禁用动画时 */
+/* --transition-duration 设置为 0s */
+```
+
+---
+
+## HTML 结构规范
+
+### 弹出窗口结构
+
+```html
+<body>
+  <div class="container">
+    <!-- 模式选择器 -->
+    <div class="mode-selector">...</div>
+    
+    <!-- 搜索框 -->
+    <div class="search-container">...</div>
+    
+    <!-- 快捷键提示 -->
+    <div class="keyboard-hints">...</div>
+    
+    <!-- 统计栏 -->
+    <div class="stats-bar">...</div>
+    
+    <!-- 批量操作工具栏 -->
+    <div class="batch-toolbar">...</div>
+    
+    <!-- 搜索结果 -->
+    <div id="results" class="results-container">...</div>
+    
+    <!-- 友情链接 -->
+    <div class="friend-links">...</div>
+    
+    <!-- 右键菜单 -->
+    <div class="context-menu">...</div>
+    
+    <!-- 设置面板 -->
+    <div class="settings-panel">...</div>
+  </div>
+  
+  <!-- 按顺序加载脚本 -->
+  <script src="js/settings.js"></script>
+  <script src="js/search-parser.js"></script>
+  <script src="js/smart-sort.js"></script>
+  <script src="js/popup.js"></script>
+</body>
+```
+
+---
+
+## Manifest V3 规范
+
+### 权限声明
+
+只申请必要的权限：
+
+```json
+{
+  "manifest_version": 3,
+  "permissions": [
+    "bookmarks",    // 书签访问
+    "tabs",         // 标签页管理
+    "history",      // 历史记录
+    "downloads",    // 下载管理
+    "storage",      // 设置存储
+    "favicon"       // 网站图标
+  ],
+  "host_permissions": [
+    "*://*/*",
+    "https://www.google.com/s2/*"
+  ]
+}
+```
+
+### Service Worker
+
+Manifest V3 使用 Service Worker 而非 Background Page：
+
+```json
+{
+  "background": {
+    "service_worker": "background.js"
+  }
+}
+```
+
+---
+
+## 功能扩展规范
+
+### 添加新搜索语法
+
+在 `search-parser.js` 中添加：
+
+```javascript
+static COMMANDS = {
+  // 现有命令...
+  
+  // 新增命令
+  newCommand: {
+    regex: /newcmd:([^\s]+)/,
+    process: (value, item, searchText) => {
+      // 返回 true/false 决定是否保留该项
+      return true;
+    }
+  }
+};
+```
+
+### 添加新排序方式
+
+在 `smart-sort.js` 中添加：
+
+```javascript
+static sort(items, options = {}) {
+  const getScore = (item) => {
+    switch (mode) {
+      case 'newMode':
+        return this.getNewScore(item);
+      // ...
+    }
+  };
+}
+
+static getNewScore(item) {
+  // 计算并返回分数 (0-1)
+  return 0.5;
+}
+```
+
+### 添加新设置项
+
+1. 在 `settings.js` 中添加默认值
+2. 在 `popup.html` 设置面板中添加 UI
+3. 在 `popup.js` 中处理设置变化
+
+---
+
+## 调试技巧
+
+### 控制台调试
+
+```javascript
+// 在 popup.js 中添加调试日志
+console.log('搜索结果:', filteredResults);
+console.log('当前设置:', await window.settings.get());
+```
+
+### 查看日志位置
+
+- **Popup 日志**: 右键扩展图标 -> 检查弹出窗口 -> Console
+- **Background 日志**: chrome://extensions/ -> 详情 -> 检查视图: Service Worker
+
+### 重新加载扩展
+
+修改代码后需要重新加载：
+1. chrome://extensions/
+2. 点击扩展卡片上的刷新按钮
+3. 重新打开 popup
+
+---
+
+## 版本发布检查清单
+
+- [ ] 更新 `manifest.json` 中的版本号
+- [ ] 更新 `PUBLISH.md` 中的版本历史
+- [ ] 更新 `ROADMAP.md` 中的进度
+- [ ] 测试所有搜索模式
+- [ ] 测试深色/浅色主题切换
+- [ ] 测试快捷键功能
+- [ ] 检查控制台无报错
+- [ ] 生成新的图标（如有更改）
+
+---
+
+**最后更新**: 2025-01-30

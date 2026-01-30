@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Quick Search</title>
+  <link rel="stylesheet" type="text/css" href="css/popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="mode-selector">
+      <div class="tab-group">
+        <button class="tab-btn active" data-mode="bookmarks">
+          <span class="tab-label">书签</span>
+        </button>
+        <button class="tab-btn" data-mode="tabs">
+          <span class="tab-label">标签页</span>
+        </button>
+        <button class="tab-btn" data-mode="history">
+          <span class="tab-label">历史</span>
+        </button>
+        <button class="tab-btn" data-mode="downloads">
+          <span class="tab-label">下载</span>
+        </button>
+      </div>
+      <button id="settingsBtn" class="settings-btn" title="设置">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49 1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.65.07.97l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65M12 13.5a1.5 1.5 0 0 0 1.5-1.5A1.5 1.5 0 0 0 12 10.5a1.5 1.5 0 0 0-1.5 1.5 1.5 1.5 0 0 0 1.5 1.5z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="search-container">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="输入关键词搜索..." autofocus>
+        <button id="helpBtn" class="help-btn" title="搜索语法帮助">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M11 18h2v-2h-2v2m1-16A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-4 4h2a2 2 0 0 1 2-2 2 2 0 0 1 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5a4 4 0 0 0-4-4z"/>
+          </svg>
+        </button>
+        <span class="keyboard-shortcut" title="快捷键">⌥B</span>
+      </div>
+      <div class="sort-options">
+        <button class="sort-btn active" data-sort="smart" title="智能排序（推荐）">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+          </svg>
+        </button>
+        <button class="sort-btn" data-sort="time" title="时间排序（最近优先）">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/>
+          </svg>
+        </button>
+        <button class="sort-btn" data-sort="frequency" title="使用频率（最常用优先）">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="keyboard-hints">
+      <span class="hint-group">
+        <span class="hint-key">←→</span>
+        <span class="hint-text">切换</span>
+      </span>
+      <span class="hint-group">
+        <span class="hint-key">↑↓</span>
+        <span class="hint-text">选择</span>
+      </span>
+      <span class="hint-group">
+        <span class="hint-key">↵</span>
+        <span class="hint-text">打开</span>
+      </span>
+      <span class="hint-group">
+        <span class="hint-key">Esc</span>
+        <span class="hint-text">关闭</span>
+      </span>
+    </div>
+    <div class="stats-bar">
+      <span class="total-stats">
+        <span id="totalCount">0</span> 个<span id="modeLabel">书签</span>
+      </span>
+      <span class="search-stats" id="searchStats"></span>
+    </div>
+    <div class="batch-toolbar" style="display: none;">
+      <div class="batch-info">
+        已选择 <span class="selected-count">0</span> 项
+      </div>
+      <div class="batch-actions">
+        <button class="batch-btn" data-action="open-all" title="在新标签页中打开">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+          </svg>
+        </button>
+        <button class="batch-btn" data-action="copy-all" title="复制链接">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+        </button>
+        <button class="batch-btn" data-action="clear-selection" title="取消选择">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="results" class="results-container">
+      <div id="resultsList"></div>
+    </div>
+
+    <!-- 友情链接区域 -->
+    <div class="friend-links">
+      <div class="friend-links-container">
+        <a href="https://www.codeium.com" class="friend-link-item" target="_blank" title="Codeium - 新一代AI编程助手">
+          <img class="friend-link-favicon" data-favicon="https://www.codeium.com" alt="Codeium">
+          <span class="friend-link-tag">Codeium</span>
+        </a>
+        <a href="https://www.deepseek.com" class="friend-link-item" target="_blank" title="DeepSeek - 智能搜索引擎">
+          <img class="friend-link-favicon" data-favicon="https://www.deepseek.com" alt="DeepSeek">
+          <span class="friend-link-tag">DeepSeek</span>
+        </a>
+        <a href="https://www.iqiyi.com" class="friend-link-item" target="_blank" title="爱奇艺 - 在线视频网站">
+          <img class="friend-link-favicon" data-favicon="https://www.iqiyi.com" alt="iQiyi">
+          <span class="friend-link-tag">爱奇艺</span>
+        </a>
+        <a href="https://www.bilibili.com" class="friend-link-item" target="_blank" title="哔哩哔哩 - 国内知名的视频弹幕网站">
+          <img class="friend-link-favicon" data-favicon="https://www.bilibili.com" alt="Bilibili">
+          <span class="friend-link-tag">哔哩哔哩</span>
+        </a>
+        <a href="https://www.youtube.com" class="friend-link-item" target="_blank" title="YouTube - 全球最大的视频分享平台">
+          <img class="friend-link-favicon" data-favicon="https://www.youtube.com" alt="YouTube">
+          <span class="friend-link-tag">YouTube</span>
+        </a>
+      </div>
+    </div>
+    
+    <!-- 右键菜单 -->
+    <div class="context-menu" style="display: none;">
+      <div class="menu-item" data-action="open-new">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+        </svg>
+        <span>在新标签页打开</span>
+      </div>
+      <div class="menu-item" data-action="open-incognito">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/>
+        </svg>
+        <span>在隐私窗口打开</span>
+      </div>
+      <div class="menu-separator"></div>
+      <div class="menu-item" data-action="copy">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+        </svg>
+        <span>复制链接</span>
+      </div>
+      <div class="menu-item" data-action="share">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M18 10.2c-.8-.4-1.7-.6-2.6-.6-3.3 0-6 2.7-6 6 0 .9.2 1.8.6 2.6-4.1-.5-7.3-4-7.3-8.2 0-4.6 3.7-8.3 8.3-8.3 4.2 0 7.7 3.2 8.2 7.3-.3-.5-.7-.9-1.2-1.2zm-7 1.6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="#4285f4"/>
+          <path d="M12 6.8c-2.9 0-5.2 2.3-5.2 5.2s2.3 5.2 5.2 5.2c.9 0 1.8-.2 2.5-.6.7.4 1.6.6 2.5.6 2.9 0 5.2-2.3 5.2-5.2 0-.9-.2-1.8-.6-2.5.4-.7.6-1.6.6-2.5 0-2.9-2.3-5.2-5.2-5.2-.9 0-1.8.2-2.5.6-.7-.4-1.6-.6-2.5-.6z" fill="#4285f4"/>
+        </svg>
+        <span>分享链接</span>
+      </div>
+      <div class="menu-separator"></div>
+      <div class="menu-item delete-action" data-action="delete">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+        </svg>
+        <span class="delete-text">删除</span>
+      </div>
+    </div>
+    
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <div class="settings-title">设置</div>
+        <div class="settings-close" id="settingsClose">✕</div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">主题</div>
+        <div class="settings-option">
+          <input type="radio" name="theme" id="themeSystem" value="system">
+          <label class="settings-option-label" for="themeSystem">跟随系统</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="theme" id="themeLight" value="light">
+          <label class="settings-option-label" for="themeLight">浅色</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="theme" id="themeDark" value="dark">
+          <label class="settings-option-label" for="themeDark">深色</label>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">字体大小</div>
+        <div class="settings-option">
+          <input type="radio" name="fontSize" id="fontSmall" value="small">
+          <label class="settings-option-label" for="fontSmall">小</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="fontSize" id="fontMedium" value="medium">
+          <label class="settings-option-label" for="fontMedium">中</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="fontSize" id="fontLarge" value="large">
+          <label class="settings-option-label" for="fontLarge">大</label>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">行高</div>
+        <div class="settings-option">
+          <input type="radio" name="lineHeight" id="lineCompact" value="compact">
+          <label class="settings-option-label" for="lineCompact">紧凑</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="lineHeight" id="lineNormal" value="normal">
+          <label class="settings-option-label" for="lineNormal">正常</label>
+        </div>
+        <div class="settings-option">
+          <input type="radio" name="lineHeight" id="lineRelaxed" value="relaxed">
+          <label class="settings-option-label" for="lineRelaxed">宽松</label>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">其他</div>
+        <div class="settings-option">
+          <input type="checkbox" id="animation" name="animation">
+          <label class="settings-option-label" for="animation">启用动画</label>
+        </div>
+        <div class="settings-option">
+          <input type="checkbox" id="highContrast" name="highContrast">
+          <label class="settings-option-label" for="highContrast">高对比度</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/settings.js"></script>
+  <script src="js/search-parser.js"></script>
+  <script src="js/smart-sort.js"></script>
+  <script src="js/popup.js"></script>
+</body>
+</html>
