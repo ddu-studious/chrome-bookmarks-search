@@ -322,6 +322,23 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // 处理键盘事件
   function handleKeydown(e) {
+    // 检查是否在编辑弹窗中（编辑弹窗内的输入框需要正常使用方向键）
+    const editModal = document.getElementById('editModal');
+    const isEditModalOpen = editModal && editModal.classList.contains('show');
+    
+    // 检查焦点是否在输入框中（但排除主搜索框，主搜索框不需要左右键移动光标的需求较小）
+    const activeElement = document.activeElement;
+    const isInNonSearchInput = activeElement && 
+      (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') &&
+      activeElement.id !== 'searchInput';
+    
+    // 如果编辑弹窗打开或焦点在非搜索输入框中，跳过全局快捷键处理
+    // 让输入框正常处理方向键、文本选择等
+    if (isEditModalOpen || isInNonSearchInput) {
+      // 只处理 Escape 键关闭弹窗（但让弹窗自己的事件处理器处理）
+      return;
+    }
+    
     const items = document.querySelectorAll('.result-item');
     
     // 处理左右键切换模式
@@ -915,10 +932,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   function initContextMenu() {
     const contextMenu = document.querySelector('.context-menu');
     const deleteText = contextMenu.querySelector('.delete-text');
+    const editAction = contextMenu.querySelector('.edit-action');
     let activeItem = null;
 
-    // 根据当前模式更新删除菜单文案
-    function updateDeleteMenuText() {
+    // 根据当前模式更新菜单项显示
+    function updateMenuItems() {
       const textMap = {
         bookmarks: '删除书签',
         tabs: '关闭标签页',
@@ -928,6 +946,16 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (deleteText) {
         deleteText.textContent = textMap[currentMode] || '删除';
       }
+      
+      // 只有书签模式显示编辑选项
+      if (editAction) {
+        editAction.style.display = currentMode === 'bookmarks' ? 'flex' : 'none';
+      }
+    }
+
+    // 根据当前模式更新删除菜单文案（保持向后兼容）
+    function updateDeleteMenuText() {
+      updateMenuItems();
     }
 
     // 显示右键菜单
@@ -1056,6 +1084,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
       }
       
+      // 编辑操作
+      if (action === 'edit') {
+        handleEdit();
+        hideContextMenu();
+        return;
+      }
+      
       if (!url) return;
       
       switch (action) {
@@ -1087,6 +1122,17 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
       
       hideContextMenu();
+    }
+    
+    // 处理编辑操作
+    function handleEdit() {
+      if (!activeItem || currentMode !== 'bookmarks') return;
+      
+      const itemId = activeItem.dataset.id;
+      const title = activeItem.querySelector('.result-title')?.textContent || '';
+      const url = activeItem.dataset.url || '';
+      
+      openEditModal(itemId, title, url);
     }
 
     // 监听结果项的右键事件
@@ -1121,6 +1167,110 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
+  // 初始化编辑弹窗
+  function initEditModal() {
+    const editModal = document.getElementById('editModal');
+    const editModalClose = document.getElementById('editModalClose');
+    const editCancel = document.getElementById('editCancel');
+    const editSave = document.getElementById('editSave');
+    const editTitle = document.getElementById('editTitle');
+    const editUrl = document.getElementById('editUrl');
+    
+    let currentEditId = null;
+    
+    // 关闭弹窗
+    function closeEditModal() {
+      editModal.classList.remove('show');
+      currentEditId = null;
+      editTitle.value = '';
+      editUrl.value = '';
+      searchInput.focus();
+    }
+    
+    // 打开弹窗
+    window.openEditModal = function(id, title, url) {
+      currentEditId = id;
+      editTitle.value = title;
+      editUrl.value = url;
+      editModal.classList.add('show');
+      editTitle.focus();
+      editTitle.select();
+    };
+    
+    // 保存编辑
+    async function saveEdit() {
+      if (!currentEditId) return;
+      
+      const newTitle = editTitle.value.trim();
+      const newUrl = editUrl.value.trim();
+      
+      if (!newTitle) {
+        editTitle.focus();
+        return;
+      }
+      
+      if (!newUrl) {
+        editUrl.focus();
+        return;
+      }
+      
+      // 验证 URL 格式
+      try {
+        new URL(newUrl);
+      } catch (e) {
+        alert('请输入有效的网址');
+        editUrl.focus();
+        return;
+      }
+      
+      try {
+        await chrome.bookmarks.update(currentEditId, {
+          title: newTitle,
+          url: newUrl
+        });
+        
+        closeEditModal();
+        loadBookmarks(); // 刷新列表
+      } catch (error) {
+        console.error('编辑书签失败:', error);
+        alert('编辑失败: ' + error.message);
+      }
+    }
+    
+    // 绑定事件
+    editModalClose.addEventListener('click', closeEditModal);
+    editCancel.addEventListener('click', closeEditModal);
+    editSave.addEventListener('click', saveEdit);
+    
+    // 点击遮罩关闭
+    editModal.addEventListener('click', (e) => {
+      if (e.target === editModal) {
+        closeEditModal();
+      }
+    });
+    
+    // 键盘事件
+    editModal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeEditModal();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        saveEdit();
+      }
+    });
+    
+    // 输入时更新保存按钮状态
+    function updateSaveButton() {
+      const hasTitle = editTitle.value.trim().length > 0;
+      const hasUrl = editUrl.value.trim().length > 0;
+      editSave.disabled = !hasTitle || !hasUrl;
+    }
+    
+    editTitle.addEventListener('input', updateSaveButton);
+    editUrl.addEventListener('input', updateSaveButton);
+  }
+
   // 在初始化函数中添加右键菜单初始化
   async function init() {
     // 初始化设置
@@ -1138,6 +1288,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 初始化右键菜单
     initContextMenu();
+    
+    // 初始化编辑弹窗
+    initEditModal();
     
     // 加载数据
     loadData();

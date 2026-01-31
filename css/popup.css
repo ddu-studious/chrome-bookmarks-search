@@ -1071,3 +1071,214 @@ body {
     color: #f28b82;
   }
 }
+
+/* 编辑菜单项样式 */
+.menu-item.edit-action {
+  color: var(--color-primary, #1a73e8);
+}
+
+.menu-item.edit-action:hover {
+  background: rgba(26, 115, 232, 0.1);
+  color: var(--color-primary, #1a73e8);
+}
+
+.menu-item.edit-action:hover svg {
+  color: var(--color-primary, #1a73e8);
+}
+
+/* 编辑弹窗样式 */
+.edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+
+.edit-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.edit-modal-content {
+  background: var(--color-bg, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 400px;
+  transform: scale(0.95) translateY(-10px);
+  transition: transform 0.2s ease;
+  overflow: hidden;
+}
+
+.edit-modal.show .edit-modal-content {
+  transform: scale(1) translateY(0);
+}
+
+.edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border, #dadce0);
+  background: var(--color-bg-secondary, #f8f9fa);
+}
+
+.edit-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text, #202124);
+}
+
+.edit-modal-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary, #5f6368);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.edit-modal-close:hover {
+  background: var(--color-hover, #f8f9fa);
+  color: var(--color-text, #202124);
+}
+
+.edit-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #5f6368);
+}
+
+.edit-field input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text, #202124);
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-field input:focus {
+  outline: none;
+  border-color: var(--color-primary, #1a73e8);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+}
+
+.edit-field input::placeholder {
+  color: var(--color-text-secondary, #5f6368);
+  opacity: 0.6;
+}
+
+.edit-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border, #dadce0);
+  background: var(--color-bg-secondary, #f8f9fa);
+}
+
+.edit-btn {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.edit-btn-cancel {
+  background: transparent;
+  color: var(--color-text-secondary, #5f6368);
+  border: 1px solid var(--color-border, #dadce0);
+}
+
+.edit-btn-cancel:hover {
+  background: var(--color-hover, #f8f9fa);
+  color: var(--color-text, #202124);
+  border-color: var(--color-text-secondary, #5f6368);
+}
+
+.edit-btn-save {
+  background: var(--color-primary, #1a73e8);
+  color: #ffffff;
+}
+
+.edit-btn-save:hover {
+  background: #1557b0;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+}
+
+.edit-btn-save:disabled {
+  background: var(--color-border, #dadce0);
+  color: var(--color-text-secondary, #5f6368);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 深色模式适配 - 编辑菜单项 */
+.dark-theme .menu-item.edit-action {
+  color: var(--color-primary, #8ab4f8);
+}
+
+.dark-theme .menu-item.edit-action:hover {
+  background: rgba(138, 180, 248, 0.15);
+  color: var(--color-primary, #8ab4f8);
+}
+
+.dark-theme .menu-item.edit-action:hover svg {
+  color: var(--color-primary, #8ab4f8);
+}
+
+/* 深色模式适配 - 编辑弹窗 */
+.dark-theme .edit-modal {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.dark-theme .edit-modal-content {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dark-theme .edit-field input:focus {
+  box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.2);
+}
+
+.dark-theme .edit-btn-save {
+  background: var(--color-primary, #8ab4f8);
+  color: #202124;
+}
+
+.dark-theme .edit-btn-save:hover {
+  background: #aecbfa;
+}
