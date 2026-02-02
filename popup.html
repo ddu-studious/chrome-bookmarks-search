@@ -80,6 +80,20 @@
       </span>
       <span class="search-stats" id="searchStats"></span>
     </div>
+    <!-- 书签筛选器（仅在书签模式下显示） -->
+    <div class="bookmark-filters" id="bookmarkFilters">
+      <span class="filter-label">筛选：</span>
+      <button class="filter-btn active" data-filter="all">全部</button>
+      <button class="filter-btn" data-filter="never_used">
+        未使用 <span class="filter-count">0</span>
+      </button>
+      <button class="filter-btn" data-filter="rarely_used">
+        很少使用 <span class="filter-count">0</span>
+      </button>
+      <button class="filter-btn" data-filter="dormant">
+        休眠 <span class="filter-count">0</span>
+      </button>
+    </div>
     <div class="batch-toolbar" style="display: none;">
       <div class="batch-info">
         已选择 <span class="selected-count">0</span> 项

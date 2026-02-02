@@ -234,6 +234,119 @@ body {
   flex-shrink: 0;
 }
 
+/* 书签筛选器 */
+.bookmark-filters {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 15px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-right: 4px;
+}
+
+.filter-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.filter-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.filter-btn .filter-count {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+/* 筛选按钮特定颜色 */
+.filter-btn[data-filter="never_used"]:not(.active):hover {
+  border-color: #f44336;
+  color: #f44336;
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.filter-btn[data-filter="never_used"].active {
+  background: #f44336;
+  border-color: #f44336;
+}
+
+.filter-btn[data-filter="rarely_used"]:not(.active):hover {
+  border-color: #ff9800;
+  color: #ff9800;
+  background: rgba(255, 152, 0, 0.1);
+}
+
+.filter-btn[data-filter="rarely_used"].active {
+  background: #ff9800;
+  border-color: #ff9800;
+}
+
+.filter-btn[data-filter="dormant"]:not(.active):hover {
+  border-color: #9e9e9e;
+  color: #757575;
+  background: rgba(158, 158, 158, 0.1);
+}
+
+.filter-btn[data-filter="dormant"].active {
+  background: #9e9e9e;
+  border-color: #9e9e9e;
+}
+
+/* 状态标签 */
+.status-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-right: 6px;
+}
+
+.status-tag.never-used {
+  background: #f44336;
+  color: white;
+}
+
+.status-tag.rarely-used {
+  background: #ff9800;
+  color: white;
+}
+
+.status-tag.dormant {
+  background: #9e9e9e;
+  color: white;
+}
+
+/* 添加时间样式 */
+.added-date {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
 .total-stats {
   color: var(--color-text-secondary);
 }

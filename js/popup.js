@@ -14,6 +14,23 @@ document.addEventListener('DOMContentLoaded', async function() {
   let allHistory = [];
   let allDownloads = [];
   let visitCounts = new Map();
+  
+  // 书签使用状态常量
+  const BOOKMARK_STATUS = {
+    NEVER_USED: 'never_used',
+    RARELY_USED: 'rarely_used',
+    DORMANT: 'dormant',
+    ACTIVE: 'active'
+  };
+  
+  // 分类阈值
+  const THRESHOLDS = {
+    RARELY_USED_MAX: 2,        // 访问次数 <= 2 视为很少使用
+    DORMANT_DAYS: 180          // 180天未访问视为休眠
+  };
+  
+  // 当前筛选状态
+  let currentFilter = 'all';
 
   // 格式化时间
   function formatTime(timestamp) {
@@ -33,6 +50,27 @@ document.addEventListener('DOMContentLoaded', async function() {
       return date.toLocaleDateString();
     }
   }
+  
+  // 格式化添加日期（用于书签添加时间）
+  function formatAddedDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days < 1) {
+      return '今天';
+    } else if (days < 7) {
+      return `${days}天前`;
+    } else if (days < 30) {
+      return `${Math.floor(days / 7)}周前`;
+    } else if (days < 365) {
+      return `${Math.floor(days / 30)}个月前`;
+    } else {
+      const years = Math.floor(days / 365);
+      return years === 1 ? '1年前' : `${years}年前`;
+    }
+  }
 
   // 获取URL的访问历史
   async function getUrlStats(url) {
@@ -47,6 +85,93 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else {
           resolve({ count: 0, lastVisit: null });
         }
+      });
+    });
+  }
+  
+  // 书签分类函数
+  function categorizeBookmark(bookmark) {
+    const { visitCount, lastVisit } = bookmark;
+    const now = Date.now();
+    
+    // 从未使用
+    if (!visitCount || visitCount === 0) {
+      return BOOKMARK_STATUS.NEVER_USED;
+    }
+    
+    // 很少使用
+    if (visitCount <= THRESHOLDS.RARELY_USED_MAX) {
+      return BOOKMARK_STATUS.RARELY_USED;
+    }
+    
+    // 休眠（超过180天未访问）
+    if (lastVisit) {
+      const daysSinceLastVisit = (now - lastVisit) / (1000 * 60 * 60 * 24);
+      if (daysSinceLastVisit > THRESHOLDS.DORMANT_DAYS) {
+        return BOOKMARK_STATUS.DORMANT;
+      }
+    }
+    
+    // 活跃
+    return BOOKMARK_STATUS.ACTIVE;
+  }
+  
+  // 按使用状态筛选书签
+  function filterByUsageStatus(bookmarks, filter) {
+    if (filter === 'all') return bookmarks;
+    return bookmarks.filter(b => b.usageStatus === filter);
+  }
+  
+  // 更新筛选器计数
+  function updateFilterCounts() {
+    const counts = {
+      never_used: 0,
+      rarely_used: 0,
+      dormant: 0
+    };
+    
+    allBookmarks.forEach(b => {
+      if (counts.hasOwnProperty(b.usageStatus)) {
+        counts[b.usageStatus]++;
+      }
+    });
+    
+    // 更新 UI
+    const neverUsedBtn = document.querySelector('[data-filter="never_used"] .filter-count');
+    const rarelyUsedBtn = document.querySelector('[data-filter="rarely_used"] .filter-count');
+    const dormantBtn = document.querySelector('[data-filter="dormant"] .filter-count');
+    
+    if (neverUsedBtn) neverUsedBtn.textContent = counts.never_used;
+    if (rarelyUsedBtn) rarelyUsedBtn.textContent = counts.rarely_used;
+    if (dormantBtn) dormantBtn.textContent = counts.dormant;
+  }
+  
+  // 更新筛选器显示状态
+  function updateFiltersVisibility() {
+    const filtersContainer = document.getElementById('bookmarkFilters');
+    if (filtersContainer) {
+      filtersContainer.style.display = currentMode === 'bookmarks' ? 'flex' : 'none';
+    }
+  }
+  
+  // 初始化筛选器
+  function initBookmarkFilters() {
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const filter = btn.dataset.filter;
+        
+        // 更新 UI
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // 更新筛选状态
+        currentFilter = filter;
+        
+        // 重新搜索以应用筛选
+        const searchInput = document.getElementById('searchInput');
+        search(searchInput.value);
       });
     });
   }
@@ -67,14 +192,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     bookmarkTree.forEach(traverseBookmarks);
     
-    // 获取所有书签的访问统计
+    // 获取所有书签的访问统计并分类
     const statsPromises = allBookmarks.map(async bookmark => {
       const stats = await getUrlStats(bookmark.url);
-      return {
+      const bookmarkData = {
         ...bookmark,
         visitCount: stats.count,
         lastVisit: stats.lastVisit
       };
+      // 添加使用状态分类
+      bookmarkData.usageStatus = categorizeBookmark(bookmarkData);
+      return bookmarkData;
     });
     
     // 等待所有统计数据加载完成
@@ -88,9 +216,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       return (b.lastVisit || 0) - (a.lastVisit || 0);
     });
 
+    // 更新筛选器计数
+    updateFilterCounts();
+    
     totalCountElement.textContent = allBookmarks.length;
     if (currentMode === 'bookmarks') {
-      displayResults(allBookmarks);
+      // 应用当前筛选器
+      const filteredBookmarks = filterByUsageStatus(allBookmarks, currentFilter);
+      displayResults(filteredBookmarks);
     }
   }
 
@@ -227,7 +360,36 @@ document.addEventListener('DOMContentLoaded', async function() {
       const meta = document.createElement('div');
       meta.className = 'result-meta';
       
-      if ((currentMode === 'bookmarks' || currentMode === 'history') && item.visitCount > 0) {
+      if (currentMode === 'bookmarks') {
+        // 书签模式：显示状态标签和访问信息
+        let metaContent = '';
+        
+        // 添加状态标签
+        if (item.usageStatus && item.usageStatus !== BOOKMARK_STATUS.ACTIVE) {
+          const statusLabels = {
+            [BOOKMARK_STATUS.NEVER_USED]: { text: '从未访问', class: 'never-used' },
+            [BOOKMARK_STATUS.RARELY_USED]: { text: '访问较少', class: 'rarely-used' },
+            [BOOKMARK_STATUS.DORMANT]: { text: '长期未访问', class: 'dormant' }
+          };
+          const status = statusLabels[item.usageStatus];
+          if (status) {
+            metaContent += `<span class="status-tag ${status.class}">${status.text}</span>`;
+          }
+        }
+        
+        // 显示访问次数或添加时间
+        if (item.visitCount > 0) {
+          metaContent += `<span class="visit-count">${item.visitCount}次访问</span>`;
+          if (item.lastVisit) {
+            metaContent += `<span class="last-visit">${formatTime(item.lastVisit)}</span>`;
+          }
+        } else if (item.dateAdded) {
+          // 未使用的书签显示添加时间
+          metaContent += `<span class="added-date">添加于 ${formatAddedDate(item.dateAdded)}</span>`;
+        }
+        
+        meta.innerHTML = metaContent;
+      } else if (currentMode === 'history' && item.visitCount > 0) {
         meta.innerHTML = `
           <span class="visit-count">${item.visitCount}次访问</span>
           ${item.lastVisit ? `<span class="last-visit">${formatTime(item.lastVisit)}</span>` : ''}
@@ -472,7 +634,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 根据当前模式获取数据
     switch (currentMode) {
       case 'bookmarks':
-        items = allBookmarks;
+        // 书签模式下先应用筛选器
+        items = filterByUsageStatus(allBookmarks, currentFilter);
         break;
       case 'tabs':
         items = allTabs;
@@ -539,6 +702,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 重置搜索和选中状态
     searchInput.value = '';
     selectedIndex = -1;
+    
+    // 更新筛选器显示状态
+    updateFiltersVisibility();
     
     // 加载对应数据
     loadData();
@@ -1282,6 +1448,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 初始化排序选项
     initSortOptions();
+    
+    // 初始化书签筛选器
+    initBookmarkFilters();
+    updateFiltersVisibility();
     
     // 初始化多选功能
     initMultiSelect();
