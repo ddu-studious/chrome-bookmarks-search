@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Demo 选择器 - Chrome Bookmarks Search</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-size: 42px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.7);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .demos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .demo-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .demo-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .demo-preview {
+      height: 200px;
+      background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .demo-preview::after {
+      content: '点击预览';
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      font-size: 12px;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .demo-card:hover .demo-preview::after {
+      opacity: 1;
+    }
+
+    .demo-card:nth-child(1) .demo-preview { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .demo-card:nth-child(2) .demo-preview { background: linear-gradient(135deg, #0f0f10 0%, #1a1a2e 100%); }
+    .demo-card:nth-child(3) .demo-preview { background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%); }
+    .demo-card:nth-child(4) .demo-preview { background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 100%); }
+    .demo-card:nth-child(5) .demo-preview { background: linear-gradient(135deg, #4158D0 0%, #C850C0 50%, #FFCC70 100%); }
+
+    .demo-info {
+      padding: 20px;
+    }
+
+    .demo-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .demo-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .demo-description {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .demo-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .feature-tag {
+      font-size: 11px;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .comparison-table {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 40px;
+    }
+
+    .table-header {
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .table-header h2 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .table-header p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 14px 20px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 600;
+    }
+
+    td {
+      font-size: 14px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .style-name {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .check {
+      color: #4ade80;
+    }
+
+    .partial {
+      color: #fbbf24;
+    }
+
+    footer {
+      text-align: center;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    footer p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎨 UI 升级 Demo</h1>
+      <p class="subtitle">
+        Chrome Bookmarks Search 扩展的 5 种 UI 设计方案。<br>
+        每个 Demo 都可以直接在浏览器中预览，点击卡片查看完整效果。
+      </p>
+    </header>
+
+    <div class="demos-grid">
+      <a href="demo-spotlight.html" class="demo-card">
+        <div class="demo-preview">🔍</div>
+        <div class="demo-info">
+          <div class="demo-title">
+            Spotlight 风格
+            <span class="demo-badge">macOS</span>
+          </div>
+          <p class="demo-description">
+            灵感来源于 macOS Spotlight 和 Raycast。毛玻璃效果、分组结果、柔和圆角设计。
+          </p>
+          <div class="demo-features">
+            <span class="feature-tag">毛玻璃</span>
+            <span class="feature-tag">分组展示</span>
+            <span class="feature-tag">圆角设计</span>
+            <span class="feature-tag">简洁优雅</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="demo-raycast.html" class="demo-card">
+        <div class="demo-preview">⚡</div>
+        <div class="demo-info">
+          <div class="demo-title">
+            Raycast/Linear 风格
+            <span class="demo-badge">命令面板</span>
+          </div>
+          <p class="demo-description">
+            灵感来源于 Raycast 和 Linear。渐变强调色、左侧指示条、紧凑信息密度。
+          </p>
+          <div class="demo-features">
+            <span class="feature-tag">渐变色</span>
+            <span class="feature-tag">高信息密度</span>
+            <span class="feature-tag">操作快捷</span>
+            <span class="feature-tag">专业感</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="demo-notion.html" class="demo-card">
+        <div class="demo-preview">📝</div>
+        <div class="demo-info">
+          <div class="demo-title">
+            Notion 风格
+            <span class="demo-badge">生产力</span>
+          </div>
+          <p class="demo-description">
+            灵感来源于 Notion。侧边栏导航、Emoji 图标、颜色标签区分状态。
+          </p>
+          <div class="demo-features">
+            <span class="feature-tag">侧边栏</span>
+            <span class="feature-tag">Emoji 图标</span>
+            <span class="feature-tag">颜色标签</span>
+            <span class="feature-tag">温和配色</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="demo-arc.html" class="demo-card">
+        <div class="demo-preview">🌈</div>
+        <div class="demo-info">
+          <div class="demo-title">
+            Arc 浏览器风格
+            <span class="demo-badge">现代多彩</span>
+          </div>
+          <p class="demo-description">
+            灵感来源于 Arc 浏览器和 Figma。彩虹色带、多彩卡片、动态效果。
+          </p>
+          <div class="demo-features">
+            <span class="feature-tag">多彩</span>
+            <span class="feature-tag">卡片化</span>
+            <span class="feature-tag">动态效果</span>
+            <span class="feature-tag">个性化</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="demo-fluent.html" class="demo-card">
+        <div class="demo-preview">🪟</div>
+        <div class="demo-info">
+          <div class="demo-title">
+            Fluent Design 风格
+            <span class="demo-badge">Windows 11</span>
+          </div>
+          <p class="demo-description">
+            灵感来源于 Windows 11 Fluent Design。Mica/Acrylic 效果、微妙边框、系统化图标。
+          </p>
+          <div class="demo-features">
+            <span class="feature-tag">Mica 效果</span>
+            <span class="feature-tag">系统化</span>
+            <span class="feature-tag">下划线指示</span>
+            <span class="feature-tag">层次感</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="comparison-table">
+      <div class="table-header">
+        <h2>📊 设计风格对比</h2>
+        <p>根据你的偏好和用户群体选择合适的风格</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>风格</th>
+            <th>视觉复杂度</th>
+            <th>信息密度</th>
+            <th>动画效果</th>
+            <th>适合场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="style-name">🔍 Spotlight</span></td>
+            <td>低</td>
+            <td>中</td>
+            <td>轻微</td>
+            <td>追求简洁的 macOS 用户</td>
+          </tr>
+          <tr>
+            <td><span class="style-name">⚡ Raycast</span></td>
+            <td>中</td>
+            <td>高</td>
+            <td>中等</td>
+            <td>效率优先的开发者</td>
+          </tr>
+          <tr>
+            <td><span class="style-name">📝 Notion</span></td>
+            <td>低</td>
+            <td>中</td>
+            <td>轻微</td>
+            <td>喜欢清晰结构的用户</td>
+          </tr>
+          <tr>
+            <td><span class="style-name">🌈 Arc</span></td>
+            <td>高</td>
+            <td>中</td>
+            <td>丰富</td>
+            <td>追求个性化的年轻用户</td>
+          </tr>
+          <tr>
+            <td><span class="style-name">🪟 Fluent</span></td>
+            <td>中</td>
+            <td>中</td>
+            <td>微妙</td>
+            <td>Windows 用户、企业用户</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      <p>
+        Chrome Bookmarks Search v1.5.0 · 
+        <a href="../popup.html">查看当前版本</a> · 
+        选择你喜欢的风格，我们将据此进行 UI 升级
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

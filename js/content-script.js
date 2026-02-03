@@ -1,0 +1,2176 @@
+/**
+ * Content Script - 书签搜索浮层
+ * 在页面上注入居中浮层，支持三种 UI 风格
+ */
+
+(function() {
+  'use strict';
+
+  console.log('[BookmarkSearch] Content script loading...');
+
+  // 防止重复注入
+  if (window.__bookmarkSearchInjected) {
+    console.log('[BookmarkSearch] Already injected, skipping...');
+    return;
+  }
+  window.__bookmarkSearchInjected = true;
+  
+  console.log('[BookmarkSearch] Content script initialized');
+
+  // 浮层状态
+  let overlayContainer = null;
+  let shadowRoot = null;
+  let isVisible = false;
+  let currentMode = 'bookmarks';
+  let currentResults = [];
+  let selectedIndex = -1;
+  let allBookmarks = [];
+  let allTabs = [];
+  let allHistory = [];
+  let allDownloads = [];
+  let currentSort = 'smart';
+  let currentFilter = 'all';
+  let currentStyle = 'spotlight'; // spotlight, raycast, fluent
+
+  // 书签使用状态常量
+  const BOOKMARK_STATUS = {
+    NEVER_USED: 'never_used',
+    RARELY_USED: 'rarely_used',
+    DORMANT: 'dormant',
+    ACTIVE: 'active'
+  };
+
+  // 分类阈值
+  const THRESHOLDS = {
+    RARELY_USED_MAX: 2,
+    DORMANT_DAYS: 180
+  };
+
+  // 创建浮层容器
+  function createOverlay() {
+    if (overlayContainer) return;
+
+    console.log('[BookmarkSearch] Creating overlay container...');
+    
+    overlayContainer = document.createElement('div');
+    overlayContainer.id = 'bookmark-search-overlay-container';
+    shadowRoot = overlayContainer.attachShadow({ mode: 'closed' });
+    
+    // 注入样式和 HTML
+    shadowRoot.innerHTML = getOverlayHTML();
+    
+    // 确保 body 存在
+    if (document.body) {
+      document.body.appendChild(overlayContainer);
+      console.log('[BookmarkSearch] Overlay appended to body');
+    } else {
+      console.error('[BookmarkSearch] document.body not available!');
+      return;
+    }
+
+    // 绑定事件
+    bindEvents();
+    console.log('[BookmarkSearch] Overlay created successfully');
+  }
+
+  // 获取浮层 HTML
+  function getOverlayHTML() {
+    return `
+      <style>${getStyles()}</style>
+      <div class="overlay-backdrop" id="backdrop"></div>
+      <div class="overlay-container" id="searchPanel">
+        <div class="search-area">
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索书签、标签页、历史记录..." autocomplete="off">
+            <span class="shortcut-badge">Alt+B</span>
+          </div>
+        </div>
+
+        <div class="mode-tabs" id="modeTabs">
+          <button class="mode-tab active" data-mode="bookmarks">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+            <span>书签</span>
+            <span class="tab-count" id="bookmarksCount">0</span>
+          </button>
+          <button class="mode-tab" data-mode="tabs">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+            <span>标签页</span>
+            <span class="tab-count" id="tabsCount">0</span>
+          </button>
+          <button class="mode-tab" data-mode="history">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+            <span>历史</span>
+            <span class="tab-count" id="historyCount">0</span>
+          </button>
+          <button class="mode-tab" data-mode="downloads">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span>下载</span>
+            <span class="tab-count" id="downloadsCount">0</span>
+          </button>
+        </div>
+
+        <div class="filter-bar" id="filterBar">
+          <div class="filter-group">
+            <button class="filter-btn active" data-filter="all">全部</button>
+            <button class="filter-btn" data-filter="never_used">未使用 <span class="filter-count">0</span></button>
+            <button class="filter-btn" data-filter="rarely_used">很少使用 <span class="filter-count">0</span></button>
+            <button class="filter-btn" data-filter="dormant">休眠 <span class="filter-count">0</span></button>
+          </div>
+          <div class="sort-group">
+            <button class="sort-btn active" data-sort="smart" title="智能排序">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+            </button>
+            <button class="sort-btn" data-sort="time" title="时间排序">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            </button>
+            <button class="sort-btn" data-sort="frequency" title="频率排序">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="results-container" id="results">
+          <div class="results-list" id="resultsList"></div>
+        </div>
+
+        <!-- 友情链接区域 -->
+        <div class="friend-links" id="friendLinks">
+          <div class="friend-links-container" id="friendLinksContainer">
+            <!-- 动态生成 -->
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <div class="status-left">
+            <span class="result-count" id="searchStats">准备就绪</span>
+          </div>
+          <div class="keyboard-hints">
+            <span class="hint"><kbd>↑↓</kbd> 选择</span>
+            <span class="hint"><kbd>↵</kbd> 打开</span>
+            <span class="hint"><kbd>←→</kbd> 切换</span>
+            <span class="hint"><kbd>Esc</kbd> 关闭</span>
+          </div>
+          <button class="settings-btn-overlay" id="settingsBtn" title="设置">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+          </button>
+          <button class="style-switcher" id="styleSwitcher" title="切换样式">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 右键菜单 -->
+        <div class="context-menu" id="contextMenu">
+          <div class="menu-item" data-action="open-new">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            <span class="menu-item-text">在新标签页打开</span>
+            <span class="menu-item-shortcut">⌘↵</span>
+          </div>
+          <div class="menu-item" data-action="open-incognito">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <span class="menu-item-text">在隐私窗口打开</span>
+            <span class="menu-item-shortcut">⇧⌘N</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item" data-action="copy">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            <span class="menu-item-text">复制链接</span>
+            <span class="menu-item-shortcut">⌘C</span>
+          </div>
+          <div class="menu-item" data-action="share">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span class="menu-item-text">分享链接</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item edit-action" data-action="edit">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span class="menu-item-text edit-text">编辑书签</span>
+            <span class="menu-item-shortcut">⌘E</span>
+          </div>
+          <div class="menu-item delete-action" data-action="delete">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="menu-item-text delete-text">删除书签</span>
+            <span class="menu-item-shortcut">⌘⌫</span>
+          </div>
+        </div>
+
+        <!-- 编辑弹窗 -->
+        <div class="edit-modal" id="editModal">
+          <div class="edit-modal-content">
+            <div class="edit-modal-header">
+              <span class="edit-modal-title">编辑书签</span>
+              <button class="edit-modal-close" id="editModalClose">×</button>
+            </div>
+            <div class="edit-modal-body">
+              <div class="edit-field">
+                <label for="editTitle">标题</label>
+                <input type="text" id="editTitle" placeholder="输入书签标题...">
+              </div>
+              <div class="edit-field">
+                <label for="editUrl">网址</label>
+                <input type="url" id="editUrl" placeholder="输入网址...">
+              </div>
+            </div>
+            <div class="edit-modal-footer">
+              <button class="edit-btn edit-btn-cancel" id="editCancel">取消</button>
+              <button class="edit-btn edit-btn-save" id="editSave">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 获取样式
+  function getStyles() {
+    return `
+      /* 基础变量 */
+      :host {
+        --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --overlay-width: 620px;
+        --overlay-min-width: 520px;
+        --overlay-max-width: 680px;
+        --overlay-max-height: 520px;
+        --transition-duration: 0.2s;
+      }
+
+      /* ==================== Spotlight 风格 (默认) ==================== */
+      :host(.style-spotlight) {
+        --bg-primary: rgba(255, 255, 255, 0.92);
+        --bg-secondary: rgba(248, 249, 250, 0.95);
+        --bg-hover: rgba(0, 0, 0, 0.04);
+        --bg-active: #007aff;
+        --text-primary: #1d1d1f;
+        --text-secondary: #86868b;
+        --text-active: #ffffff;
+        --accent: #007aff;
+        --accent-light: rgba(0, 122, 255, 0.1);
+        --border: rgba(0, 0, 0, 0.08);
+        --shadow: 0 22px 70px 4px rgba(0, 0, 0, 0.2);
+        --blur: blur(30px);
+        --radius: 16px;
+        --radius-sm: 10px;
+      }
+
+      :host(.style-spotlight.dark) {
+        --bg-primary: rgba(30, 30, 30, 0.92);
+        --bg-secondary: rgba(45, 45, 45, 0.95);
+        --bg-hover: rgba(255, 255, 255, 0.08);
+        --text-primary: #f5f5f7;
+        --text-secondary: #a1a1a6;
+        --accent: #0a84ff;
+        --accent-light: rgba(10, 132, 255, 0.15);
+        --border: rgba(255, 255, 255, 0.1);
+      }
+
+      /* ==================== Raycast 风格 ==================== */
+      :host(.style-raycast) {
+        --bg-primary: #18181b;
+        --bg-secondary: #27272a;
+        --bg-hover: #3f3f46;
+        --bg-active: transparent;
+        --text-primary: #fafafa;
+        --text-secondary: #a1a1aa;
+        --text-active: #fafafa;
+        --accent: #a855f7;
+        --accent-secondary: #ec4899;
+        --accent-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+        --accent-light: rgba(168, 85, 247, 0.15);
+        --border: rgba(255, 255, 255, 0.08);
+        --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        --blur: none;
+        --radius: 12px;
+        --radius-sm: 8px;
+      }
+
+      :host(.style-raycast.light) {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f4f4f5;
+        --bg-hover: #e4e4e7;
+        --text-primary: #18181b;
+        --text-secondary: #52525b;
+        --border: rgba(0, 0, 0, 0.08);
+        --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+      }
+
+      /* ==================== Fluent 风格 ==================== */
+      :host(.style-fluent) {
+        --bg-primary: rgba(243, 243, 243, 0.85);
+        --bg-secondary: rgba(255, 255, 255, 0.7);
+        --bg-hover: rgba(0, 0, 0, 0.03);
+        --bg-active: rgba(0, 120, 212, 0.1);
+        --text-primary: #1a1a1a;
+        --text-secondary: #616161;
+        --text-active: #0078d4;
+        --accent: #0078d4;
+        --accent-light: rgba(0, 120, 212, 0.1);
+        --border: rgba(0, 0, 0, 0.06);
+        --border-strong: rgba(0, 0, 0, 0.12);
+        --shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        --blur: blur(20px);
+        --radius: 8px;
+        --radius-sm: 4px;
+      }
+
+      :host(.style-fluent.dark) {
+        --bg-primary: rgba(32, 32, 32, 0.9);
+        --bg-secondary: rgba(44, 44, 44, 0.8);
+        --bg-hover: rgba(255, 255, 255, 0.05);
+        --bg-active: rgba(96, 205, 255, 0.12);
+        --text-primary: #ffffff;
+        --text-secondary: #c5c5c5;
+        --text-active: #60cdff;
+        --accent: #60cdff;
+        --accent-light: rgba(96, 205, 255, 0.12);
+        --border: rgba(255, 255, 255, 0.06);
+        --border-strong: rgba(255, 255, 255, 0.1);
+      }
+
+      /* ==================== 基础样式 ==================== */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      .overlay-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        visibility: hidden;
+        transition: all var(--transition-duration) ease;
+        z-index: 2147483646;
+      }
+
+      .overlay-backdrop.show {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .overlay-container {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.95);
+        width: var(--overlay-width);
+        min-width: var(--overlay-min-width);
+        max-width: var(--overlay-max-width);
+        max-height: var(--overlay-max-height);
+        background: var(--bg-primary);
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        font-family: var(--font-family);
+        opacity: 0;
+        visibility: hidden;
+        transition: all var(--transition-duration) ease;
+        z-index: 2147483647;
+      }
+
+      .overlay-container.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      /* ==================== 搜索区域 ==================== */
+      .search-area {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .search-box {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .search-icon {
+        width: 20px;
+        height: 20px;
+        color: var(--text-secondary);
+        flex-shrink: 0;
+      }
+
+      .search-input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        font-size: 16px;
+        color: var(--text-primary);
+        outline: none;
+        font-weight: 400;
+      }
+
+      .search-input::placeholder {
+        color: var(--text-secondary);
+      }
+
+      .shortcut-badge {
+        padding: 4px 8px;
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-family: 'SF Mono', Monaco, monospace;
+        flex-shrink: 0;
+      }
+
+      /* ==================== 模式标签 ==================== */
+      .mode-tabs {
+        display: flex;
+        gap: 2px;
+        padding: 8px 12px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .mode-tab {
+        flex: 1;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        transition: all 0.15s ease;
+        font-family: inherit;
+      }
+
+      .mode-tab:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+
+      .mode-tab.active {
+        background: var(--bg-primary);
+        color: var(--accent);
+        font-weight: 500;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+
+      .mode-tab svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .tab-count {
+        padding: 2px 6px;
+        background: var(--bg-hover);
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .mode-tab.active .tab-count {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      /* ==================== 筛选栏 ==================== */
+      .filter-bar {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 8px;
+      }
+
+      .filter-bar.show {
+        display: flex;
+      }
+
+      .filter-group, .sort-group {
+        display: flex;
+        gap: 4px;
+      }
+
+      .filter-btn {
+        padding: 5px 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: inherit;
+      }
+
+      .filter-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .filter-btn.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+
+      .filter-count {
+        margin-left: 2px;
+        opacity: 0.8;
+      }
+
+      .sort-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--bg-hover);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+      }
+
+      .sort-btn:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      .sort-btn.active {
+        background: var(--accent);
+        color: white;
+      }
+
+      .sort-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ==================== 结果列表 ==================== */
+      .results-container {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 180px;
+        max-height: 320px;
+      }
+
+      .results-list {
+        padding: 8px;
+      }
+
+      .result-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all 0.1s ease;
+        position: relative;
+      }
+
+      .result-item:hover {
+        background: var(--bg-hover);
+      }
+
+      .result-item.active {
+        background: var(--bg-active);
+      }
+
+      /* Spotlight 风格激活样式 */
+      :host(.style-spotlight) .result-item.active {
+        background: var(--accent);
+      }
+
+      :host(.style-spotlight) .result-item.active .result-title,
+      :host(.style-spotlight) .result-item.active .result-url,
+      :host(.style-spotlight) .result-item.active .result-meta {
+        color: white !important;
+      }
+
+      /* Raycast 风格左侧指示条 */
+      :host(.style-raycast) .result-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 0;
+        background: var(--accent-gradient);
+        border-radius: 2px;
+        transition: height 0.15s ease;
+      }
+
+      :host(.style-raycast) .result-item:hover::before,
+      :host(.style-raycast) .result-item.active::before {
+        height: 24px;
+      }
+
+      /* Fluent 风格边框高亮 */
+      :host(.style-fluent) .result-item.active {
+        border: 1px solid var(--accent);
+        background: var(--accent-light);
+      }
+
+      .result-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+
+      .result-icon img {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+      }
+
+      .result-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .result-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .result-url {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 2px;
+      }
+
+      .result-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .meta-badge {
+        padding: 3px 8px;
+        background: var(--accent-light);
+        border-radius: 10px;
+        font-size: 11px;
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      .meta-time {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .status-tag {
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+      }
+
+      .status-tag.never-used {
+        background: rgba(255, 149, 0, 0.15);
+        color: #ff9500;
+      }
+
+      .status-tag.rarely-used {
+        background: rgba(52, 199, 89, 0.15);
+        color: #34c759;
+      }
+
+      .status-tag.dormant {
+        background: rgba(255, 59, 48, 0.15);
+        color: #ff3b30;
+      }
+
+      .no-results {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+
+      /* ==================== 状态栏 ==================== */
+      .status-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 16px;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .status-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .keyboard-hints {
+        display: flex;
+        gap: 12px;
+      }
+
+      .hint {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .hint kbd {
+        padding: 2px 6px;
+        background: var(--bg-primary);
+        border-radius: 4px;
+        font-family: 'SF Mono', Monaco, monospace;
+        font-size: 11px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      .style-switcher {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--bg-hover);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        margin-left: 8px;
+      }
+
+      .style-switcher:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      .style-switcher svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ==================== 滚动条 ==================== */
+      .results-container::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .results-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .results-container::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+
+      .results-container::-webkit-scrollbar-thumb:hover {
+        background: var(--text-secondary);
+      }
+
+      /* ==================== 友情链接 ==================== */
+      .friend-links {
+        padding: 8px 16px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-secondary);
+      }
+
+      .friend-links-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+      }
+
+      .friend-link-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: var(--bg-primary);
+        border-radius: 14px;
+        text-decoration: none;
+        color: var(--text-secondary);
+        font-size: 12px;
+        transition: all 0.15s ease;
+        border: 1px solid var(--border);
+      }
+
+      .friend-link-item:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .friend-link-favicon {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+      }
+
+      .friend-link-tag {
+        white-space: nowrap;
+      }
+
+      /* ==================== 设置按钮 ==================== */
+      .settings-btn-overlay {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--bg-hover);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        margin-left: 8px;
+      }
+
+      .settings-btn-overlay:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      .settings-btn-overlay svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ==================== 右键菜单基础 ==================== */
+      .context-menu {
+        position: fixed;
+        min-width: 200px;
+        z-index: 2147483648;
+        opacity: 0;
+        visibility: hidden;
+        transform: scale(0.95);
+        transition: all 0.15s ease;
+      }
+
+      .context-menu.show {
+        opacity: 1;
+        visibility: visible;
+        transform: scale(1);
+      }
+
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.1s;
+      }
+
+      .menu-item svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+
+      .menu-item-text {
+        flex: 1;
+      }
+
+      .menu-item-shortcut {
+        font-size: 11px;
+        font-family: 'SF Mono', Monaco, monospace;
+      }
+
+      .menu-separator {
+        height: 1px;
+      }
+
+      /* ==================== Spotlight 风格右键菜单 ==================== */
+      :host(.style-spotlight) .context-menu,
+      :host(.style-spotlight.dark) .context-menu {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 10px;
+        box-shadow: 
+          0 0 0 0.5px rgba(0, 0, 0, 0.1),
+          0 12px 24px rgba(0, 0, 0, 0.15),
+          0 2px 8px rgba(0, 0, 0, 0.08);
+        padding: 5px 0;
+      }
+
+      :host(.style-spotlight.dark) .context-menu {
+        background: rgba(40, 40, 40, 0.88);
+        box-shadow: 
+          0 0 0 0.5px rgba(255, 255, 255, 0.1),
+          0 12px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      :host(.style-spotlight) .menu-item,
+      :host(.style-spotlight.dark) .menu-item {
+        padding: 6px 12px;
+        margin: 0 5px;
+        border-radius: 5px;
+        color: #1d1d1f;
+      }
+
+      :host(.style-spotlight.dark) .menu-item {
+        color: #f5f5f7;
+      }
+
+      :host(.style-spotlight) .menu-item:hover,
+      :host(.style-spotlight.dark) .menu-item:hover {
+        background: #007aff;
+        color: white;
+      }
+
+      :host(.style-spotlight) .menu-item:hover svg,
+      :host(.style-spotlight.dark) .menu-item:hover svg {
+        color: white;
+      }
+
+      :host(.style-spotlight) .menu-item svg,
+      :host(.style-spotlight.dark) .menu-item svg {
+        color: #6e6e73;
+      }
+
+      :host(.style-spotlight) .menu-item-shortcut {
+        color: #a1a1a6;
+      }
+
+      :host(.style-spotlight) .menu-item:hover .menu-item-shortcut {
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      :host(.style-spotlight) .menu-separator,
+      :host(.style-spotlight.dark) .menu-separator {
+        background: rgba(0, 0, 0, 0.1);
+        margin: 5px 12px;
+      }
+
+      :host(.style-spotlight.dark) .menu-separator {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      :host(.style-spotlight) .menu-item.delete-action {
+        color: #ff3b30;
+      }
+
+      :host(.style-spotlight) .menu-item.delete-action svg {
+        color: #ff3b30;
+      }
+
+      :host(.style-spotlight) .menu-item.delete-action:hover {
+        background: #ff3b30;
+        color: white;
+      }
+
+      :host(.style-spotlight) .menu-item.delete-action:hover svg {
+        color: white;
+      }
+
+      :host(.style-spotlight) .menu-item.edit-action {
+        color: #007aff;
+      }
+
+      :host(.style-spotlight) .menu-item.edit-action svg {
+        color: #007aff;
+      }
+
+      /* ==================== Raycast 风格右键菜单 ==================== */
+      :host(.style-raycast) .context-menu,
+      :host(.style-raycast.light) .context-menu {
+        background: #1e1e20;
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      :host(.style-raycast.light) .context-menu {
+        background: #ffffff;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      :host(.style-raycast) .menu-item,
+      :host(.style-raycast.light) .menu-item {
+        padding: 10px 12px;
+        border-radius: 8px;
+        color: #e5e5e5;
+        position: relative;
+      }
+
+      :host(.style-raycast.light) .menu-item {
+        color: #1d1d1f;
+      }
+
+      :host(.style-raycast) .menu-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 0;
+        background: linear-gradient(135deg, #a855f7, #ec4899);
+        border-radius: 2px;
+        transition: height 0.15s;
+      }
+
+      :host(.style-raycast) .menu-item:hover {
+        background: #2a2a2c;
+      }
+
+      :host(.style-raycast.light) .menu-item:hover {
+        background: #f5f5f7;
+      }
+
+      :host(.style-raycast) .menu-item:hover::before {
+        height: 20px;
+      }
+
+      :host(.style-raycast) .menu-item svg {
+        color: #8e8e93;
+      }
+
+      :host(.style-raycast) .menu-item:hover svg {
+        color: #a855f7;
+      }
+
+      :host(.style-raycast) .menu-item-shortcut {
+        color: #5e5e63;
+        padding: 2px 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 4px;
+      }
+
+      :host(.style-raycast) .menu-separator {
+        background: rgba(255, 255, 255, 0.06);
+        margin: 6px 0;
+      }
+
+      :host(.style-raycast.light) .menu-separator {
+        background: rgba(0, 0, 0, 0.06);
+      }
+
+      :host(.style-raycast) .menu-item.delete-action {
+        color: #ff6b6b;
+      }
+
+      :host(.style-raycast) .menu-item.delete-action svg {
+        color: #ff6b6b;
+      }
+
+      :host(.style-raycast) .menu-item.delete-action:hover::before {
+        background: linear-gradient(135deg, #ff6b6b, #ff3b30);
+      }
+
+      :host(.style-raycast) .menu-item.edit-action {
+        color: #a855f7;
+      }
+
+      :host(.style-raycast) .menu-item.edit-action svg {
+        color: #a855f7;
+      }
+
+      /* ==================== Fluent 风格右键菜单 ==================== */
+      :host(.style-fluent) .context-menu,
+      :host(.style-fluent.dark) .context-menu {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-radius: 8px;
+        box-shadow: 
+          0 0 0 1px rgba(0, 0, 0, 0.05),
+          0 8px 16px rgba(0, 0, 0, 0.1);
+        padding: 4px;
+      }
+
+      :host(.style-fluent.dark) .context-menu {
+        background: rgba(40, 40, 40, 0.9);
+        box-shadow: 
+          0 0 0 1px rgba(255, 255, 255, 0.05),
+          0 8px 16px rgba(0, 0, 0, 0.3);
+      }
+
+      :host(.style-fluent) .menu-item,
+      :host(.style-fluent.dark) .menu-item {
+        padding: 8px 10px;
+        border-radius: 4px;
+        color: #1a1a1a;
+      }
+
+      :host(.style-fluent.dark) .menu-item {
+        color: #f5f5f7;
+      }
+
+      :host(.style-fluent) .menu-item:hover {
+        background: rgba(0, 0, 0, 0.04);
+      }
+
+      :host(.style-fluent.dark) .menu-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      :host(.style-fluent) .menu-item:active {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      :host(.style-fluent) .menu-item svg {
+        color: #424242;
+      }
+
+      :host(.style-fluent.dark) .menu-item svg {
+        color: #a1a1a6;
+      }
+
+      :host(.style-fluent) .menu-item-shortcut {
+        color: #6e6e6e;
+      }
+
+      :host(.style-fluent) .menu-separator {
+        background: rgba(0, 0, 0, 0.08);
+        margin: 4px 8px;
+      }
+
+      :host(.style-fluent.dark) .menu-separator {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      :host(.style-fluent) .menu-item.delete-action {
+        color: #c42b1c;
+      }
+
+      :host(.style-fluent) .menu-item.delete-action svg {
+        color: #c42b1c;
+      }
+
+      :host(.style-fluent) .menu-item.delete-action:hover {
+        background: rgba(196, 43, 28, 0.08);
+      }
+
+      :host(.style-fluent) .menu-item.edit-action {
+        color: #0078d4;
+      }
+
+      :host(.style-fluent) .menu-item.edit-action svg {
+        color: #0078d4;
+      }
+
+      /* ==================== 编辑弹窗 ==================== */
+      .edit-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 2147483649;
+      }
+
+      .edit-modal.show {
+        display: flex;
+      }
+
+      .edit-modal-content {
+        background: var(--bg-primary);
+        border-radius: var(--radius);
+        width: 400px;
+        max-width: 90%;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .edit-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .edit-modal-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .edit-modal-close {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 20px;
+        color: var(--text-secondary);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .edit-modal-close:hover {
+        background: var(--bg-hover);
+      }
+
+      .edit-modal-body {
+        padding: 20px;
+      }
+
+      .edit-field {
+        margin-bottom: 16px;
+      }
+
+      .edit-field:last-child {
+        margin-bottom: 0;
+      }
+
+      .edit-field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .edit-field input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      .edit-field input:focus {
+        border-color: var(--accent);
+      }
+
+      .edit-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 16px 20px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-secondary);
+      }
+
+      .edit-btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+
+      .edit-btn-cancel {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+
+      .edit-btn-cancel:hover {
+        background: var(--bg-hover);
+      }
+
+      .edit-btn-save {
+        background: var(--accent);
+        color: white;
+      }
+
+      .edit-btn-save:hover {
+        opacity: 0.9;
+      }
+    `;
+  }
+
+  // 绑定事件
+  function bindEvents() {
+    const backdrop = shadowRoot.getElementById('backdrop');
+    const searchInput = shadowRoot.getElementById('searchInput');
+    const modeTabs = shadowRoot.getElementById('modeTabs');
+    const filterBar = shadowRoot.getElementById('filterBar');
+    const styleSwitcher = shadowRoot.getElementById('styleSwitcher');
+
+    // 点击背景关闭
+    backdrop.addEventListener('click', hideOverlay);
+
+    // 搜索输入
+    searchInput.addEventListener('input', (e) => {
+      search(e.target.value);
+    });
+
+    // 键盘事件
+    searchInput.addEventListener('keydown', handleKeydown);
+
+    // 模式切换
+    modeTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.mode-tab');
+      if (tab) {
+        const mode = tab.dataset.mode;
+        switchMode(mode);
+      }
+    });
+
+    // 筛选器
+    filterBar.addEventListener('click', (e) => {
+      const filterBtn = e.target.closest('.filter-btn');
+      const sortBtn = e.target.closest('.sort-btn');
+
+      if (filterBtn) {
+        shadowRoot.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        filterBtn.classList.add('active');
+        currentFilter = filterBtn.dataset.filter;
+        search(searchInput.value);
+      }
+
+      if (sortBtn) {
+        shadowRoot.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        sortBtn.classList.add('active');
+        currentSort = sortBtn.dataset.sort;
+        search(searchInput.value);
+      }
+    });
+
+    // 样式切换
+    styleSwitcher.addEventListener('click', cycleStyle);
+
+    // 结果项点击
+    shadowRoot.getElementById('resultsList').addEventListener('click', (e) => {
+      const item = e.target.closest('.result-item');
+      if (item) {
+        const index = parseInt(item.dataset.index);
+        openResult(index);
+      }
+    });
+
+    // 结果项右键菜单
+    shadowRoot.getElementById('resultsList').addEventListener('contextmenu', (e) => {
+      const item = e.target.closest('.result-item');
+      if (item) {
+        e.preventDefault();
+        const index = parseInt(item.dataset.index);
+        showContextMenu(e, index);
+      }
+    });
+
+    // 点击其他地方关闭右键菜单
+    shadowRoot.addEventListener('click', hideContextMenu);
+    backdrop.addEventListener('click', hideContextMenu);
+
+    // 右键菜单点击
+    shadowRoot.getElementById('contextMenu').addEventListener('click', handleContextMenuClick);
+
+    // 设置按钮
+    shadowRoot.getElementById('settingsBtn').addEventListener('click', openSettings);
+
+    // 编辑弹窗事件
+    shadowRoot.getElementById('editModalClose').addEventListener('click', hideEditModal);
+    shadowRoot.getElementById('editCancel').addEventListener('click', hideEditModal);
+    shadowRoot.getElementById('editSave').addEventListener('click', saveEdit);
+
+    // 加载友情链接
+    loadFriendLinks();
+  }
+
+  // 处理键盘事件
+  function handleKeydown(e) {
+    const items = shadowRoot.querySelectorAll('.result-item');
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        if (selectedIndex < items.length - 1) {
+          selectedIndex++;
+          updateSelection();
+        }
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        if (selectedIndex > 0) {
+          selectedIndex--;
+          updateSelection();
+        }
+        break;
+
+      case 'ArrowLeft':
+        e.preventDefault();
+        switchModePrev();
+        break;
+
+      case 'ArrowRight':
+        e.preventDefault();
+        switchModeNext();
+        break;
+
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0) {
+          openResult(selectedIndex);
+        }
+        break;
+
+      case 'Escape':
+        e.preventDefault();
+        hideOverlay();
+        break;
+    }
+  }
+
+  // 更新选中状态
+  function updateSelection() {
+    const items = shadowRoot.querySelectorAll('.result-item');
+    items.forEach((item, index) => {
+      if (index === selectedIndex) {
+        item.classList.add('active');
+        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+
+  // 切换到上一个模式
+  function switchModePrev() {
+    const modes = ['bookmarks', 'tabs', 'history', 'downloads'];
+    const currentIndex = modes.indexOf(currentMode);
+    const newIndex = currentIndex <= 0 ? modes.length - 1 : currentIndex - 1;
+    switchMode(modes[newIndex]);
+  }
+
+  // 切换到下一个模式
+  function switchModeNext() {
+    const modes = ['bookmarks', 'tabs', 'history', 'downloads'];
+    const currentIndex = modes.indexOf(currentMode);
+    const newIndex = currentIndex >= modes.length - 1 ? 0 : currentIndex + 1;
+    switchMode(modes[newIndex]);
+  }
+
+  // 切换搜索模式
+  function switchMode(mode) {
+    currentMode = mode;
+    selectedIndex = -1;
+
+    // 更新标签样式
+    shadowRoot.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.mode === mode);
+    });
+
+    // 更新搜索框占位符
+    const searchInput = shadowRoot.getElementById('searchInput');
+    const placeholders = {
+      bookmarks: '搜索书签...',
+      tabs: '搜索标签页...',
+      history: '搜索历史记录...',
+      downloads: '搜索下载文件...'
+    };
+    searchInput.placeholder = placeholders[mode];
+
+    // 显示/隐藏筛选器
+    const filterBar = shadowRoot.getElementById('filterBar');
+    filterBar.classList.toggle('show', mode === 'bookmarks');
+
+    // 加载数据并搜索
+    loadData().then(() => {
+      search(searchInput.value);
+    });
+  }
+
+  // 加载数据
+  async function loadData() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
+        if (response) {
+          switch (currentMode) {
+            case 'bookmarks':
+              allBookmarks = response.data || [];
+              shadowRoot.getElementById('bookmarksCount').textContent = allBookmarks.length;
+              updateFilterCounts();
+              break;
+            case 'tabs':
+              allTabs = response.data || [];
+              shadowRoot.getElementById('tabsCount').textContent = allTabs.length;
+              break;
+            case 'history':
+              allHistory = response.data || [];
+              shadowRoot.getElementById('historyCount').textContent = allHistory.length;
+              break;
+            case 'downloads':
+              allDownloads = response.data || [];
+              shadowRoot.getElementById('downloadsCount').textContent = allDownloads.length;
+              break;
+          }
+        }
+        resolve();
+      });
+    });
+  }
+
+  // 更新筛选器计数
+  function updateFilterCounts() {
+    const counts = {
+      never_used: 0,
+      rarely_used: 0,
+      dormant: 0
+    };
+
+    allBookmarks.forEach(b => {
+      if (b.usageStatus && counts.hasOwnProperty(b.usageStatus)) {
+        counts[b.usageStatus]++;
+      }
+    });
+
+    const neverUsedCount = shadowRoot.querySelector('[data-filter="never_used"] .filter-count');
+    const rarelyUsedCount = shadowRoot.querySelector('[data-filter="rarely_used"] .filter-count');
+    const dormantCount = shadowRoot.querySelector('[data-filter="dormant"] .filter-count');
+
+    if (neverUsedCount) neverUsedCount.textContent = counts.never_used;
+    if (rarelyUsedCount) rarelyUsedCount.textContent = counts.rarely_used;
+    if (dormantCount) dormantCount.textContent = counts.dormant;
+  }
+
+  // 搜索函数
+  function search(query) {
+    let items;
+
+    switch (currentMode) {
+      case 'bookmarks':
+        items = filterByUsageStatus(allBookmarks, currentFilter);
+        break;
+      case 'tabs':
+        items = allTabs;
+        break;
+      case 'history':
+        items = allHistory;
+        break;
+      case 'downloads':
+        items = allDownloads;
+        break;
+      default:
+        items = [];
+    }
+
+    // 恢复原有“多关键字 + 高级语法”能力：复用 SearchParser + SmartSort
+    // SearchParser 支持：空格分隔多关键字 AND、引号精确匹配、site/type/in/after/before 等
+    if (typeof SearchParser !== 'undefined' && SearchParser.filter) {
+      items = SearchParser.filter(items, query || '');
+    } else if (query && query.trim()) {
+      // 兜底：至少支持“空格分词 AND”
+      const tokens = query.trim().split(/\s+/).filter(Boolean).map(t => t.toLowerCase());
+      items = items.filter(item => {
+        const searchable = [
+          item.title || '',
+          item.url || '',
+          item.filename || ''
+        ].join(' ').toLowerCase();
+        return tokens.every(t => searchable.includes(t));
+      });
+    }
+
+    if (typeof SmartSort !== 'undefined' && SmartSort.sort) {
+      items = SmartSort.sort(items, { searchText: query || '', mode: currentSort });
+    } else {
+      // 兜底排序（保持行为可用）
+      items = sortItems(items, query || '');
+    }
+
+    currentResults = items;
+    selectedIndex = items.length > 0 ? 0 : -1;
+    displayResults(items);
+  }
+
+  // 按使用状态筛选
+  function filterByUsageStatus(bookmarks, filter) {
+    if (filter === 'all') return bookmarks;
+    return bookmarks.filter(b => b.usageStatus === filter);
+  }
+
+  // 排序
+  function sortItems(items, searchText) {
+    const sorted = [...items];
+
+    const getScore = (item) => {
+      switch (currentSort) {
+        case 'time':
+          return item.lastVisit || item.startTime || item.dateAdded || 0;
+        case 'frequency':
+          return item.visitCount || 0;
+        case 'smart':
+        default:
+          let score = 0;
+          if (searchText && item.title?.toLowerCase().includes(searchText.toLowerCase())) {
+            score += 100;
+          }
+          score += (item.visitCount || 0) * 0.5;
+          score += ((item.lastVisit || 0) / 1000000000000) * 0.3;
+          return score;
+      }
+    };
+
+    sorted.sort((a, b) => getScore(b) - getScore(a));
+    return sorted;
+  }
+
+  // 显示结果
+  function displayResults(items) {
+    const resultsList = shadowRoot.getElementById('resultsList');
+    const searchStats = shadowRoot.getElementById('searchStats');
+
+    if (items.length === 0) {
+      resultsList.innerHTML = '<div class="no-results">没有找到匹配的结果</div>';
+      searchStats.textContent = '无结果';
+      return;
+    }
+
+    resultsList.innerHTML = items.slice(0, 50).map((item, index) => {
+      const isActive = index === selectedIndex ? 'active' : '';
+      const faviconUrl = getFaviconUrl(item);
+      const meta = getMetaInfo(item);
+
+      return `
+        <div class="result-item ${isActive}" data-index="${index}">
+          <div class="result-icon">
+            <img src="${faviconUrl}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'">
+          </div>
+          <div class="result-content">
+            <div class="result-title">${escapeHtml(item.title || item.filename?.split('/').pop() || '无标题')}</div>
+            <div class="result-url">${escapeHtml(item.url || '')}</div>
+          </div>
+          <div class="result-meta">${meta}</div>
+        </div>
+      `;
+    }).join('');
+
+    searchStats.textContent = `找到 ${items.length} 个结果`;
+  }
+
+  // 获取 favicon URL
+  function getFaviconUrl(item) {
+    try {
+      if (item.url) {
+        const url = new URL(item.url);
+        return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      }
+    } catch (e) {}
+    return 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>';
+  }
+
+  // 获取元信息
+  function getMetaInfo(item) {
+    let html = '';
+
+    if (item.visitCount > 0) {
+      html += `<span class="meta-badge">${item.visitCount}次</span>`;
+    }
+
+    if (item.lastVisit) {
+      html += `<span class="meta-time">${formatTime(item.lastVisit)}</span>`;
+    }
+
+    if (item.usageStatus && item.usageStatus !== BOOKMARK_STATUS.ACTIVE) {
+      const statusLabels = {
+        [BOOKMARK_STATUS.NEVER_USED]: { text: '从未访问', class: 'never-used' },
+        [BOOKMARK_STATUS.RARELY_USED]: { text: '访问较少', class: 'rarely-used' },
+        [BOOKMARK_STATUS.DORMANT]: { text: '长期未访问', class: 'dormant' }
+      };
+      const status = statusLabels[item.usageStatus];
+      if (status) {
+        html = `<span class="status-tag ${status.class}">${status.text}</span>` + html;
+      }
+    }
+
+    return html;
+  }
+
+  // 格式化时间
+  function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`;
+    return date.toLocaleDateString();
+  }
+
+  // HTML 转义
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // 打开结果
+  function openResult(index) {
+    const item = currentResults[index];
+    if (!item) return;
+
+    chrome.runtime.sendMessage({
+      type: 'OPEN_RESULT',
+      mode: currentMode,
+      item: item
+    });
+
+    hideOverlay();
+  }
+
+  // 循环切换样式
+  function cycleStyle() {
+    const styles = ['spotlight', 'raycast', 'fluent'];
+    const currentIndex = styles.indexOf(currentStyle);
+    const nextIndex = (currentIndex + 1) % styles.length;
+    setStyle(styles[nextIndex]);
+
+    // 保存设置
+    chrome.runtime.sendMessage({
+      type: 'SAVE_STYLE',
+      style: styles[nextIndex]
+    });
+  }
+
+  // 设置样式
+  function setStyle(style) {
+    currentStyle = style;
+    
+    // Shadow DOM 的 :host 选择器需要通过 host 元素的 class 来控制
+    // 所以我们直接在 shadowRoot 内部的容器上应用样式
+    const container = shadowRoot.getElementById('searchPanel');
+    const backdrop = shadowRoot.getElementById('backdrop');
+    
+    // 移除所有样式类
+    overlayContainer.className = 'bookmark-search-overlay-host';
+    
+    // 添加新样式类
+    overlayContainer.classList.add(`style-${style}`);
+
+    // 检测深色模式
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (isDark && (style === 'spotlight' || style === 'fluent')) {
+      overlayContainer.classList.add('dark');
+    } else if (!isDark && style === 'raycast') {
+      overlayContainer.classList.add('light');
+    }
+  }
+
+  // 显示浮层
+  function showOverlay() {
+    console.log('[BookmarkSearch] showOverlay called');
+    if (!overlayContainer) {
+      console.log('[BookmarkSearch] Creating overlay...');
+      createOverlay();
+    }
+
+    // 加载保存的样式
+    chrome.runtime.sendMessage({ type: 'GET_STYLE' }, (response) => {
+      if (response && response.style) {
+        setStyle(response.style);
+      } else {
+        setStyle('spotlight');
+      }
+    });
+
+    const backdrop = shadowRoot.getElementById('backdrop');
+    const panel = shadowRoot.getElementById('searchPanel');
+    const searchInput = shadowRoot.getElementById('searchInput');
+
+    backdrop.classList.add('show');
+    panel.classList.add('show');
+    isVisible = true;
+
+    // 聚焦搜索框
+    setTimeout(() => {
+      searchInput.focus();
+      searchInput.select();
+    }, 100);
+
+    // 加载初始数据
+    loadData().then(() => {
+      search('');
+    });
+  }
+
+  // 隐藏浮层
+  function hideOverlay() {
+    if (!shadowRoot) return;
+
+    const backdrop = shadowRoot.getElementById('backdrop');
+    const panel = shadowRoot.getElementById('searchPanel');
+
+    backdrop.classList.remove('show');
+    panel.classList.remove('show');
+    isVisible = false;
+
+    // 清空搜索
+    const searchInput = shadowRoot.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.value = '';
+    }
+  }
+
+  // 切换浮层
+  function toggleOverlay() {
+    if (isVisible) {
+      hideOverlay();
+    } else {
+      showOverlay();
+    }
+  }
+
+  // 监听来自 background 的消息
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[BookmarkSearch] Content script received message:', request.type);
+    if (request.type === 'TOGGLE_OVERLAY') {
+      console.log('[BookmarkSearch] Toggling overlay...');
+      toggleOverlay();
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+  
+  console.log('[BookmarkSearch] Message listener registered');
+
+  // 监听系统主题变化
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (overlayContainer) {
+      setStyle(currentStyle);
+    }
+  });
+
+  // 监听快捷键 (备用，如果 background 无法触发)
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      toggleOverlay();
+    }
+  });
+
+  // ==================== 右键菜单功能 ====================
+  let contextMenuTarget = null;
+  let contextMenuIndex = -1;
+
+  function showContextMenu(e, index) {
+    contextMenuIndex = index;
+    contextMenuTarget = currentResults[index];
+    
+    const menu = shadowRoot.getElementById('contextMenu');
+    const editAction = menu.querySelector('.edit-action');
+    const deleteAction = menu.querySelector('.delete-action');
+    
+    // 根据模式显示/隐藏编辑和删除选项
+    if (currentMode === 'bookmarks') {
+      editAction.style.display = 'flex';
+      deleteAction.style.display = 'flex';
+      deleteAction.querySelector('.delete-text').textContent = '删除书签';
+    } else if (currentMode === 'history') {
+      editAction.style.display = 'none';
+      deleteAction.style.display = 'flex';
+      deleteAction.querySelector('.delete-text').textContent = '删除历史记录';
+    } else if (currentMode === 'downloads') {
+      editAction.style.display = 'none';
+      deleteAction.style.display = 'flex';
+      deleteAction.querySelector('.delete-text').textContent = '删除下载记录';
+    } else {
+      editAction.style.display = 'none';
+      deleteAction.style.display = 'none';
+    }
+    
+    // 计算菜单位置
+    const panel = shadowRoot.getElementById('searchPanel');
+    const panelRect = panel.getBoundingClientRect();
+    
+    // 先显示菜单获取尺寸
+    menu.style.visibility = 'hidden';
+    menu.classList.add('show');
+    const menuRect = menu.getBoundingClientRect();
+    menu.style.visibility = '';
+    
+    let x = e.clientX - panelRect.left;
+    let y = e.clientY - panelRect.top;
+    
+    // 确保菜单不超出面板右边界
+    if (x + menuRect.width > panelRect.width - 10) {
+      x = panelRect.width - menuRect.width - 10;
+    }
+    
+    // 确保菜单不超出面板底部边界
+    if (y + menuRect.height > panelRect.height - 10) {
+      y = y - menuRect.height;
+      if (y < 10) y = 10;
+    }
+    
+    // 确保不超出左边界
+    if (x < 10) x = 10;
+    
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+
+  function hideContextMenu() {
+    const menu = shadowRoot.getElementById('contextMenu');
+    menu.classList.remove('show');
+    contextMenuTarget = null;
+    contextMenuIndex = -1;
+  }
+
+  function handleContextMenuClick(e) {
+    const menuItem = e.target.closest('.menu-item');
+    if (!menuItem || !contextMenuTarget) return;
+    
+    const action = menuItem.dataset.action;
+    
+    switch (action) {
+      case 'open-new':
+        chrome.runtime.sendMessage({
+          type: 'OPEN_RESULT',
+          mode: currentMode,
+          item: contextMenuTarget,
+          newTab: true
+        });
+        break;
+      
+      case 'open-incognito':
+        chrome.runtime.sendMessage({
+          type: 'OPEN_INCOGNITO',
+          url: contextMenuTarget.url
+        });
+        break;
+      
+      case 'copy':
+        copyToClipboard(contextMenuTarget.url);
+        showToast('链接已复制');
+        break;
+      
+      case 'share':
+        if (navigator.share) {
+          navigator.share({
+            title: contextMenuTarget.title,
+            url: contextMenuTarget.url
+          });
+        } else {
+          copyToClipboard(contextMenuTarget.url);
+          showToast('链接已复制（可直接粘贴分享）');
+        }
+        break;
+      
+      case 'edit':
+        showEditModal(contextMenuTarget);
+        break;
+      
+      case 'delete':
+        confirmDelete(contextMenuTarget);
+        break;
+    }
+    
+    hideContextMenu();
+  }
+
+  // ==================== 编辑功能 ====================
+  let editingItem = null;
+
+  function showEditModal(item) {
+    editingItem = item;
+    const modal = shadowRoot.getElementById('editModal');
+    const titleInput = shadowRoot.getElementById('editTitle');
+    const urlInput = shadowRoot.getElementById('editUrl');
+    
+    titleInput.value = item.title || '';
+    urlInput.value = item.url || '';
+    
+    modal.classList.add('show');
+    titleInput.focus();
+  }
+
+  function hideEditModal() {
+    const modal = shadowRoot.getElementById('editModal');
+    modal.classList.remove('show');
+    editingItem = null;
+  }
+
+  function saveEdit() {
+    if (!editingItem) return;
+    
+    const titleInput = shadowRoot.getElementById('editTitle');
+    const urlInput = shadowRoot.getElementById('editUrl');
+    
+    const newTitle = titleInput.value.trim();
+    const newUrl = urlInput.value.trim();
+    
+    if (!newTitle || !newUrl) {
+      showToast('标题和网址不能为空');
+      return;
+    }
+    
+    chrome.runtime.sendMessage({
+      type: 'EDIT_BOOKMARK',
+      id: editingItem.id,
+      title: newTitle,
+      url: newUrl
+    }, (response) => {
+      if (response && response.success) {
+        showToast('书签已更新');
+        // 刷新数据
+        loadData().then(() => {
+          search(shadowRoot.getElementById('searchInput').value);
+        });
+      } else {
+        showToast('更新失败');
+      }
+    });
+    
+    hideEditModal();
+  }
+
+  function confirmDelete(item) {
+    const typeText = {
+      bookmarks: '书签',
+      history: '历史记录',
+      downloads: '下载记录'
+    }[currentMode] || '项目';
+    
+    if (confirm(`确定要删除这个${typeText}吗？\n${item.title || item.url}`)) {
+      chrome.runtime.sendMessage({
+        type: 'DELETE_ITEM',
+        mode: currentMode,
+        item: item
+      }, (response) => {
+        if (response && response.success) {
+          showToast(`${typeText}已删除`);
+          // 刷新数据
+          loadData().then(() => {
+            search(shadowRoot.getElementById('searchInput').value);
+          });
+        } else {
+          showToast('删除失败');
+        }
+      });
+    }
+  }
+
+  // ==================== 友情链接 ====================
+  async function loadFriendLinks() {
+    try {
+      const result = await chrome.storage.sync.get('optionsSettings');
+      const defaultLinks = [
+        { name: 'Codeium', url: 'https://www.codeium.com' },
+        { name: 'DeepSeek', url: 'https://www.deepseek.com' },
+        { name: '爱奇艺', url: 'https://www.iqiyi.com' },
+        { name: '哔哩哔哩', url: 'https://www.bilibili.com' },
+        { name: 'YouTube', url: 'https://www.youtube.com' }
+      ];
+      
+      const links = result.optionsSettings?.friendLinks || defaultLinks;
+      const container = shadowRoot.getElementById('friendLinksContainer');
+      
+      container.innerHTML = links.map(link => {
+        let hostname = '';
+        try {
+          hostname = new URL(link.url).hostname;
+        } catch (e) {}
+        
+        return `
+          <a href="${escapeHtml(link.url)}" class="friend-link-item" target="_blank" title="${escapeHtml(link.name)}">
+            <img class="friend-link-favicon" src="https://www.google.com/s2/favicons?domain=${hostname}&sz=32" onerror="this.style.display='none'">
+            <span class="friend-link-tag">${escapeHtml(link.name)}</span>
+          </a>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error('[BookmarkSearch] Failed to load friend links:', e);
+    }
+  }
+
+  // ==================== 设置页面 ====================
+  function openSettings() {
+    chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
+    hideOverlay();
+  }
+
+  // ==================== 工具函数 ====================
+  function copyToClipboard(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+
+  function showToast(message) {
+    // 创建简单的 toast 提示
+    let toast = shadowRoot.getElementById('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        background: var(--text-primary);
+        color: var(--bg-primary);
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 2147483650;
+        opacity: 0;
+        transition: opacity 0.3s;
+      `;
+      shadowRoot.getElementById('searchPanel').appendChild(toast);
+    }
+    
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 2000);
+  }
+
+})();

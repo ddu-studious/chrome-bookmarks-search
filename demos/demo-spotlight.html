@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Demo - Spotlight 风格</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: rgba(255, 255, 255, 0.85);
+      --bg-secondary: rgba(248, 249, 250, 0.9);
+      --bg-hover: rgba(0, 0, 0, 0.04);
+      --text-primary: #1d1d1f;
+      --text-secondary: #86868b;
+      --accent: #007aff;
+      --accent-light: rgba(0, 122, 255, 0.1);
+      --border: rgba(0, 0, 0, 0.08);
+      --shadow: 0 22px 70px 4px rgba(0, 0, 0, 0.15);
+      --blur: blur(30px);
+    }
+
+    .dark {
+      --bg-primary: rgba(30, 30, 30, 0.85);
+      --bg-secondary: rgba(45, 45, 45, 0.9);
+      --bg-hover: rgba(255, 255, 255, 0.08);
+      --text-primary: #f5f5f7;
+      --text-secondary: #a1a1a6;
+      --accent: #0a84ff;
+      --accent-light: rgba(10, 132, 255, 0.15);
+      --border: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      padding: 20px;
+    }
+
+    .container {
+      width: 580px;
+      max-height: 520px;
+      background: var(--bg-primary);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 搜索区域 */
+    .search-area {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .search-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 18px;
+      color: var(--text-primary);
+      outline: none;
+      font-weight: 400;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .shortcut-badge {
+      padding: 4px 8px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    /* 模式切换 */
+    .mode-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 8px 16px;
+      background: var(--bg-secondary);
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .mode-tab:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .mode-tab.active {
+      background: var(--bg-primary);
+      color: var(--accent);
+      font-weight: 500;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .mode-tab svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* 快捷操作区 */
+    .quick-actions {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .action-pill {
+      padding: 6px 12px;
+      background: var(--accent-light);
+      border: none;
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .action-pill:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* 结果列表 */
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .result-section {
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      padding: 8px 12px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .result-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .result-item.active {
+      background: var(--accent);
+    }
+
+    .result-item.active * {
+      color: white !important;
+    }
+
+    .result-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .result-icon img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-url {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .result-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .meta-badge {
+      padding: 3px 8px;
+      background: var(--accent-light);
+      border-radius: 10px;
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .meta-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* 底部状态栏 */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .keyboard-hints {
+      display: flex;
+      gap: 12px;
+    }
+
+    .hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .hint kbd {
+      padding: 2px 6px;
+      background: var(--bg-primary);
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 主题切换 */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    /* 滚动条 */
+    .results::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .results::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .results::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .results::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+
+    /* 设计说明 */
+    .design-notes {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .design-notes h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #1d1d1f;
+    }
+
+    .design-notes p {
+      font-size: 13px;
+      color: #86868b;
+      line-height: 1.5;
+    }
+
+    .design-notes ul {
+      margin-top: 8px;
+      padding-left: 20px;
+      font-size: 12px;
+      color: #86868b;
+    }
+
+    .design-notes li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 切换主题</button>
+
+  <div class="container">
+    <div class="search-area">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="搜索书签、标签页、历史记录..." value="github react">
+        <span class="shortcut-badge">⌥B</span>
+      </div>
+    </div>
+
+    <div class="mode-tabs">
+      <button class="mode-tab active">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        书签
+      </button>
+      <button class="mode-tab">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+        标签页
+      </button>
+      <button class="mode-tab">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        历史
+      </button>
+      <button class="mode-tab">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        下载
+      </button>
+    </div>
+
+    <div class="quick-actions">
+      <button class="action-pill">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        全部
+      </button>
+      <button class="action-pill">未使用 238</button>
+      <button class="action-pill">很少使用 18</button>
+      <button class="action-pill">休眠 0</button>
+    </div>
+
+    <div class="results">
+      <div class="result-section">
+        <div class="section-title">最佳匹配</div>
+        <div class="result-item active">
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">GitHub - facebook/react: A declarative UI library</div>
+            <div class="result-url">https://github.com/facebook/react</div>
+          </div>
+          <div class="result-meta">
+            <span class="meta-badge">156次</span>
+            <span class="meta-time">2小时前</span>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">React Documentation</div>
+            <div class="result-url">https://react.dev</div>
+          </div>
+          <div class="result-meta">
+            <span class="meta-badge">89次</span>
+            <span class="meta-time">昨天</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <div class="section-title">其他结果</div>
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">React Hooks 完全指南</div>
+            <div class="result-url">https://github.com/example/react-hooks-guide</div>
+          </div>
+          <div class="result-meta">
+            <span class="meta-time">3天前</span>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Awesome React Components</div>
+            <div class="result-url">https://github.com/brillout/awesome-react-components</div>
+          </div>
+          <div class="result-meta">
+            <span class="meta-time">1周前</span>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">React Native 中文文档</div>
+            <div class="result-url">https://reactnative.cn</div>
+          </div>
+          <div class="result-meta">
+            <span class="meta-time">2周前</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span>找到 5 个结果</span>
+      <div class="keyboard-hints">
+        <span class="hint"><kbd>↑↓</kbd> 选择</span>
+        <span class="hint"><kbd>↵</kbd> 打开</span>
+        <span class="hint"><kbd>⌘C</kbd> 复制</span>
+        <span class="hint"><kbd>Esc</kbd> 关闭</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>🎨 Demo 1: Spotlight 风格 (macOS)</h3>
+    <p>灵感来源于 macOS Spotlight 和 Raycast，强调简洁和效率。</p>
+    <ul>
+      <li><strong>毛玻璃效果</strong>：背景模糊营造层次感和现代感</li>
+      <li><strong>分组结果</strong>：区分「最佳匹配」和「其他结果」</li>
+      <li><strong>快捷键提示</strong>：底部状态栏显示操作快捷键</li>
+      <li><strong>圆角设计</strong>：所有元素采用柔和圆角</li>
+      <li><strong>微妙动画</strong>：hover 状态有轻柔过渡</li>
+    </ul>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+
+    // 模拟选中效果
+    document.querySelectorAll('.result-item').forEach((item, index) => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.result-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+
+    // 模拟 Tab 切换
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

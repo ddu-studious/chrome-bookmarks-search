@@ -1,14 +1,407 @@
 // Background script for handling extension events
+console.log('[BookmarkSearch] Background script loaded');
+
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Chrome Bookmarks Search Extension installed');
+  console.log('[BookmarkSearch] Extension installed');
 });
+
+// 书签使用状态常量
+const BOOKMARK_STATUS = {
+  NEVER_USED: 'never_used',
+  RARELY_USED: 'rarely_used',
+  DORMANT: 'dormant',
+  ACTIVE: 'active'
+};
+
+// 分类阈值
+const THRESHOLDS = {
+  RARELY_USED_MAX: 2,
+  DORMANT_DAYS: 180
+};
+
+// 获取URL的访问历史
+async function getUrlStats(url) {
+  return new Promise((resolve) => {
+    chrome.history.getVisits({ url }, visits => {
+      if (visits && visits.length > 0) {
+        const lastVisit = visits[visits.length - 1].visitTime;
+        resolve({
+          count: visits.length,
+          lastVisit: lastVisit
+        });
+      } else {
+        resolve({ count: 0, lastVisit: null });
+      }
+    });
+  });
+}
+
+// 书签分类函数
+function categorizeBookmark(bookmark) {
+  const { visitCount, lastVisit } = bookmark;
+  const now = Date.now();
+
+  if (!visitCount || visitCount === 0) {
+    return BOOKMARK_STATUS.NEVER_USED;
+  }
+
+  if (visitCount <= THRESHOLDS.RARELY_USED_MAX) {
+    return BOOKMARK_STATUS.RARELY_USED;
+  }
+
+  if (lastVisit) {
+    const daysSinceLastVisit = (now - lastVisit) / (1000 * 60 * 60 * 24);
+    if (daysSinceLastVisit > THRESHOLDS.DORMANT_DAYS) {
+      return BOOKMARK_STATUS.DORMANT;
+    }
+  }
+
+  return BOOKMARK_STATUS.ACTIVE;
+}
+
+// 加载书签数据
+async function loadBookmarks() {
+  const bookmarkTree = await chrome.bookmarks.getTree();
+  const allBookmarks = [];
+
+  function traverseBookmarks(node) {
+    if (node.url) {
+      allBookmarks.push(node);
+    }
+    if (node.children) {
+      node.children.forEach(traverseBookmarks);
+    }
+  }
+
+  bookmarkTree.forEach(traverseBookmarks);
+
+  // 获取所有书签的访问统计并分类
+  const bookmarksWithStats = await Promise.all(allBookmarks.map(async bookmark => {
+    const stats = await getUrlStats(bookmark.url);
+    const bookmarkData = {
+      ...bookmark,
+      visitCount: stats.count,
+      lastVisit: stats.lastVisit
+    };
+    bookmarkData.usageStatus = categorizeBookmark(bookmarkData);
+    return bookmarkData;
+  }));
+
+  // 按访问次数和最后访问时间排序
+  return bookmarksWithStats.sort((a, b) => {
+    if (b.visitCount !== a.visitCount) {
+      return b.visitCount - a.visitCount;
+    }
+    return (b.lastVisit || 0) - (a.lastVisit || 0);
+  });
+}
+
+// 加载标签页数据
+async function loadTabs() {
+  return chrome.tabs.query({});
+}
+
+// 加载历史记录
+async function loadHistory() {
+  const endTime = Date.now();
+  const startTime = endTime - (30 * 24 * 60 * 60 * 1000);
+
+  return new Promise((resolve) => {
+    chrome.history.search({
+      text: '',
+      startTime: startTime,
+      endTime: endTime,
+      maxResults: 1000
+    }, async (historyItems) => {
+      historyItems.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
+
+      const historyWithStats = await Promise.all(historyItems.map(async item => {
+        const stats = await getUrlStats(item.url);
+        return {
+          ...item,
+          visitCount: stats.count,
+          lastVisit: stats.lastVisit
+        };
+      }));
+
+      resolve(historyWithStats);
+    });
+  });
+}
+
+// 加载下载记录
+async function loadDownloads() {
+  return new Promise((resolve) => {
+    chrome.downloads.search({
+      limit: 1000,
+      orderBy: ['-startTime']
+    }, downloads => {
+      resolve(downloads || []);
+    });
+  });
+}
 
 // 处理消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('[BookmarkSearch] Received message:', request.type);
+  
+  // 获取数据
+  if (request.type === 'GET_DATA') {
+    (async () => {
+      let data = [];
+      try {
+        switch (request.mode) {
+          case 'bookmarks':
+            data = await loadBookmarks();
+            break;
+          case 'tabs':
+            data = await loadTabs();
+            break;
+          case 'history':
+            data = await loadHistory();
+            break;
+          case 'downloads':
+            data = await loadDownloads();
+            break;
+        }
+        console.log('[BookmarkSearch] Loaded data:', request.mode, data.length);
+      } catch (error) {
+        console.error('[BookmarkSearch] Error loading data:', error);
+      }
+      sendResponse({ data });
+    })();
+    return true;
+  }
+
+  // 打开结果
+  if (request.type === 'OPEN_RESULT') {
+    const { mode, item } = request;
+
+    switch (mode) {
+      case 'bookmarks':
+      case 'history':
+        if (item.url) {
+          chrome.tabs.create({ url: item.url });
+        }
+        break;
+      case 'tabs':
+        if (item.id) {
+          chrome.tabs.update(item.id, { active: true });
+          chrome.windows.update(item.windowId, { focused: true });
+        }
+        break;
+      case 'downloads':
+        if (item.id) {
+          chrome.downloads.open(item.id);
+        }
+        break;
+    }
+
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 保存样式设置
+  if (request.type === 'SAVE_STYLE') {
+    chrome.storage.sync.set({ overlayStyle: request.style });
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 获取样式设置
+  if (request.type === 'GET_STYLE') {
+    chrome.storage.sync.get('overlayStyle', (result) => {
+      sendResponse({ style: result.overlayStyle || 'spotlight' });
+    });
+    return true;
+  }
+
+  // 旧的搜索书签接口
   if (request.type === 'SEARCH_BOOKMARKS') {
     chrome.bookmarks.search(request.query)
       .then(results => sendResponse({ success: true, results }))
       .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // Will respond asynchronously
+    return true;
+  }
+
+  // 在隐私窗口打开
+  if (request.type === 'OPEN_INCOGNITO') {
+    chrome.windows.create({
+      url: request.url,
+      incognito: true
+    });
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 编辑书签
+  if (request.type === 'EDIT_BOOKMARK') {
+    chrome.bookmarks.update(request.id, {
+      title: request.title,
+      url: request.url
+    }, () => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true });
+      }
+    });
+    return true;
+  }
+
+  // 删除项目
+  if (request.type === 'DELETE_ITEM') {
+    const { mode, item } = request;
+    
+    try {
+      if (mode === 'bookmarks') {
+        chrome.bookmarks.remove(item.id, () => {
+          sendResponse({ success: !chrome.runtime.lastError });
+        });
+      } else if (mode === 'history') {
+        chrome.history.deleteUrl({ url: item.url }, () => {
+          sendResponse({ success: !chrome.runtime.lastError });
+        });
+      } else if (mode === 'downloads') {
+        chrome.downloads.erase({ id: item.id }, () => {
+          sendResponse({ success: !chrome.runtime.lastError });
+        });
+      } else {
+        sendResponse({ success: false, error: 'Unknown mode' });
+      }
+    } catch (error) {
+      sendResponse({ success: false, error: error.message });
+    }
+    return true;
+  }
+
+  // 打开设置页面
+  if (request.type === 'OPEN_OPTIONS') {
+    chrome.runtime.openOptionsPage();
+    sendResponse({ success: true });
+    return true;
+  }
+});
+
+// 注入并打开浮层的核心函数
+async function injectAndToggleOverlay(tabId) {
+  console.log('[BookmarkSearch] Attempting to toggle overlay in tab:', tabId);
+  
+  try {
+    // 先尝试发送消息
+    const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
+    console.log('[BookmarkSearch] Message sent successfully, response:', response);
+  } catch (error) {
+    console.log('[BookmarkSearch] Content script not ready, injecting...', error.message);
+    
+    // 注入 content script
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['js/search-parser.js', 'js/smart-sort.js', 'js/content-script.js']
+      });
+      console.log('[BookmarkSearch] Content script injected');
+      
+      // 等待一小段时间后发送消息
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      try {
+        const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
+        console.log('[BookmarkSearch] Message sent after injection, response:', response);
+      } catch (msgError) {
+        console.error('[BookmarkSearch] Failed to send message after injection:', msgError);
+      }
+    } catch (injectError) {
+      console.error('[BookmarkSearch] Failed to inject content script:', injectError);
+    }
+  }
+}
+
+// 检查是否可以注入的页面
+function canInjectIntoTab(tab) {
+  if (!tab || !tab.url) return false;
+  
+  const url = tab.url;
+  // 不能注入的页面
+  if (url.startsWith('chrome://') ||
+      url.startsWith('chrome-extension://') ||
+      url.startsWith('edge://') ||
+      url.startsWith('about:') ||
+      url.startsWith('moz-extension://') ||
+      url.startsWith('file://') ||
+      url === 'about:blank') {
+    return false;
+  }
+  return true;
+}
+
+async function findBestInjectableTabInCurrentWindow() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const injectable = tabs.filter(canInjectIntoTab);
+  if (injectable.length === 0) return null;
+
+  // 选最近访问的可注入标签页（lastAccessed 越大越新）
+  injectable.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return injectable[0];
+}
+
+async function openFallbackTabAndToggleOverlay() {
+  // 在没有任何可注入标签页时，打开一个普通网页作为“承载页”
+  const fallbackUrl = 'https://example.com/';
+  console.log('[BookmarkSearch] Opening fallback tab:', fallbackUrl);
+
+  const createdTab = await chrome.tabs.create({ url: fallbackUrl, active: true });
+  if (!createdTab?.id) return;
+
+  await new Promise((resolve) => {
+    const listener = (tabId, changeInfo) => {
+      if (tabId === createdTab.id && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+
+  await injectAndToggleOverlay(createdTab.id);
+}
+
+async function ensureOverlayVisibleFromAnyPage(tab) {
+  if (tab && canInjectIntoTab(tab)) {
+    await injectAndToggleOverlay(tab.id);
+    return;
+  }
+
+  console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url);
+
+  // 优雅降级：切换到最近一个可注入的普通网页标签页
+  const bestTab = await findBestInjectableTabInCurrentWindow();
+  if (bestTab?.id) {
+    console.log('[BookmarkSearch] Switching to injectable tab:', bestTab.id, bestTab.url);
+    await chrome.tabs.update(bestTab.id, { active: true });
+    await injectAndToggleOverlay(bestTab.id);
+    return;
+  }
+
+  // 当前窗口没有任何可注入网页：新开一个承载页
+  await openFallbackTabAndToggleOverlay();
+}
+
+// 点击扩展图标
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('[BookmarkSearch] Action clicked, tab:', tab.id, tab.url);
+  await ensureOverlayVisibleFromAnyPage(tab);
+});
+
+// 监听快捷键
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log('[BookmarkSearch] Command received:', command);
+  
+  // 只处理 _execute_action 命令
+  if (command === '_execute_action') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    console.log('[BookmarkSearch] Current tab:', tab?.id, tab?.url);
+
+    await ensureOverlayVisibleFromAnyPage(tab);
   }
 });

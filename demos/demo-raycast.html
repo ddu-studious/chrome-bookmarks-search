@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Demo - Raycast/Linear 风格</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-base: #18181b;
+      --bg-elevated: #27272a;
+      --bg-hover: #3f3f46;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
+      --accent: #a855f7;
+      --accent-secondary: #ec4899;
+      --accent-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .light {
+      --bg-base: #ffffff;
+      --bg-elevated: #f4f4f5;
+      --bg-hover: #e4e4e7;
+      --text-primary: #18181b;
+      --text-secondary: #52525b;
+      --text-tertiary: #a1a1aa;
+      --border: rgba(0, 0, 0, 0.08);
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0f0f10 0%, #1a1a2e 50%, #16213e 100%);
+      padding: 20px;
+    }
+
+    .container {
+      width: 560px;
+      max-height: 540px;
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 搜索区域 */
+    .search-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--text-tertiary);
+    }
+
+    .search-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 15px;
+      color: var(--text-primary);
+      outline: none;
+      font-weight: 500;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-tertiary);
+      font-weight: 400;
+    }
+
+    .search-scope {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--accent-gradient);
+      border-radius: 6px;
+      font-size: 12px;
+      color: white;
+      font-weight: 500;
+    }
+
+    /* 命令面板导航 */
+    .command-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .nav-item {
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .nav-item svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.7;
+    }
+
+    .nav-item.active svg {
+      opacity: 1;
+    }
+
+    .nav-count {
+      padding: 2px 6px;
+      background: var(--border);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* 筛选条 */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-chip {
+      padding: 4px 10px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .filter-chip.active {
+      background: var(--accent-gradient);
+      border-color: transparent;
+      color: white;
+      font-weight: 500;
+    }
+
+    .filter-chip .count {
+      margin-left: 4px;
+      opacity: 0.8;
+    }
+
+    /* 排序按钮组 */
+    .sort-group {
+      display: flex;
+      gap: 2px;
+      margin-left: auto;
+      background: var(--bg-elevated);
+      border-radius: 6px;
+      padding: 2px;
+    }
+
+    .sort-btn {
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .sort-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .sort-btn.active {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .sort-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* 结果列表 */
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      position: relative;
+    }
+
+    .result-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 0;
+      background: var(--accent-gradient);
+      border-radius: 2px;
+      transition: height 0.15s ease;
+    }
+
+    .result-item:hover {
+      background: var(--bg-elevated);
+    }
+
+    .result-item:hover::before {
+      height: 24px;
+    }
+
+    .result-item.active {
+      background: var(--bg-elevated);
+    }
+
+    .result-item.active::before {
+      height: 24px;
+    }
+
+    .result-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .result-icon img {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-tag {
+      padding: 2px 6px;
+      background: rgba(168, 85, 247, 0.15);
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .result-url {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .result-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .result-item:hover .result-actions {
+      opacity: 1;
+    }
+
+    .result-stat {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .result-stat.highlight {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .action-btn {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: var(--bg-hover);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .action-btn:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    .action-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* 底部状态栏 */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .result-count {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .result-count strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .keyboard-shortcuts {
+      display: flex;
+      gap: 16px;
+    }
+
+    .shortcut {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .shortcut kbd {
+      padding: 2px 5px;
+      background: var(--bg-hover);
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 10px;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    /* 主题切换 */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: white;
+    }
+
+    /* 滚动条 */
+    .results::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .results::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .results::-webkit-scrollbar-thumb {
+      background: var(--bg-hover);
+      border-radius: 3px;
+    }
+
+    /* 设计说明 */
+    .design-notes {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 16px 20px;
+      background: rgba(24, 24, 27, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: white;
+    }
+
+    .design-notes h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .design-notes p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .design-notes ul {
+      margin-top: 8px;
+      padding-left: 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .design-notes li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">☀️ 切换主题</button>
+
+  <div class="container">
+    <div class="search-header">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" class="search-input" placeholder="搜索或输入命令..." value="react hooks">
+      <div class="search-scope">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+        </svg>
+        书签
+      </div>
+    </div>
+
+    <div class="command-nav">
+      <button class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        书签
+        <span class="nav-count">303</span>
+      </button>
+      <button class="nav-item">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+        标签页
+        <span class="nav-count">12</span>
+      </button>
+      <button class="nav-item">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        历史
+        <span class="nav-count">847</span>
+      </button>
+      <button class="nav-item">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        下载
+        <span class="nav-count">56</span>
+      </button>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">筛选</span>
+      <div class="filter-chips">
+        <button class="filter-chip active">全部</button>
+        <button class="filter-chip">未使用<span class="count">238</span></button>
+        <button class="filter-chip">很少使用<span class="count">18</span></button>
+        <button class="filter-chip">休眠<span class="count">0</span></button>
+      </div>
+      <div class="sort-group">
+        <button class="sort-btn active" title="智能排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+        </button>
+        <button class="sort-btn" title="时间排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+        </button>
+        <button class="sort-btn" title="频率排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="results">
+      <div class="result-item active">
+        <div class="result-icon">
+          <img src="https://react.dev/favicon.ico" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-header">
+            <span class="result-title">React Hooks 完全指南 - 从入门到精通</span>
+            <span class="result-tag">HOT</span>
+          </div>
+          <div class="result-url">https://react.dev/learn/hooks</div>
+        </div>
+        <div class="result-actions">
+          <span class="result-stat highlight">184次访问</span>
+          <span class="result-stat">1天前</span>
+          <button class="action-btn" title="复制链接">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-header">
+            <span class="result-title">useHooks - Easy to understand React Hook recipes</span>
+          </div>
+          <div class="result-url">https://github.com/uidotdev/usehooks</div>
+        </div>
+        <div class="result-actions">
+          <span class="result-stat highlight">67次</span>
+          <span class="result-stat">3天前</span>
+          <button class="action-btn" title="复制链接">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-header">
+            <span class="result-title">ahooks - React Hooks Library</span>
+          </div>
+          <div class="result-url">https://ahooks.js.org</div>
+        </div>
+        <div class="result-actions">
+          <span class="result-stat">45次</span>
+          <span class="result-stat">1周前</span>
+          <button class="action-btn" title="复制链接">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://overreacted.io/favicon.ico" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-header">
+            <span class="result-title">A Complete Guide to useEffect — Overreacted</span>
+          </div>
+          <div class="result-url">https://overreacted.io/a-complete-guide-to-useeffect/</div>
+        </div>
+        <div class="result-actions">
+          <span class="result-stat">32次</span>
+          <span class="result-stat">2周前</span>
+          <button class="action-btn" title="复制链接">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://www.patterns.dev/favicon.ico" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-header">
+            <span class="result-title">React Hooks Pattern - patterns.dev</span>
+          </div>
+          <div class="result-url">https://www.patterns.dev/posts/hooks-pattern</div>
+        </div>
+        <div class="result-actions">
+          <span class="result-stat">18次</span>
+          <span class="result-stat">1月前</span>
+          <button class="action-btn" title="复制链接">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-left">
+        <span class="result-count">找到 <strong>5</strong> 个结果</span>
+      </div>
+      <div class="keyboard-shortcuts">
+        <span class="shortcut"><kbd>↑</kbd><kbd>↓</kbd> 导航</span>
+        <span class="shortcut"><kbd>↵</kbd> 打开</span>
+        <span class="shortcut"><kbd>⌘</kbd><kbd>C</kbd> 复制</span>
+        <span class="shortcut"><kbd>Esc</kbd> 关闭</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>🚀 Demo 2: Raycast/Linear 风格 (命令面板)</h3>
+    <p>灵感来源于 Raycast、Linear 和 Vercel，强调高效和专业感。</p>
+    <ul>
+      <li><strong>渐变强调色</strong>：紫粉渐变作为主题色，现代感强</li>
+      <li><strong>左侧指示条</strong>：hover 时显示渐变色条，指示当前项</li>
+      <li><strong>紧凑信息密度</strong>：在有限空间展示更多信息</li>
+      <li><strong>操作快捷显示</strong>：hover 时显示操作按钮</li>
+      <li><strong>Pill 导航</strong>：顶部导航带计数标签</li>
+    </ul>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('light');
+    }
+
+    document.querySelectorAll('.result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.result-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.nav-item').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
