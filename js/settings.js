@@ -9,7 +9,21 @@ const DEFAULT_SETTINGS = {
 
 // 获取当前设置
 async function getSettings() {
-  const result = await chrome.storage.sync.get('settings');
+  // 尝试从两个位置读取设置（兼容 options 页面和旧设置）
+  const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
+  
+  // 优先使用 optionsSettings（来自 options 页面）
+  if (result.optionsSettings) {
+    return {
+      ...DEFAULT_SETTINGS,
+      theme: result.optionsSettings.theme || DEFAULT_SETTINGS.theme,
+      fontSize: result.optionsSettings.fontSize || DEFAULT_SETTINGS.fontSize,
+      animation: result.optionsSettings.animation !== undefined ? result.optionsSettings.animation : DEFAULT_SETTINGS.animation,
+      highContrast: result.optionsSettings.highContrast !== undefined ? result.optionsSettings.highContrast : DEFAULT_SETTINGS.highContrast,
+      lineHeight: DEFAULT_SETTINGS.lineHeight
+    };
+  }
+  
   return { ...DEFAULT_SETTINGS, ...result.settings };
 }
 

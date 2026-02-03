@@ -34,6 +34,7 @@ let editingItem = null;
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
+  await applyTheme(); // 应用主题设置
   await loadStats();
   bindNavigationEvents();
   bindSettingEvents();
@@ -41,7 +42,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindModalEvents();
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
+  
+  // 监听系统主题变化
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+    const result = await chrome.storage.sync.get('optionsSettings');
+    const settings = result.optionsSettings || {};
+    if (settings.theme === 'system' || !settings.theme) {
+      await applyTheme();
+    }
+  });
 });
+
+// 应用主题到页面
+async function applyTheme() {
+  const result = await chrome.storage.sync.get('optionsSettings');
+  const settings = result.optionsSettings || {};
+  const theme = settings.theme || 'system';
+  const root = document.documentElement;
+  
+  // 移除所有主题类
+  root.classList.remove('dark-theme', 'light-theme');
+  
+  if (theme === 'dark') {
+    root.classList.add('dark-theme');
+  } else if (theme === 'light') {
+    root.classList.add('light-theme');
+  }
+  // system 模式下不添加任何类，让 CSS media query 自动处理
+}
 
 // ==================== 导航 ====================
 function handleHashChange() {
@@ -146,6 +174,9 @@ async function saveSettings() {
     overlayStyle: settings.uiStyle,
     overlayFont: fontFamily
   });
+  
+  // 立即应用主题到当前页面
+  await applyTheme();
   
   showToast('设置已保存');
 }

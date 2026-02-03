@@ -2153,13 +2153,37 @@
     // 添加新样式类
     overlayContainer.classList.add(`style-${style}`);
 
-    // 检测深色模式
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (isDark && (style === 'spotlight' || style === 'fluent')) {
-      overlayContainer.classList.add('dark');
-    } else if (!isDark && style === 'raycast') {
-      overlayContainer.classList.add('light');
-    }
+    // 获取用户主题设置并应用
+    chrome.storage.sync.get(['optionsSettings', 'settings'], (result) => {
+      // 优先使用 optionsSettings（来自 options 页面）
+      let userTheme = 'system';
+      if (result.optionsSettings && result.optionsSettings.theme) {
+        userTheme = result.optionsSettings.theme;
+      } else if (result.settings && result.settings.theme) {
+        userTheme = result.settings.theme;
+      }
+      
+      // 根据用户设置或系统偏好决定是否使用深色模式
+      let isDark = false;
+      if (userTheme === 'dark') {
+        isDark = true;
+      } else if (userTheme === 'light') {
+        isDark = false;
+      } else {
+        // system 模式：跟随系统
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      
+      // 移除之前的主题类
+      overlayContainer.classList.remove('dark', 'light');
+      
+      // 应用主题
+      if (isDark && (style === 'spotlight' || style === 'fluent')) {
+        overlayContainer.classList.add('dark');
+      } else if (!isDark && style === 'raycast') {
+        overlayContainer.classList.add('light');
+      }
+    });
   }
 
   // 显示浮层
@@ -2204,6 +2228,12 @@
       searchInput.focus();
       searchInput.select();
     }, 100);
+
+    // 初始化筛选栏显示状态（书签模式下显示）
+    const filterBar = shadowRoot.getElementById('filterBar');
+    if (filterBar) {
+      filterBar.classList.toggle('show', currentMode === 'bookmarks');
+    }
 
     // 加载初始数据
     loadData().then(() => {
@@ -2254,10 +2284,31 @@
   
   console.log('[BookmarkSearch] Message listener registered');
 
-  // 监听系统主题变化
+  // 监听系统主题变化（仅当用户设置为跟随系统时才响应）
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (overlayContainer) {
-      setStyle(currentStyle);
+      chrome.storage.sync.get(['optionsSettings', 'settings'], (result) => {
+        let userTheme = 'system';
+        if (result.optionsSettings && result.optionsSettings.theme) {
+          userTheme = result.optionsSettings.theme;
+        } else if (result.settings && result.settings.theme) {
+          userTheme = result.settings.theme;
+        }
+        
+        // 只有跟随系统时才响应系统主题变化
+        if (userTheme === 'system') {
+          setStyle(currentStyle);
+        }
+      });
+    }
+  });
+  
+  // 监听存储变化以实时更新主题
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync' && (changes.optionsSettings || changes.settings)) {
+      if (overlayContainer) {
+        setStyle(currentStyle);
+      }
     }
   });
 

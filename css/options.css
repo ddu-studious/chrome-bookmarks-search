@@ -26,8 +26,9 @@
   --sidebar-width: 240px;
 }
 
+/* 深色主题变量 - 同时支持系统偏好和手动选择 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light-theme) {
     --bg-primary: #1c1c1e;
     --bg-secondary: #2c2c2e;
     --bg-tertiary: #3a3a3c;
@@ -48,6 +49,29 @@
     --warning: #ff9f0a;
     --warning-light: rgba(255, 159, 10, 0.15);
   }
+}
+
+/* 手动选择深色主题 */
+:root.dark-theme {
+  --bg-primary: #1c1c1e;
+  --bg-secondary: #2c2c2e;
+  --bg-tertiary: #3a3a3c;
+  --bg-card: #2c2c2e;
+  --bg-hover: #3a3a3c;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  --border: #3d3d3f;
+  --border-light: #48484a;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-light: rgba(10, 132, 255, 0.15);
+  --danger: #ff453a;
+  --danger-light: rgba(255, 69, 58, 0.15);
+  --success: #30d158;
+  --success-light: rgba(48, 209, 88, 0.15);
+  --warning: #ff9f0a;
+  --warning-light: rgba(255, 159, 10, 0.15);
 }
 
 /* ==================== 基础样式 ==================== */
