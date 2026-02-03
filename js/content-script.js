@@ -349,6 +349,11 @@
             <span class="hint"><kbd>←→</kbd> 切换</span>
             <span class="hint"><kbd>Esc</kbd> 关闭</span>
           </div>
+          <button class="font-switcher" id="fontSwitcher" title="切换字体">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M9.93 13.5h4.14L12 7.98 9.93 13.5zM20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-4.05 16.5l-1.14-3H9.17l-1.12 3H5.96l5.11-13h1.86l5.11 13h-2.09z"/>
+            </svg>
+          </button>
           <button class="settings-btn-overlay" id="settingsBtn" title="设置">
             <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
               <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -423,6 +428,36 @@
     `;
   }
 
+  // 字体配置 - 6种常用字体
+  const FONT_CONFIGS = {
+    system: {
+      family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+      name: '系统默认'
+    },
+    pingfang: {
+      family: "'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      name: '苹方'
+    },
+    yahei: {
+      family: "'Microsoft YaHei', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      name: '微软雅黑'
+    },
+    inter: {
+      family: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      name: 'Inter'
+    },
+    noto: {
+      family: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      name: 'Noto Sans'
+    },
+    sourcehans: {
+      family: "'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif",
+      name: '思源黑体'
+    }
+  };
+
+  let currentFont = 'system';
+
   // 获取样式
   function getStyles() {
     return `
@@ -435,6 +470,14 @@
         --overlay-max-height: 520px;
         --transition-duration: 0.2s;
       }
+
+      /* 字体切换支持 - 6种常用字体 */
+      :host(.font-system) { --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+      :host(.font-pingfang) { --font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+      :host(.font-yahei) { --font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      :host(.font-inter) { --font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+      :host(.font-noto) { --font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+      :host(.font-sourcehans) { --font-family: 'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif; }
 
       /* ==================== Spotlight 风格 (默认) ==================== */
       :host(.style-spotlight) {
@@ -1042,6 +1085,32 @@
         white-space: nowrap;
       }
 
+      /* ==================== 字体切换按钮 ==================== */
+      .font-switcher {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--bg-hover);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        margin-left: 8px;
+      }
+
+      .font-switcher:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      .font-switcher svg {
+        width: 16px;
+        height: 16px;
+      }
+
       /* ==================== 设置按钮 ==================== */
       .settings-btn-overlay {
         width: 28px;
@@ -1641,6 +1710,9 @@
     // 右键菜单点击
     shadowRoot.getElementById('contextMenu').addEventListener('click', handleContextMenuClick);
 
+    // 字体切换按钮
+    shadowRoot.getElementById('fontSwitcher').addEventListener('click', cycleFont);
+
     // 设置按钮
     shadowRoot.getElementById('settingsBtn').addEventListener('click', openSettings);
 
@@ -1857,11 +1929,21 @@
       });
     }
 
+    // 确定实际使用的排序模式
+    // 历史记录、标签页、下载：无搜索词时默认按时间排序更直观
+    // 书签：默认按智能排序（访问频率 + 相关度）
+    let effectiveSort = currentSort;
+    if (currentSort === 'smart') {
+      if ((currentMode === 'history' || currentMode === 'tabs' || currentMode === 'downloads') && !query?.trim()) {
+        effectiveSort = 'time';
+      }
+    }
+
     if (typeof SmartSort !== 'undefined' && SmartSort.sort) {
-      items = SmartSort.sort(items, { searchText: query || '', mode: currentSort });
+      items = SmartSort.sort(items, { searchText: query || '', mode: effectiveSort });
     } else {
       // 兜底排序（保持行为可用）
-      items = sortItems(items, query || '');
+      items = sortItems(items, query || '', effectiveSort);
     }
 
     currentResults = items;
@@ -1876,13 +1958,14 @@
   }
 
   // 排序
-  function sortItems(items, searchText) {
+  function sortItems(items, searchText, sortMode) {
     const sorted = [...items];
+    const mode = sortMode || currentSort;
 
     const getScore = (item) => {
-      switch (currentSort) {
+      switch (mode) {
         case 'time':
-          return item.lastVisit || item.startTime || item.dateAdded || 0;
+          return item.lastVisit || item.lastVisitTime || item.startTime || item.dateAdded || 0;
         case 'frequency':
           return item.visitCount || 0;
         case 'smart':
@@ -1892,7 +1975,7 @@
             score += 100;
           }
           score += (item.visitCount || 0) * 0.5;
-          score += ((item.lastVisit || 0) / 1000000000000) * 0.3;
+          score += ((item.lastVisit || item.lastVisitTime || 0) / 1000000000000) * 0.3;
           return score;
       }
     };
@@ -2006,6 +2089,37 @@
     hideOverlay();
   }
 
+  // 循环切换字体
+  function cycleFont() {
+    const fonts = ['system', 'pingfang', 'inter', 'noto'];
+    const currentIndex = fonts.indexOf(currentFont);
+    const nextIndex = (currentIndex + 1) % fonts.length;
+    setFont(fonts[nextIndex]);
+
+    // 保存设置
+    chrome.runtime.sendMessage({
+      type: 'SAVE_FONT',
+      font: fonts[nextIndex]
+    });
+
+    // 显示当前字体名称
+    const fontConfig = FONT_CONFIGS[fonts[nextIndex]];
+    showToast(`字体: ${fontConfig?.name || fonts[nextIndex]}`);
+  }
+
+  // 设置字体
+  function setFont(font) {
+    currentFont = font;
+    
+    // 移除所有字体类
+    Object.keys(FONT_CONFIGS).forEach(f => {
+      overlayContainer.classList.remove(`font-${f}`);
+    });
+    
+    // 添加新字体类
+    overlayContainer.classList.add(`font-${font}`);
+  }
+
   // 循环切换样式
   function cycleStyle() {
     const styles = ['spotlight', 'raycast', 'fluent'];
@@ -2029,8 +2143,12 @@
     const container = shadowRoot.getElementById('searchPanel');
     const backdrop = shadowRoot.getElementById('backdrop');
     
-    // 移除所有样式类
+    // 移除所有样式类，但保留字体类
+    const fontClass = Array.from(overlayContainer.classList).find(c => c.startsWith('font-'));
     overlayContainer.className = 'bookmark-search-overlay-host';
+    if (fontClass) {
+      overlayContainer.classList.add(fontClass);
+    }
     
     // 添加新样式类
     overlayContainer.classList.add(`style-${style}`);
@@ -2058,6 +2176,15 @@
         setStyle(response.style);
       } else {
         setStyle('spotlight');
+      }
+    });
+
+    // 加载保存的字体
+    chrome.runtime.sendMessage({ type: 'GET_FONT' }, (response) => {
+      if (response && response.font) {
+        setFont(response.font);
+      } else {
+        setFont('system');
       }
     });
 

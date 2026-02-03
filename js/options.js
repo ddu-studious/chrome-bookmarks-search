@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   theme: 'system',
   uiStyle: 'spotlight',
   fontSize: 'medium',
+  fontFamily: 'system',
   animation: true,
   highContrast: false,
   defaultMode: 'bookmarks',
@@ -75,13 +76,19 @@ function bindNavigationEvents() {
 
 // ==================== 设置加载/保存 ====================
 async function loadSettings() {
-  const result = await chrome.storage.sync.get('optionsSettings');
+  const result = await chrome.storage.sync.get(['optionsSettings', 'overlayFont']);
   const settings = { ...DEFAULT_SETTINGS, ...result.optionsSettings };
+  
+  // 如果有单独存储的字体设置，使用它
+  if (result.overlayFont) {
+    settings.fontFamily = result.overlayFont;
+  }
   
   // 应用到表单
   document.getElementById('themeMode').value = settings.theme;
   document.getElementById('uiStyle').value = settings.uiStyle;
   document.getElementById('fontSize').value = settings.fontSize;
+  document.getElementById('fontFamily').value = settings.fontFamily;
   document.getElementById('enableAnimation').checked = settings.animation;
   document.getElementById('highContrast').checked = settings.highContrast;
   document.getElementById('defaultMode').value = settings.defaultMode;
@@ -106,10 +113,13 @@ async function loadCurrentShortcut() {
 }
 
 async function saveSettings() {
+  const fontFamily = document.getElementById('fontFamily').value;
+  
   const settings = {
     theme: document.getElementById('themeMode').value,
     uiStyle: document.getElementById('uiStyle').value,
     fontSize: document.getElementById('fontSize').value,
+    fontFamily: fontFamily,
     animation: document.getElementById('enableAnimation').checked,
     highContrast: document.getElementById('highContrast').checked,
     defaultMode: document.getElementById('defaultMode').value,
@@ -124,7 +134,7 @@ async function saveSettings() {
   
   await chrome.storage.sync.set({ optionsSettings: settings });
   
-  // 同步到旧格式
+  // 同步到旧格式（包括字体设置）
   await chrome.storage.sync.set({
     settings: {
       theme: settings.theme,
@@ -133,7 +143,8 @@ async function saveSettings() {
       animation: settings.animation,
       highContrast: settings.highContrast
     },
-    overlayStyle: settings.uiStyle
+    overlayStyle: settings.uiStyle,
+    overlayFont: fontFamily
   });
   
   showToast('设置已保存');

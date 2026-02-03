@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>字体测试 - Chrome 书签搜索</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --text-primary: #e8e8e8;
+      --text-secondary: #a0a0a0;
+      --accent: #00d4ff;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      padding: 40px;
+      color: var(--text-primary);
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      margin-bottom: 30px;
+    }
+
+    .font-selector {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .font-btn {
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-primary);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .font-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .font-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    .preview-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .preview-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .preview-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .preview-content {
+      transition: font-family 0.3s;
+    }
+
+    /* 搜索框预览 */
+    .search-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .search-preview svg {
+      width: 20px;
+      height: 20px;
+      color: var(--text-secondary);
+    }
+
+    .search-preview input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 16px;
+      outline: none;
+    }
+
+    .search-preview input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    /* 结果列表预览 */
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      transition: background 0.15s;
+    }
+
+    .result-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .result-item.active {
+      background: var(--accent);
+    }
+
+    .result-item.active .result-title,
+    .result-item.active .result-url {
+      color: #000;
+    }
+
+    .result-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result-icon img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-url {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* 中文文本预览 */
+    .text-samples {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .text-sample {
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+
+    .text-sample h4 {
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .text-sample p {
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .text-sample.large p {
+      font-size: 18px;
+    }
+
+    .text-sample.small p {
+      font-size: 12px;
+    }
+
+    /* 字体对比表 */
+    .font-comparison {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .font-comparison th,
+    .font-comparison td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .font-comparison th {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .font-comparison tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* 快捷键预览 */
+    .keyboard-hints {
+      display: flex;
+      gap: 16px;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+
+    .hint {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .hint kbd {
+      padding: 3px 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    /* 推荐标签 */
+    .recommend-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+
+    .font-info {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      border-radius: 12px;
+    }
+
+    .font-info h3 {
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .font-info ul {
+      padding-left: 20px;
+      color: var(--text-secondary);
+    }
+
+    .font-info li {
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .current-font {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 100;
+    }
+
+    .current-font strong {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="current-font">
+    当前字体: <strong id="currentFontName">系统默认</strong>
+  </div>
+
+  <div class="container">
+    <h1>🔤 字体测试页面</h1>
+    <p class="subtitle">选择适合中英文混排的最佳字体</p>
+
+    <div class="font-selector">
+      <button class="font-btn active" data-font="system" data-name="系统默认">
+        系统默认
+      </button>
+      <button class="font-btn" data-font="pingfang" data-name="苹方 (PingFang SC)">
+        苹方 <span class="recommend-badge">macOS</span>
+      </button>
+      <button class="font-btn" data-font="yahei" data-name="微软雅黑">
+        微软雅黑 <span class="recommend-badge">Windows</span>
+      </button>
+      <button class="font-btn" data-font="inter" data-name="Inter">
+        Inter
+      </button>
+      <button class="font-btn" data-font="noto" data-name="Noto Sans SC">
+        Noto Sans SC
+      </button>
+      <button class="font-btn" data-font="sourcehans" data-name="思源黑体">
+        思源黑体
+      </button>
+    </div>
+
+    <!-- 搜索界面预览 -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <span class="preview-title">搜索界面预览</span>
+        <span class="preview-meta">模拟实际使用效果</span>
+      </div>
+      <div class="preview-content" id="previewContent">
+        <div class="search-preview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" placeholder="搜索书签、标签页、历史记录..." value="GitHub React">
+        </div>
+
+        <div class="result-item active">
+          <div class="result-icon">
+            <img src="https://www.google.com/s2/favicons?domain=github.com&sz=32">
+          </div>
+          <div class="result-content">
+            <div class="result-title">React - 用于构建用户界面的 JavaScript 库</div>
+            <div class="result-url">https://github.com/facebook/react</div>
+          </div>
+          <div class="result-meta">2小时前</div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://www.google.com/s2/favicons?domain=reactjs.org&sz=32">
+          </div>
+          <div class="result-content">
+            <div class="result-title">React – A JavaScript library for building UIs</div>
+            <div class="result-url">https://reactjs.org/</div>
+          </div>
+          <div class="result-meta">1天前</div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-icon">
+            <img src="https://www.google.com/s2/favicons?domain=github.com&sz=32">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Awesome React - 精选 React 资源集合</div>
+            <div class="result-url">https://github.com/enaqx/awesome-react</div>
+          </div>
+          <div class="result-meta">3天前</div>
+        </div>
+
+        <div class="keyboard-hints">
+          <span class="hint"><kbd>↑↓</kbd> 选择</span>
+          <span class="hint"><kbd>↵</kbd> 打开</span>
+          <span class="hint"><kbd>←→</kbd> 切换</span>
+          <span class="hint"><kbd>Esc</kbd> 关闭</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文本样本对比 -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <span class="preview-title">中英文混排测试</span>
+        <span class="preview-meta">不同场景下的显示效果</span>
+      </div>
+      <div class="preview-content text-samples" id="textSamples">
+        <div class="text-sample large">
+          <h4>标题文字 (18px)</h4>
+          <p>Chrome 书签搜索 - 快速找到你需要的内容</p>
+        </div>
+        <div class="text-sample">
+          <h4>正文文字 (14px)</h4>
+          <p>支持多关键词搜索，使用 site:github.com 限定网站，after:2024-01 筛选时间范围。</p>
+        </div>
+        <div class="text-sample small">
+          <h4>辅助文字 (12px)</h4>
+          <p>最后访问时间: 2024年1月30日 15:30 | 访问次数: 128次 | 来源: 历史记录</p>
+        </div>
+        <div class="text-sample">
+          <h4>混合内容</h4>
+          <p>React v18.2.0 发布了！新增 Concurrent Features 和 Suspense for SSR，性能提升 30%+。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 字体对比表 -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <span class="preview-title">字体特性对比</span>
+        <span class="preview-meta">选择最适合的字体</span>
+      </div>
+      <table class="font-comparison">
+        <thead>
+          <tr>
+            <th>字体</th>
+            <th>中文支持</th>
+            <th>英文效果</th>
+            <th>数字对齐</th>
+            <th>系统兼容</th>
+            <th>推荐场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>系统默认</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>通用场景</td>
+          </tr>
+          <tr>
+            <td>苹方 (PingFang SC)</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐ (macOS)</td>
+            <td>macOS 用户首选</td>
+          </tr>
+          <tr>
+            <td>微软雅黑</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐ (Windows)</td>
+            <td>Windows 用户首选</td>
+          </tr>
+          <tr>
+            <td>Inter</td>
+            <td>⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐</td>
+            <td>现代 UI</td>
+          </tr>
+          <tr>
+            <td>Noto Sans SC</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>跨平台一致</td>
+          </tr>
+          <tr>
+            <td>思源黑体</td>
+            <td>⭐⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐⭐</td>
+            <td>⭐⭐⭐</td>
+            <td>印刷/阅读</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="font-info">
+      <h3>💡 字体选择建议</h3>
+      <ul>
+        <li><strong>macOS 用户</strong>：推荐使用「苹方」或「系统默认」，原生支持，渲染效果最佳</li>
+        <li><strong>Windows 用户</strong>：推荐使用「系统默认」（微软雅黑）或「Noto Sans SC」</li>
+        <li><strong>开发者</strong>：如果偏好现代简洁风格，可以尝试「Inter」+「Noto Sans SC」组合</li>
+        <li><strong>跨平台一致性</strong>：选择「Noto Sans SC」可以在不同系统上保持一致的显示效果</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // 字体配置 - 6种常用字体
+    const fontConfigs = {
+      system: {
+        family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        name: '系统默认'
+      },
+      pingfang: {
+        family: '"PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        name: '苹方 (PingFang SC)'
+      },
+      yahei: {
+        family: '"Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        name: '微软雅黑'
+      },
+      inter: {
+        family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        name: 'Inter'
+      },
+      noto: {
+        family: '"Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        name: 'Noto Sans SC'
+      },
+      sourcehans: {
+        family: '"Source Han Sans SC", "Noto Sans SC", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif',
+        name: '思源黑体'
+      }
+    };
+
+    // 切换字体
+    function setFont(fontKey) {
+      const config = fontConfigs[fontKey];
+      if (!config) return;
+
+      // 更新预览区域字体
+      document.getElementById('previewContent').style.fontFamily = config.family;
+      document.getElementById('textSamples').style.fontFamily = config.family;
+      document.getElementById('currentFontName').textContent = config.name;
+
+      // 更新按钮状态
+      document.querySelectorAll('.font-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.font === fontKey);
+      });
+
+      // 更新按钮自身字体以便预览
+      document.querySelectorAll('.font-btn').forEach(btn => {
+        const btnConfig = fontConfigs[btn.dataset.font];
+        if (btnConfig) {
+          btn.style.fontFamily = btnConfig.family;
+        }
+      });
+
+      // 保存选择
+      localStorage.setItem('preferredFont', fontKey);
+    }
+
+    // 绑定事件
+    document.querySelectorAll('.font-btn').forEach(btn => {
+      btn.addEventListener('click', () => setFont(btn.dataset.font));
+      
+      // 初始化按钮字体
+      const config = fontConfigs[btn.dataset.font];
+      if (config) {
+        btn.style.fontFamily = config.family;
+      }
+    });
+
+    // 加载保存的字体
+    const savedFont = localStorage.getItem('preferredFont') || 'system';
+    setFont(savedFont);
+  </script>
+</body>
+</html>

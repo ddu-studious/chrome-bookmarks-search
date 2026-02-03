@@ -60,6 +60,10 @@ function categorizeBookmark(bookmark) {
 }
 
 // 加载书签数据
+// 优化说明：
+// 1. 书签本身不包含访问统计，需要从 history API 获取
+// 2. 使用并发控制避免大量书签时的性能问题
+// 3. 添加超时保护，避免单个请求阻塞整体
 async function loadBookmarks() {
   const bookmarkTree = await chrome.bookmarks.getTree();
   const allBookmarks = [];
@@ -75,36 +79,90 @@ async function loadBookmarks() {
 
   bookmarkTree.forEach(traverseBookmarks);
 
-  // 获取所有书签的访问统计并分类
-  const bookmarksWithStats = await Promise.all(allBookmarks.map(async bookmark => {
-    const stats = await getUrlStats(bookmark.url);
-    const bookmarkData = {
-      ...bookmark,
-      visitCount: stats.count,
-      lastVisit: stats.lastVisit
-    };
-    bookmarkData.usageStatus = categorizeBookmark(bookmarkData);
-    return bookmarkData;
-  }));
+  console.log('[BookmarkSearch] Found bookmarks:', allBookmarks.length);
+
+  // 并发控制：分批处理，每批最多 50 个
+  const BATCH_SIZE = 50;
+  const bookmarksWithStats = [];
+
+  for (let i = 0; i < allBookmarks.length; i += BATCH_SIZE) {
+    const batch = allBookmarks.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(batch.map(async bookmark => {
+      try {
+        const stats = await getUrlStats(bookmark.url);
+        const bookmarkData = {
+          ...bookmark,
+          visitCount: stats.count,
+          lastVisit: stats.lastVisit
+        };
+        bookmarkData.usageStatus = categorizeBookmark(bookmarkData);
+        return bookmarkData;
+      } catch (error) {
+        // 单个书签查询失败不影响整体
+        console.warn('[BookmarkSearch] Failed to get stats for:', bookmark.url, error);
+        return {
+          ...bookmark,
+          visitCount: 0,
+          lastVisit: null,
+          usageStatus: BOOKMARK_STATUS.NEVER_USED
+        };
+      }
+    }));
+    bookmarksWithStats.push(...batchResults);
+  }
 
   // 按访问次数和最后访问时间排序
-  return bookmarksWithStats.sort((a, b) => {
+  const sorted = bookmarksWithStats.sort((a, b) => {
     if (b.visitCount !== a.visitCount) {
       return b.visitCount - a.visitCount;
     }
     return (b.lastVisit || 0) - (a.lastVisit || 0);
   });
+
+  console.log('[BookmarkSearch] Bookmarks loaded with stats, top item:', 
+    sorted[0]?.title, 'visits:', sorted[0]?.visitCount);
+
+  return sorted;
 }
 
 // 加载标签页数据
+// 优化说明：
+// 1. 按最近访问时间排序（当前活动标签页优先）
+// 2. 添加统一的字段映射
 async function loadTabs() {
-  return chrome.tabs.query({});
+  const tabs = await chrome.tabs.query({});
+  
+  // 按 lastAccessed 降序排列（最近访问的在前）
+  // 注意：lastAccessed 可能为 undefined（某些情况下）
+  const sorted = tabs.sort((a, b) => {
+    // 活动标签页优先
+    if (a.active && !b.active) return -1;
+    if (!a.active && b.active) return 1;
+    // 然后按最近访问时间
+    return (b.lastAccessed || 0) - (a.lastAccessed || 0);
+  });
+
+  // 映射字段以保持一致性
+  const processed = sorted.map(tab => ({
+    ...tab,
+    lastVisit: tab.lastAccessed,
+    visitCount: 1 // 标签页没有访问次数概念
+  }));
+
+  console.log('[BookmarkSearch] Tabs loaded:', processed.length,
+    'Active:', processed.find(t => t.active)?.title);
+
+  return processed;
 }
 
 // 加载历史记录
+// 优化说明：
+// 1. chrome.history.search() 已经返回了 lastVisitTime 和 visitCount，无需重复查询
+// 2. 直接使用 API 返回的数据，提升性能并避免数据不一致
+// 3. 确保按 lastVisitTime 降序排列，最新访问的在最前
 async function loadHistory() {
   const endTime = Date.now();
-  const startTime = endTime - (30 * 24 * 60 * 60 * 1000);
+  const startTime = endTime - (30 * 24 * 60 * 60 * 1000); // 30天前
 
   return new Promise((resolve) => {
     chrome.history.search({
@@ -112,17 +170,26 @@ async function loadHistory() {
       startTime: startTime,
       endTime: endTime,
       maxResults: 1000
-    }, async (historyItems) => {
-      historyItems.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
-
-      const historyWithStats = await Promise.all(historyItems.map(async item => {
-        const stats = await getUrlStats(item.url);
-        return {
-          ...item,
-          visitCount: stats.count,
-          lastVisit: stats.lastVisit
-        };
+    }, (historyItems) => {
+      // chrome.history.search 返回的 HistoryItem 已经包含：
+      // - lastVisitTime: 最后访问时间（毫秒时间戳）
+      // - visitCount: 访问次数
+      // - typedCount: 用户主动输入 URL 的次数
+      
+      // 直接使用 API 返回的数据，映射为统一格式
+      const historyWithStats = historyItems.map(item => ({
+        ...item,
+        // 保持字段命名一致性，同时保留原始字段
+        lastVisit: item.lastVisitTime,
+        // visitCount 已经存在，无需额外查询
       }));
+
+      // 按最后访问时间降序排列（最新的在最前面）
+      historyWithStats.sort((a, b) => (b.lastVisitTime || 0) - (a.lastVisitTime || 0));
+
+      console.log('[BookmarkSearch] History loaded:', historyWithStats.length, 
+        'Latest:', historyWithStats[0]?.title, 
+        'Time:', historyWithStats[0]?.lastVisitTime ? new Date(historyWithStats[0].lastVisitTime).toLocaleString() : 'N/A');
 
       resolve(historyWithStats);
     });
@@ -130,13 +197,27 @@ async function loadHistory() {
 }
 
 // 加载下载记录
+// 优化说明：
+// 1. 按开始时间降序排列（最新的在前）
+// 2. 映射字段名以保持与其他模式的一致性
 async function loadDownloads() {
   return new Promise((resolve) => {
     chrome.downloads.search({
       limit: 1000,
       orderBy: ['-startTime']
     }, downloads => {
-      resolve(downloads || []);
+      const processed = (downloads || []).map(item => ({
+        ...item,
+        // 统一字段名，便于 UI 显示
+        title: item.filename ? item.filename.split('/').pop() : '未知文件',
+        lastVisit: item.startTime ? new Date(item.startTime).getTime() : null,
+        visitCount: 1 // 下载次数固定为 1
+      }));
+      
+      console.log('[BookmarkSearch] Downloads loaded:', processed.length,
+        'Latest:', processed[0]?.title);
+      
+      resolve(processed);
     });
   });
 }
@@ -212,6 +293,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_STYLE') {
     chrome.storage.sync.get('overlayStyle', (result) => {
       sendResponse({ style: result.overlayStyle || 'spotlight' });
+    });
+    return true;
+  }
+
+  // 保存字体设置
+  if (request.type === 'SAVE_FONT') {
+    chrome.storage.sync.set({ overlayFont: request.font });
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 获取字体设置
+  if (request.type === 'GET_FONT') {
+    chrome.storage.sync.get('overlayFont', (result) => {
+      sendResponse({ font: result.overlayFont || 'system' });
     });
     return true;
   }
