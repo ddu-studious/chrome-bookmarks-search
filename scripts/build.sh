@@ -30,6 +30,22 @@ echo -e "项目目录: ${YELLOW}$PROJECT_ROOT${NC}"
 echo -e "版本号:   ${YELLOW}$VERSION${NC}"
 echo ""
 
+# 版本一致性检查
+echo -e "${YELLOW}检查版本一致性...${NC}"
+PUBLISH_VERSION=$(head -1 "$PROJECT_ROOT/PUBLISH.md" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/v//')
+if [ -n "$PUBLISH_VERSION" ] && [ "$PUBLISH_VERSION" != "$VERSION" ]; then
+    echo -e "${RED}警告: PUBLISH.md 版本 ($PUBLISH_VERSION) 与 manifest.json 版本 ($VERSION) 不一致${NC}"
+    echo -e "${YELLOW}请确认是否继续？(y/N)${NC}"
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}已取消打包${NC}"
+        exit 1
+    fi
+else
+    echo -e "  ✓ 版本一致性检查通过"
+fi
+echo ""
+
 # 创建 dist 目录
 mkdir -p "$DIST_DIR"
 
@@ -43,6 +59,7 @@ fi
 FILES_TO_PACK=(
     "manifest.json"
     "popup.html"
+    "options.html"
     "background.js"
     "css"
     "js"
