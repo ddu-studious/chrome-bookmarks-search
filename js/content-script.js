@@ -32,6 +32,201 @@
   let currentFilter = 'all';
   let currentStyle = 'spotlight'; // spotlight, raycast, fluent
 
+  // ==================== 事件隔离模块 ====================
+  // 用于防止宿主页面的事件影响浮层
+  const EventIsolation = {
+    // 保存原始状态，用于恢复
+    _savedState: {
+      bodyOverflow: '',
+      bodyPosition: '',
+      bodyTop: '',
+      bodyWidth: '',
+      scrollY: 0
+    },
+
+    // 需要阻止传播的事件类型
+    _eventTypes: [
+      // 键盘事件
+      'keydown', 'keyup', 'keypress',
+      // 鼠标滚轮事件
+      'wheel', 'mousewheel', 'DOMMouseScroll',
+      // 触摸事件（移动端）
+      'touchmove', 'touchstart', 'touchend',
+      // 拖拽事件
+      'drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop'
+    ],
+
+    // 在 document 级别捕获并阻止事件传播到宿主页面
+    _documentHandler: null,
+
+    // 启用事件隔离
+    enable() {
+      // 1. 锁定页面滚动
+      this._lockScroll();
+
+      // 2. 在捕获阶段拦截所有事件
+      this._documentHandler = (e) => {
+        // 只有当浮层可见时才拦截
+        if (!isVisible) return;
+
+        // 检查事件是否来自我们的浮层
+        const isFromOverlay = overlayContainer && 
+          (overlayContainer.contains(e.target) || e.target === overlayContainer);
+
+        // 对于键盘事件，特殊处理
+        if (e.type === 'keydown' || e.type === 'keyup' || e.type === 'keypress') {
+          // 如果是来自我们浮层的事件，不阻止
+          if (isFromOverlay) return;
+          
+          // 阻止宿主页面的键盘事件
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          
+          // 对于某些特殊按键，也阻止默认行为（如空格键可能导致页面滚动）
+          if (e.key === ' ' || e.key === 'Tab' || e.key === 'ArrowUp' || 
+              e.key === 'ArrowDown' || e.key === 'PageUp' || e.key === 'PageDown' ||
+              e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+          }
+          return;
+        }
+
+        // 对于滚轮事件，只允许在浮层内滚动
+        if (e.type === 'wheel' || e.type === 'mousewheel' || e.type === 'DOMMouseScroll') {
+          if (!isFromOverlay) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+          }
+          return;
+        }
+
+        // 对于触摸滚动事件
+        if (e.type === 'touchmove') {
+          if (!isFromOverlay) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          return;
+        }
+      };
+
+      // 使用捕获阶段，在事件到达目标之前拦截
+      this._eventTypes.forEach(type => {
+        document.addEventListener(type, this._documentHandler, {
+          capture: true,
+          passive: false
+        });
+      });
+
+      // 3. 阻止浮层内的滚轮事件传播到外部
+      if (overlayContainer) {
+        this._preventScrollPropagation();
+      }
+
+      console.log('[BookmarkSearch] Event isolation enabled');
+    },
+
+    // 禁用事件隔离
+    disable() {
+      // 1. 恢复页面滚动
+      this._unlockScroll();
+
+      // 2. 移除事件监听
+      if (this._documentHandler) {
+        this._eventTypes.forEach(type => {
+          document.removeEventListener(type, this._documentHandler, {
+            capture: true,
+            passive: false
+          });
+        });
+        this._documentHandler = null;
+      }
+
+      console.log('[BookmarkSearch] Event isolation disabled');
+    },
+
+    // 锁定页面滚动
+    _lockScroll() {
+      // 保存当前状态
+      this._savedState.scrollY = window.scrollY;
+      this._savedState.bodyOverflow = document.body.style.overflow;
+      this._savedState.bodyPosition = document.body.style.position;
+      this._savedState.bodyTop = document.body.style.top;
+      this._savedState.bodyWidth = document.body.style.width;
+
+      // 锁定 body
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${this._savedState.scrollY}px`;
+      document.body.style.width = '100%';
+
+      // 同时也锁定 html
+      document.documentElement.style.overflow = 'hidden';
+    },
+
+    // 解锁页面滚动
+    _unlockScroll() {
+      // 恢复 body 样式
+      document.body.style.overflow = this._savedState.bodyOverflow;
+      document.body.style.position = this._savedState.bodyPosition;
+      document.body.style.top = this._savedState.bodyTop;
+      document.body.style.width = this._savedState.bodyWidth;
+
+      // 恢复 html 样式
+      document.documentElement.style.overflow = '';
+
+      // 恢复滚动位置
+      window.scrollTo(0, this._savedState.scrollY);
+    },
+
+    // 防止滚轮事件从浮层内部传播到外部
+    _preventScrollPropagation() {
+      if (!shadowRoot) return;
+
+      const resultsContainer = shadowRoot.querySelector('.results-container');
+      if (!resultsContainer) return;
+
+      // 处理浮层内部的滚轮事件
+      resultsContainer.addEventListener('wheel', (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = resultsContainer;
+        const delta = e.deltaY;
+
+        // 检查是否滚动到边界
+        const atTop = scrollTop <= 0 && delta < 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight && delta > 0;
+
+        // 如果到达边界，阻止事件传播（防止页面滚动）
+        if (atTop || atBottom) {
+          e.preventDefault();
+        }
+
+        // 始终阻止事件传播到宿主页面
+        e.stopPropagation();
+      }, { passive: false });
+
+      // 触摸事件处理（移动端）
+      let touchStartY = 0;
+      resultsContainer.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      resultsContainer.addEventListener('touchmove', (e) => {
+        const touchY = e.touches[0].clientY;
+        const { scrollTop, scrollHeight, clientHeight } = resultsContainer;
+        const delta = touchStartY - touchY;
+
+        const atTop = scrollTop <= 0 && delta < 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight && delta > 0;
+
+        if (atTop || atBottom) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+      }, { passive: false });
+    }
+  };
+
   // 书签使用状态常量
   const BOOKMARK_STATUS = {
     NEVER_USED: 'never_used',
@@ -1333,6 +1528,7 @@
     const modeTabs = shadowRoot.getElementById('modeTabs');
     const filterBar = shadowRoot.getElementById('filterBar');
     const styleSwitcher = shadowRoot.getElementById('styleSwitcher');
+    const searchPanel = shadowRoot.getElementById('searchPanel');
 
     // 点击背景关闭
     backdrop.addEventListener('click', hideOverlay);
@@ -1342,8 +1538,40 @@
       search(e.target.value);
     });
 
-    // 键盘事件
+    // 键盘事件 - 在搜索框上
     searchInput.addEventListener('keydown', handleKeydown);
+
+    // 全局键盘事件 - 在整个面板上，确保即使焦点不在搜索框也能响应
+    searchPanel.addEventListener('keydown', (e) => {
+      // 阻止事件冒泡到宿主页面
+      e.stopPropagation();
+      
+      // 如果焦点在搜索框，已经由 handleKeydown 处理
+      if (document.activeElement === searchInput || 
+          shadowRoot.activeElement === searchInput) {
+        return;
+      }
+      
+      // 处理 Escape 关闭
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideOverlay();
+        return;
+      }
+      
+      // 其他按键时聚焦到搜索框
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        searchInput.focus();
+      }
+    });
+
+    // 阻止面板内所有事件传播到宿主页面
+    const stopPropagationEvents = ['keydown', 'keyup', 'keypress', 'click', 'mousedown', 'mouseup'];
+    stopPropagationEvents.forEach(eventType => {
+      searchPanel.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+    });
 
     // 模式切换
     modeTabs.addEventListener('click', (e) => {
@@ -1391,9 +1619,19 @@
       const item = e.target.closest('.result-item');
       if (item) {
         e.preventDefault();
+        e.stopPropagation(); // 阻止宿主页面的右键菜单
         const index = parseInt(item.dataset.index);
         showContextMenu(e, index);
       }
+    });
+
+    // 阻止整个面板的默认右键菜单
+    searchPanel.addEventListener('contextmenu', (e) => {
+      // 允许在输入框中使用系统右键菜单
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      e.stopPropagation();
     });
 
     // 点击其他地方关闭右键菜单
@@ -1417,6 +1655,10 @@
 
   // 处理键盘事件
   function handleKeydown(e) {
+    // 始终阻止事件传播到宿主页面
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
     const items = shadowRoot.querySelectorAll('.result-item');
 
     switch (e.key) {
@@ -1456,6 +1698,11 @@
       case 'Escape':
         e.preventDefault();
         hideOverlay();
+        break;
+        
+      case 'Tab':
+        // 阻止 Tab 键将焦点移出浮层
+        e.preventDefault();
         break;
     }
   }
@@ -1822,6 +2069,9 @@
     panel.classList.add('show');
     isVisible = true;
 
+    // 启用事件隔离 - 防止宿主页面事件干扰
+    EventIsolation.enable();
+
     // 聚焦搜索框
     setTimeout(() => {
       searchInput.focus();
@@ -1844,6 +2094,9 @@
     backdrop.classList.remove('show');
     panel.classList.remove('show');
     isVisible = false;
+
+    // 禁用事件隔离 - 恢复宿主页面正常行为
+    EventIsolation.disable();
 
     // 清空搜索
     const searchInput = shadowRoot.getElementById('searchInput');
@@ -2023,12 +2276,36 @@
     
     modal.classList.add('show');
     titleInput.focus();
+    
+    // 为编辑弹窗添加键盘事件处理
+    const handleEditKeydown = (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideEditModal();
+        modal.removeEventListener('keydown', handleEditKeydown);
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        saveEdit();
+        modal.removeEventListener('keydown', handleEditKeydown);
+      }
+    };
+    
+    modal.addEventListener('keydown', handleEditKeydown);
   }
 
   function hideEditModal() {
     const modal = shadowRoot.getElementById('editModal');
     modal.classList.remove('show');
     editingItem = null;
+    
+    // 关闭后重新聚焦到搜索框
+    const searchInput = shadowRoot.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.focus();
+    }
   }
 
   function saveEdit() {
@@ -2119,6 +2396,15 @@
           </a>
         `;
       }).join('');
+      
+      // 点击友情链接后关闭浮层
+      container.addEventListener('click', (e) => {
+        const link = e.target.closest('.friend-link-item');
+        if (link) {
+          // 延迟关闭，确保链接能正常打开
+          setTimeout(() => hideOverlay(), 100);
+        }
+      });
     } catch (e) {
       console.error('[BookmarkSearch] Failed to load friend links:', e);
     }

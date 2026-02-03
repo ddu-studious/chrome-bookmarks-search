@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>事件隔离测试页 - Chrome 书签搜索</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 300vh; /* 让页面可以滚动 */
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      padding: 40px;
+      color: #e8e8e8;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: #a0a0a0;
+      margin-bottom: 30px;
+    }
+
+    .test-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .test-section h2 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: #00d4ff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-badge.pending {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+    }
+
+    .status-badge.pass {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+
+    .status-badge.fail {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .test-description {
+      font-size: 14px;
+      color: #b0b0b0;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .test-area {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .event-log {
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .event-log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .event-log-item:last-child {
+      border-bottom: none;
+    }
+
+    .event-log-item.keyboard {
+      color: #7b68ee;
+    }
+
+    .event-log-item.scroll {
+      color: #00bcd4;
+    }
+
+    .event-log-item.click {
+      color: #ff9800;
+    }
+
+    kbd {
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+
+    .shortcut-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .shortcut-item {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .shortcut-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .shortcut-item.active {
+      background: rgba(0, 212, 255, 0.2);
+      border: 1px solid #00d4ff;
+    }
+
+    .scroll-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      z-index: 1000;
+    }
+
+    .instructions {
+      background: linear-gradient(135deg, rgba(123, 44, 191, 0.2), rgba(0, 212, 255, 0.2));
+      border: 1px solid rgba(123, 44, 191, 0.3);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 30px;
+    }
+
+    .instructions h2 {
+      color: #7b2cbf;
+      margin-bottom: 16px;
+    }
+
+    .instructions ol {
+      padding-left: 24px;
+      color: #d0d0d0;
+    }
+
+    .instructions li {
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+
+    .clear-btn {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+      border: 1px solid rgba(244, 67, 54, 0.3);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .clear-btn:hover {
+      background: rgba(244, 67, 54, 0.3);
+    }
+
+    .spacer {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      color: white;
+      font-size: 14px;
+      outline: none;
+      margin-bottom: 12px;
+    }
+
+    input[type="text"]:focus {
+      border-color: #00d4ff;
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <!-- 滚动位置指示器 -->
+  <div class="scroll-indicator">
+    Scroll Y: <span id="scrollY">0</span>
+  </div>
+
+  <div class="container">
+    <h1>🧪 事件隔离测试页</h1>
+    <p class="subtitle">用于测试 Chrome 书签搜索扩展的事件隔离功能</p>
+
+    <div class="instructions">
+      <h2>📋 测试步骤</h2>
+      <ol>
+        <li>确保已在 <kbd>chrome://extensions/</kbd> 重新加载扩展</li>
+        <li>按下 <kbd>Alt + B</kbd> 打开书签搜索浮层</li>
+        <li>测试以下场景，观察事件日志是否正常：
+          <ul style="margin-top: 8px;">
+            <li><strong>滚动测试</strong>：浮层打开时，滚动鼠标滚轮，页面不应滚动</li>
+            <li><strong>键盘测试</strong>：按下各种快捷键，页面不应响应</li>
+            <li><strong>输入测试</strong>：在搜索框输入文字，页面输入框不应获得焦点</li>
+          </ul>
+        </li>
+        <li>关闭浮层后，页面功能应完全恢复</li>
+      </ol>
+    </div>
+
+    <!-- 测试1: 滚动事件隔离 -->
+    <div class="test-section">
+      <h2>
+        🖱️ 滚动事件隔离测试
+        <span class="status-badge pending" id="scrollTestStatus">待测试</span>
+      </h2>
+      <p class="test-description">
+        当浮层打开时，滚动鼠标滚轮应该只滚动浮层内的内容，而不是底层页面。
+        如果页面 Scroll Y 值变化，说明事件隔离失败。
+      </p>
+      <div class="test-area">
+        <p>当前页面滚动位置：<strong id="currentScroll">0</strong> px</p>
+        <p style="margin-top: 8px; color: #888;">💡 提示：打开浮层后滚动鼠标，观察此数值是否变化</p>
+      </div>
+      <div class="event-log" id="scrollLog">
+        <div class="event-log-item scroll">等待滚动事件...</div>
+      </div>
+      <button class="clear-btn" onclick="clearLog('scrollLog')">清除日志</button>
+    </div>
+
+    <!-- 测试2: 键盘事件隔离 -->
+    <div class="test-section">
+      <h2>
+        ⌨️ 键盘事件隔离测试
+        <span class="status-badge pending" id="keyboardTestStatus">待测试</span>
+      </h2>
+      <p class="test-description">
+        当浮层打开时，页面应该不响应任何键盘事件。以下是常见的可能冲突的快捷键：
+      </p>
+      <div class="shortcut-list">
+        <div class="shortcut-item" data-key="j">J - Gmail 下一封</div>
+        <div class="shortcut-item" data-key="k">K - Gmail 上一封</div>
+        <div class="shortcut-item" data-key="g">G - GitHub 跳转</div>
+        <div class="shortcut-item" data-key="/">/ - 聚焦搜索</div>
+        <div class="shortcut-item" data-key=" ">空格 - 页面滚动</div>
+        <div class="shortcut-item" data-key="ArrowDown">↓ - 向下</div>
+        <div class="shortcut-item" data-key="ArrowUp">↑ - 向上</div>
+        <div class="shortcut-item" data-key="Escape">Esc - 退出</div>
+      </div>
+      <div class="event-log" id="keyboardLog" style="margin-top: 16px;">
+        <div class="event-log-item keyboard">等待键盘事件...</div>
+      </div>
+      <button class="clear-btn" onclick="clearLog('keyboardLog')">清除日志</button>
+    </div>
+
+    <!-- 测试3: 输入框焦点测试 -->
+    <div class="test-section">
+      <h2>
+        📝 输入框焦点测试
+        <span class="status-badge pending" id="focusTestStatus">待测试</span>
+      </h2>
+      <p class="test-description">
+        当浮层打开时，此输入框不应该被意外聚焦。在浮层中输入文字时，文字应该出现在浮层搜索框中，而不是这里。
+      </p>
+      <div class="test-area">
+        <input type="text" id="testInput" placeholder="如果浮层打开时，这里出现文字，说明隔离失败">
+        <p style="color: #888; font-size: 13px;">💡 提示：打开浮层后直接输入文字，观察文字是否出现在这里</p>
+      </div>
+      <div class="event-log" id="focusLog">
+        <div class="event-log-item">等待焦点事件...</div>
+      </div>
+      <button class="clear-btn" onclick="clearLog('focusLog')">清除日志</button>
+    </div>
+
+    <!-- 测试4: 右键菜单测试 -->
+    <div class="test-section">
+      <h2>
+        🖱️ 右键菜单测试
+        <span class="status-badge pending" id="contextMenuTestStatus">待测试</span>
+      </h2>
+      <p class="test-description">
+        在浮层的搜索结果上右键点击时，应该显示扩展的自定义右键菜单，而不是浏览器或页面的右键菜单。
+      </p>
+      <div class="test-area">
+        <p>在此区域右键点击测试页面的右键菜单：</p>
+        <div style="height: 60px; background: rgba(255,255,255,0.1); border-radius: 8px; margin-top: 12px; display: flex; align-items: center; justify-content: center; color: #888;">
+          右键点击这里
+        </div>
+      </div>
+      <div class="event-log" id="contextMenuLog">
+        <div class="event-log-item">等待右键菜单事件...</div>
+      </div>
+      <button class="clear-btn" onclick="clearLog('contextMenuLog')">清除日志</button>
+    </div>
+
+    <div class="spacer">
+      ⬇️ 向下滚动测试滚动恢复 ⬇️
+    </div>
+
+    <div class="test-section">
+      <h2>📍 滚动位置恢复测试</h2>
+      <p class="test-description">
+        当浮层关闭后，页面应该恢复到之前的滚动位置。
+        如果页面跳到顶部或其他位置，说明滚动恢复失败。
+      </p>
+      <div class="test-area">
+        <p>如果你能看到这段文字，说明你已经滚动到了页面下方。</p>
+        <p style="margin-top: 8px;">打开并关闭浮层后，页面应该仍然在这个位置。</p>
+      </div>
+    </div>
+
+    <div class="spacer">
+      ⬇️ 继续向下滚动 ⬇️
+    </div>
+
+    <div class="test-section">
+      <h2>🎉 测试完成区域</h2>
+      <p class="test-description">
+        恭喜！如果你看到这里，并且所有测试都通过了，说明事件隔离功能工作正常。
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // 滚动位置监听
+    let lastScrollY = 0;
+    window.addEventListener('scroll', () => {
+      const scrollY = Math.round(window.scrollY);
+      document.getElementById('scrollY').textContent = scrollY;
+      document.getElementById('currentScroll').textContent = scrollY;
+      
+      // 记录滚动事件
+      if (Math.abs(scrollY - lastScrollY) > 1) {
+        addLog('scrollLog', `scroll 页面滚动到 ${scrollY}px`, 'scroll');
+        lastScrollY = scrollY;
+      }
+    });
+
+    // 键盘事件监听
+    document.addEventListener('keydown', (e) => {
+      const key = e.key === ' ' ? 'Space' : e.key;
+      addLog('keyboardLog', `keydown 按键: ${key} ${e.ctrlKey ? '(Ctrl)' : ''} ${e.altKey ? '(Alt)' : ''} ${e.metaKey ? '(Cmd)' : ''}`, 'keyboard');
+      
+      // 高亮对应的快捷键项
+      document.querySelectorAll('.shortcut-item').forEach(item => {
+        if (item.dataset.key === e.key) {
+          item.classList.add('active');
+          setTimeout(() => item.classList.remove('active'), 300);
+        }
+      });
+    });
+
+    // 输入框焦点监听
+    const testInput = document.getElementById('testInput');
+    testInput.addEventListener('focus', () => {
+      addLog('focusLog', 'focus 输入框获得焦点', 'click');
+    });
+    testInput.addEventListener('input', (e) => {
+      addLog('focusLog', `input 输入内容: "${e.target.value}"`, 'click');
+    });
+
+    // 右键菜单监听
+    document.addEventListener('contextmenu', (e) => {
+      addLog('contextMenuLog', `contextmenu 位置: (${e.clientX}, ${e.clientY})`, 'click');
+    });
+
+    // 日志工具函数
+    function addLog(logId, message, type) {
+      const log = document.getElementById(logId);
+      const time = new Date().toLocaleTimeString();
+      const item = document.createElement('div');
+      item.className = `event-log-item ${type}`;
+      item.textContent = `[${time}] ${message}`;
+      
+      // 移除"等待..."的提示
+      const waitingItem = log.querySelector('.event-log-item:first-child');
+      if (waitingItem && waitingItem.textContent.includes('等待')) {
+        waitingItem.remove();
+      }
+      
+      log.insertBefore(item, log.firstChild);
+      
+      // 限制日志数量
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+
+    function clearLog(logId) {
+      const log = document.getElementById(logId);
+      log.innerHTML = `<div class="event-log-item">日志已清除，等待新事件...</div>`;
+    }
+
+    // 初始化
+    document.getElementById('scrollY').textContent = Math.round(window.scrollY);
+    document.getElementById('currentScroll').textContent = Math.round(window.scrollY);
+  </script>
+</body>
+</html>
