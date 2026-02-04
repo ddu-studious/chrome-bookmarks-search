@@ -38,9 +38,7 @@
     // 保存原始状态，用于恢复
     _savedState: {
       bodyOverflow: '',
-      bodyPosition: '',
-      bodyTop: '',
-      bodyWidth: '',
+      htmlOverflow: '',
       scrollY: 0
     },
 
@@ -58,10 +56,16 @@
 
     // 在 document 级别捕获并阻止事件传播到宿主页面
     _documentHandler: null,
+    
+    // window 级别按键拦截（用于抢在页面“焦点陷阱/快捷键”之前处理）
+    _windowKeyHandler: null,
+    // window 级别 focus/click 拦截（用于抢在页面 modal 的 focus trap 之前）
+    _windowFocusHandler: null,
+    _windowPointerHandler: null,
 
     // 启用事件隔离
     enable() {
-      // 1. 锁定页面滚动
+      // 1. 锁定页面滚动（使用更安全的方式）
       this._lockScroll();
 
       // 2. 在捕获阶段拦截所有事件
@@ -124,6 +128,12 @@
         this._preventScrollPropagation();
       }
 
+      // 4. 启用导航按键拦截（解决↑↓导致页面弹窗获取焦点的问题）
+      this._enableKeyTrap();
+
+      // 5. 启用 focus/click 捕获拦截（解决输入框无法获得焦点的问题）
+      this._enableFocusAndPointerTrap();
+
       console.log('[BookmarkSearch] Event isolation enabled');
     },
 
@@ -142,42 +152,135 @@
         });
         this._documentHandler = null;
       }
+      
+      // 3. 禁用导航按键拦截
+      this._disableKeyTrap();
+
+      // 4. 禁用 focus/click 捕获拦截
+      this._disableFocusAndPointerTrap();
 
       console.log('[BookmarkSearch] Event isolation disabled');
     },
 
-    // 锁定页面滚动
+    // 启用导航按键拦截：在 window 捕获阶段阻止页面的“焦点陷阱/快捷键”
+    // 注意：只拦截导航类按键（不拦截普通字符输入），并在拦截后交给我们自己的 handleKeydown() 处理
+    _enableKeyTrap() {
+      if (this._windowKeyHandler) return;
+
+      const navKeys = new Set([
+        'ArrowDown',
+        'ArrowUp',
+        'ArrowLeft',
+        'ArrowRight',
+        'Enter',
+        'Escape',
+        'Tab',
+        'PageUp',
+        'PageDown',
+        'Home',
+        'End'
+      ]);
+
+      this._windowKeyHandler = (e) => {
+        if (!isVisible) return;
+        if (!navKeys.has(e.key)) return;
+
+        // 编辑弹窗打开且焦点在输入框时：允许用户在输入框内正常使用方向键/回车等
+        const editModal = shadowRoot?.getElementById('editModal');
+        const isEditModalOpen = editModal?.classList.contains('show');
+        if (isEditModalOpen) {
+          const editTitle = shadowRoot?.getElementById('editTitle');
+          const editUrl = shadowRoot?.getElementById('editUrl');
+          const active = shadowRoot?.activeElement;
+          if (active === editTitle || active === editUrl) {
+            return;
+          }
+        }
+
+        // 关键：先阻断页面侧的捕获/冒泡监听（很多站点的“弹窗焦点陷阱”就挂在这里）
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        // 如果浮层没有焦点，尝试把焦点拉回搜索框（不做轮询，只在按键触发时尝试）
+        const searchInput = shadowRoot?.getElementById('searchInput');
+        if (searchInput && shadowRoot?.activeElement !== searchInput) {
+          try {
+            searchInput.focus({ preventScroll: true });
+          } catch (err) {
+            // ignore
+          }
+        }
+
+        // 将同一个事件交给我们自己的按键处理逻辑（用于↑↓选择、←→切换、Esc关闭、Enter打开）
+        try {
+          handleKeydown(e);
+        } catch (err) {
+          // ignore
+        }
+      };
+
+      window.addEventListener('keydown', this._windowKeyHandler, true);
+    },
+
+    _disableKeyTrap() {
+      if (!this._windowKeyHandler) return;
+      window.removeEventListener('keydown', this._windowKeyHandler, true);
+      this._windowKeyHandler = null;
+    },
+
+    // 捕获并阻断页面的 focus trap
+    // 原理：很多站点 modal 会在 window/document capture 阶段监听 focusin/click，
+    // 一旦发现焦点/点击落在 modal 外，就强行把焦点拉回 modal 内（比如“管理资源”按钮）。
+    // 我们在更早（同样是 capture 阶段）发现事件来自扩展浮层时，直接 stopImmediatePropagation，
+    // 让站点逻辑“看不到”这些事件，从而不会抢回焦点。
+    _enableFocusAndPointerTrap() {
+      if (this._windowFocusHandler || this._windowPointerHandler) return;
+
+      const isFromOverlay = (target) => {
+        if (!overlayContainer) return false;
+        // Shadow DOM closed 时，事件对外通常会 retarget 到 host（overlayContainer）
+        return target === overlayContainer || overlayContainer.contains(target);
+      };
+
+      this._windowFocusHandler = (e) => {
+        if (!isVisible) return;
+        if (!isFromOverlay(e.target)) return;
+
+        // 不需要 preventDefault（focusin 不可取消），只要阻断传播即可
+        e.stopImmediatePropagation();
+        e.stopPropagation();
+      };
+
+      window.addEventListener('focusin', this._windowFocusHandler, true);
+    },
+
+    _disableFocusAndPointerTrap() {
+      if (this._windowFocusHandler) {
+        window.removeEventListener('focusin', this._windowFocusHandler, true);
+        this._windowFocusHandler = null;
+      }
+      // 之前的 pointer/click trap 已移除：它会阻断事件到达浮层内部导致按钮不可点击
+      this._windowPointerHandler = null;
+    },
+
+    // 锁定页面滚动（更安全的方式，不使用 position: fixed）
     _lockScroll() {
       // 保存当前状态
       this._savedState.scrollY = window.scrollY;
       this._savedState.bodyOverflow = document.body.style.overflow;
-      this._savedState.bodyPosition = document.body.style.position;
-      this._savedState.bodyTop = document.body.style.top;
-      this._savedState.bodyWidth = document.body.style.width;
+      this._savedState.htmlOverflow = document.documentElement.style.overflow;
 
-      // 锁定 body
+      // 只设置 overflow: hidden，不改变 position
+      // 这样更安全，不会导致页面布局问题
       document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${this._savedState.scrollY}px`;
-      document.body.style.width = '100%';
-
-      // 同时也锁定 html
       document.documentElement.style.overflow = 'hidden';
     },
 
     // 解锁页面滚动
     _unlockScroll() {
-      // 恢复 body 样式
+      // 恢复样式
       document.body.style.overflow = this._savedState.bodyOverflow;
-      document.body.style.position = this._savedState.bodyPosition;
-      document.body.style.top = this._savedState.bodyTop;
-      document.body.style.width = this._savedState.bodyWidth;
-
-      // 恢复 html 样式
-      document.documentElement.style.overflow = '';
-
-      // 恢复滚动位置
-      window.scrollTo(0, this._savedState.scrollY);
+      document.documentElement.style.overflow = this._savedState.htmlOverflow;
     },
 
     // 防止滚轮事件从浮层内部传播到外部
@@ -1601,10 +1704,39 @@
 
     // 点击背景关闭
     backdrop.addEventListener('click', hideOverlay);
+    
+    // 点击搜索区域时自动聚焦搜索框（解决焦点丢失问题）
+    const searchArea = shadowRoot.querySelector('.search-area');
+    if (searchArea) {
+      searchArea.addEventListener('click', (e) => {
+        // 如果点击的不是输入框本身，聚焦到输入框
+        if (e.target !== searchInput) {
+          searchInput.focus();
+        }
+      });
+    }
+    
+    // 点击面板空白区域时尝试聚焦搜索框
+    searchPanel.addEventListener('click', (e) => {
+      // 只有点击的是面板本身（非子元素）时才聚焦
+      if (e.target === searchPanel) {
+        searchInput.focus();
+      }
+    });
 
     // 搜索输入
     searchInput.addEventListener('input', (e) => {
       search(e.target.value);
+    });
+
+    // 某些站点会用 focus trap 抢焦点：pointerdown 时主动聚焦一次，提升成功率
+    // 不要 preventDefault，否则会阻止浏览器默认的 focus 行为
+    searchInput.addEventListener('pointerdown', () => {
+      try {
+        searchInput.focus({ preventScroll: true });
+      } catch (e) {
+        // ignore
+      }
     });
 
     // 键盘事件 - 在搜索框上
@@ -2223,11 +2355,31 @@
     // 启用事件隔离 - 防止宿主页面事件干扰
     EventIsolation.enable();
 
-    // 聚焦搜索框
-    setTimeout(() => {
-      searchInput.focus();
-      searchInput.select();
-    }, 100);
+    // 智能聚焦策略：有限次数尝试，避免与浏览器原生弹窗冲突
+    let focusAttempts = 0;
+    const maxAttempts = 3;
+    
+    const tryFocus = () => {
+      if (!isVisible || focusAttempts >= maxAttempts) return;
+      focusAttempts++;
+      
+      try {
+        searchInput.focus({ preventScroll: true });
+        // 检查是否成功获得焦点
+        if (shadowRoot.activeElement === searchInput) {
+          searchInput.select();
+          console.log('[BookmarkSearch] Focus acquired successfully');
+        } else if (focusAttempts < maxAttempts) {
+          // 如果没有成功，稍后重试
+          setTimeout(tryFocus, 100 * focusAttempts);
+        }
+      } catch (e) {
+        console.log('[BookmarkSearch] Focus attempt failed:', e);
+      }
+    };
+    
+    // 立即尝试聚焦
+    tryFocus();
 
     // 初始化筛选栏显示状态（书签模式下显示）
     const filterBar = shadowRoot.getElementById('filterBar');
@@ -2453,7 +2605,28 @@
     urlInput.value = item.url || '';
     
     modal.classList.add('show');
-    titleInput.focus();
+    
+    // 智能聚焦策略：有限次数尝试
+    let focusAttempts = 0;
+    const maxAttempts = 3;
+    
+    const tryFocusTitle = () => {
+      if (!modal.classList.contains('show') || focusAttempts >= maxAttempts) return;
+      focusAttempts++;
+      
+      try {
+        titleInput.focus({ preventScroll: true });
+        if (shadowRoot.activeElement === titleInput) {
+          titleInput.select();
+        } else if (focusAttempts < maxAttempts) {
+          setTimeout(tryFocusTitle, 50 * focusAttempts);
+        }
+      } catch (e) {
+        console.log('[BookmarkSearch] Edit modal focus failed:', e);
+      }
+    };
+    
+    tryFocusTitle();
     
     // 为编辑弹窗添加键盘事件处理
     const handleEditKeydown = (e) => {
