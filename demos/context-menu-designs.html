@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>右键菜单设计方案对比</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1d1d1f;
+      padding: 40px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 40px;
+      font-weight: 600;
+    }
+
+    .designs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 30px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .design-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .design-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .design-badge {
+      padding: 3px 8px;
+      background: #007aff;
+      color: white;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .design-desc {
+      color: #6e6e73;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .preview-area {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 30px;
+      display: flex;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    /* ==================== 方案 A: macOS 风格 ==================== */
+    .menu-macos {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 10px;
+      box-shadow: 
+        0 0 0 0.5px rgba(0, 0, 0, 0.1),
+        0 12px 24px rgba(0, 0, 0, 0.15),
+        0 2px 8px rgba(0, 0, 0, 0.08);
+      padding: 5px 0;
+      min-width: 220px;
+      font-size: 13px;
+    }
+
+    .menu-macos .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px;
+      cursor: pointer;
+      color: #1d1d1f;
+      transition: background 0.1s;
+      margin: 0 5px;
+      border-radius: 5px;
+    }
+
+    .menu-macos .menu-item:hover {
+      background: #007aff;
+      color: white;
+    }
+
+    .menu-macos .menu-item:hover svg {
+      color: white;
+    }
+
+    .menu-macos .menu-item svg {
+      width: 16px;
+      height: 16px;
+      color: #6e6e73;
+      flex-shrink: 0;
+    }
+
+    .menu-macos .menu-item-text {
+      flex: 1;
+    }
+
+    .menu-macos .menu-item-shortcut {
+      font-size: 11px;
+      color: #a1a1a6;
+    }
+
+    .menu-macos .menu-item:hover .menu-item-shortcut {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .menu-macos .menu-separator {
+      height: 1px;
+      background: rgba(0, 0, 0, 0.1);
+      margin: 5px 12px;
+    }
+
+    .menu-macos .menu-item.danger {
+      color: #ff3b30;
+    }
+
+    .menu-macos .menu-item.danger svg {
+      color: #ff3b30;
+    }
+
+    .menu-macos .menu-item.danger:hover {
+      background: #ff3b30;
+      color: white;
+    }
+
+    .menu-macos .menu-item.danger:hover svg {
+      color: white;
+    }
+
+    /* ==================== 方案 B: Raycast 风格 ==================== */
+    .menu-raycast {
+      background: #1e1e20;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      min-width: 240px;
+      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .menu-raycast .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #e5e5e5;
+      transition: all 0.15s;
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .menu-raycast .menu-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 0;
+      background: linear-gradient(135deg, #a855f7, #ec4899);
+      border-radius: 2px;
+      transition: height 0.15s;
+    }
+
+    .menu-raycast .menu-item:hover {
+      background: #2a2a2c;
+    }
+
+    .menu-raycast .menu-item:hover::before {
+      height: 20px;
+    }
+
+    .menu-raycast .menu-item svg {
+      width: 18px;
+      height: 18px;
+      color: #8e8e93;
+      flex-shrink: 0;
+    }
+
+    .menu-raycast .menu-item:hover svg {
+      color: #a855f7;
+    }
+
+    .menu-raycast .menu-item-text {
+      flex: 1;
+      font-weight: 450;
+    }
+
+    .menu-raycast .menu-item-shortcut {
+      font-size: 11px;
+      color: #5e5e63;
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .menu-raycast .menu-separator {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 6px 0;
+    }
+
+    .menu-raycast .menu-item.danger {
+      color: #ff6b6b;
+    }
+
+    .menu-raycast .menu-item.danger svg {
+      color: #ff6b6b;
+    }
+
+    .menu-raycast .menu-item.danger:hover::before {
+      background: linear-gradient(135deg, #ff6b6b, #ff3b30);
+    }
+
+    /* ==================== 方案 C: Fluent 风格 ==================== */
+    .menu-fluent {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 8px;
+      box-shadow: 
+        0 0 0 1px rgba(0, 0, 0, 0.05),
+        0 8px 16px rgba(0, 0, 0, 0.1);
+      padding: 4px;
+      min-width: 200px;
+      font-size: 13px;
+    }
+
+    .menu-fluent .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      cursor: pointer;
+      color: #1a1a1a;
+      transition: all 0.1s;
+      border-radius: 4px;
+    }
+
+    .menu-fluent .menu-item:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    .menu-fluent .menu-item:active {
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .menu-fluent .menu-item svg {
+      width: 16px;
+      height: 16px;
+      color: #424242;
+      flex-shrink: 0;
+    }
+
+    .menu-fluent .menu-item-text {
+      flex: 1;
+    }
+
+    .menu-fluent .menu-item-shortcut {
+      font-size: 12px;
+      color: #6e6e6e;
+    }
+
+    .menu-fluent .menu-separator {
+      height: 1px;
+      background: rgba(0, 0, 0, 0.08);
+      margin: 4px 8px;
+    }
+
+    .menu-fluent .menu-item.danger {
+      color: #c42b1c;
+    }
+
+    .menu-fluent .menu-item.danger svg {
+      color: #c42b1c;
+    }
+
+    .menu-fluent .menu-item.danger:hover {
+      background: rgba(196, 43, 28, 0.08);
+    }
+
+    /* ==================== 方案 D: 简约圆角风格 ==================== */
+    .menu-minimal {
+      background: white;
+      border-radius: 14px;
+      box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+      padding: 8px;
+      min-width: 200px;
+      font-size: 14px;
+    }
+
+    .menu-minimal .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      color: #333;
+      transition: all 0.15s;
+      border-radius: 10px;
+    }
+
+    .menu-minimal .menu-item:hover {
+      background: #f5f5f7;
+    }
+
+    .menu-minimal .menu-item svg {
+      width: 18px;
+      height: 18px;
+      color: #666;
+      flex-shrink: 0;
+    }
+
+    .menu-minimal .menu-item:hover svg {
+      color: #007aff;
+    }
+
+    .menu-minimal .menu-item-text {
+      flex: 1;
+      font-weight: 450;
+    }
+
+    .menu-minimal .menu-separator {
+      height: 1px;
+      background: #f0f0f0;
+      margin: 6px 8px;
+    }
+
+    .menu-minimal .menu-item.danger {
+      color: #ff3b30;
+    }
+
+    .menu-minimal .menu-item.danger svg {
+      color: #ff3b30;
+    }
+
+    .menu-minimal .menu-item.danger:hover {
+      background: #fff5f5;
+    }
+
+    .menu-minimal .menu-item.danger:hover svg {
+      color: #ff3b30;
+    }
+
+    /* 推荐标签 */
+    .recommended .design-title::after {
+      content: '推荐';
+      padding: 3px 8px;
+      background: #34c759;
+      color: white;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+
+    /* 特点列表 */
+    .features {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .features h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .features ul {
+      list-style: none;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .features li {
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .features li::before {
+      content: '✓';
+      color: #34c759;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 右键菜单设计方案对比</h1>
+
+  <div class="designs-grid">
+    <!-- 方案 A: macOS 风格 -->
+    <div class="design-card recommended">
+      <div class="design-title">
+        方案 A: macOS Spotlight 风格
+      </div>
+      <div class="design-desc">
+        毛玻璃背景 + 紧凑布局 + 快捷键提示，与 Spotlight 风格浮层完美匹配
+      </div>
+      <div class="preview-area" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="menu-macos">
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            <span class="menu-item-text">在新标签页打开</span>
+            <span class="menu-item-shortcut">⌘↵</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
+            <span class="menu-item-text">在隐私窗口打开</span>
+            <span class="menu-item-shortcut">⇧⌘N</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z"/></svg>
+            <span class="menu-item-text">复制链接</span>
+            <span class="menu-item-shortcut">⌘C</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span class="menu-item-text">分享链接</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span class="menu-item-text">编辑书签</span>
+            <span class="menu-item-shortcut">⌘E</span>
+          </div>
+          <div class="menu-item danger">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="menu-item-text">删除书签</span>
+            <span class="menu-item-shortcut">⌘⌫</span>
+          </div>
+        </div>
+      </div>
+      <div class="features">
+        <h4>特点</h4>
+        <ul>
+          <li>毛玻璃效果与主浮层风格统一</li>
+          <li>显示快捷键，提升效率用户体验</li>
+          <li>悬停时整行高亮，反馈清晰</li>
+          <li>危险操作红色标记，防误触</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 方案 B: Raycast 风格 -->
+    <div class="design-card">
+      <div class="design-title">
+        方案 B: Raycast 风格
+      </div>
+      <div class="design-desc">
+        深色背景 + 渐变指示条 + 命令面板感，适合 Raycast 风格浮层
+      </div>
+      <div class="preview-area" style="background: #0a0a0a;">
+        <div class="menu-raycast">
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            <span class="menu-item-text">在新标签页打开</span>
+            <span class="menu-item-shortcut">⌘↵</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
+            <span class="menu-item-text">在隐私窗口打开</span>
+            <span class="menu-item-shortcut">⇧⌘N</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z"/></svg>
+            <span class="menu-item-text">复制链接</span>
+            <span class="menu-item-shortcut">⌘C</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span class="menu-item-text">分享链接</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span class="menu-item-text">编辑书签</span>
+            <span class="menu-item-shortcut">⌘E</span>
+          </div>
+          <div class="menu-item danger">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="menu-item-text">删除书签</span>
+            <span class="menu-item-shortcut">⌘⌫</span>
+          </div>
+        </div>
+      </div>
+      <div class="features">
+        <h4>特点</h4>
+        <ul>
+          <li>左侧渐变指示条，突出选中状态</li>
+          <li>深色系与 Raycast 风格统一</li>
+          <li>更大的图标和内边距，易触达</li>
+          <li>快捷键使用药丸背景，更醒目</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 方案 C: Fluent 风格 -->
+    <div class="design-card">
+      <div class="design-title">
+        方案 C: Windows 11 Fluent 风格
+      </div>
+      <div class="design-desc">
+        亚克力效果 + 微妙交互 + 系统原生感，适合 Fluent 风格浮层
+      </div>
+      <div class="preview-area" style="background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);">
+        <div class="menu-fluent">
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            <span class="menu-item-text">在新标签页打开</span>
+            <span class="menu-item-shortcut">Ctrl+↵</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
+            <span class="menu-item-text">在隐私窗口打开</span>
+            <span class="menu-item-shortcut">Ctrl+Shift+N</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z"/></svg>
+            <span class="menu-item-text">复制链接</span>
+            <span class="menu-item-shortcut">Ctrl+C</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span class="menu-item-text">分享链接</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span class="menu-item-text">编辑书签</span>
+          </div>
+          <div class="menu-item danger">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="menu-item-text">删除书签</span>
+          </div>
+        </div>
+      </div>
+      <div class="features">
+        <h4>特点</h4>
+        <ul>
+          <li>亚克力透明效果，Windows 11 风格</li>
+          <li>小圆角设计，更加系统原生</li>
+          <li>微妙的按下效果反馈</li>
+          <li>危险操作红色背景提示</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 方案 D: 简约圆角风格 -->
+    <div class="design-card">
+      <div class="design-title">
+        方案 D: 简约圆角风格
+      </div>
+      <div class="design-desc">
+        大圆角 + 简洁设计 + 悬停图标变色，通用性强可适配任意风格
+      </div>
+      <div class="preview-area">
+        <div class="menu-minimal">
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            <span class="menu-item-text">在新标签页打开</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
+            <span class="menu-item-text">在隐私窗口打开</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z"/></svg>
+            <span class="menu-item-text">复制链接</span>
+          </div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span class="menu-item-text">分享链接</span>
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            <span class="menu-item-text">编辑书签</span>
+          </div>
+          <div class="menu-item danger">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="menu-item-text">删除书签</span>
+          </div>
+        </div>
+      </div>
+      <div class="features">
+        <h4>特点</h4>
+        <ul>
+          <li>大圆角设计，视觉柔和</li>
+          <li>无快捷键显示，更简洁</li>
+          <li>悬停时图标变蓝，反馈明确</li>
+          <li>通用性强，适配各种主题</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

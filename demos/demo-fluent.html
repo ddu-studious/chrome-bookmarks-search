@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Demo - Fluent Design 风格</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-mica: rgba(243, 243, 243, 0.8);
+      --bg-acrylic: rgba(255, 255, 255, 0.7);
+      --bg-card: rgba(255, 255, 255, 0.5);
+      --bg-hover: rgba(0, 0, 0, 0.03);
+      --bg-pressed: rgba(0, 0, 0, 0.06);
+      --text-primary: #1a1a1a;
+      --text-secondary: #616161;
+      --text-tertiary: #9e9e9e;
+      --accent: #0078d4;
+      --accent-light: rgba(0, 120, 212, 0.1);
+      --accent-secondary: #005a9e;
+      --border: rgba(0, 0, 0, 0.06);
+      --border-strong: rgba(0, 0, 0, 0.12);
+      --shadow-ambient: 0 2px 4px rgba(0, 0, 0, 0.02);
+      --shadow-key: 0 8px 16px rgba(0, 0, 0, 0.06);
+      --blur: blur(20px);
+    }
+
+    .dark {
+      --bg-mica: rgba(32, 32, 32, 0.85);
+      --bg-acrylic: rgba(44, 44, 44, 0.75);
+      --bg-card: rgba(50, 50, 50, 0.6);
+      --bg-hover: rgba(255, 255, 255, 0.05);
+      --bg-pressed: rgba(255, 255, 255, 0.08);
+      --text-primary: #ffffff;
+      --text-secondary: #c5c5c5;
+      --text-tertiary: #8a8a8a;
+      --accent: #60cdff;
+      --accent-light: rgba(96, 205, 255, 0.12);
+      --border: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:%234158D0"/><stop offset="46%" style="stop-color:%23C850C0"/><stop offset="100%" style="stop-color:%23FFCC70"/></linearGradient></defs><rect fill="url(%23g)" width="1920" height="1080"/></svg>') center/cover;
+      padding: 20px;
+    }
+
+    .container {
+      width: 540px;
+      max-height: 560px;
+      background: var(--bg-mica);
+      backdrop-filter: var(--blur) saturate(150%);
+      -webkit-backdrop-filter: var(--blur) saturate(150%);
+      border-radius: 8px;
+      box-shadow: var(--shadow-ambient), var(--shadow-key);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+    }
+
+    /* 标题栏 */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-acrylic);
+      backdrop-filter: var(--blur);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .app-icon {
+      width: 18px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app-icon svg {
+      width: 12px;
+      height: 12px;
+      color: white;
+    }
+
+    .app-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .window-btn {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+    }
+
+    .window-btn.minimize { background: #febc2e; }
+    .window-btn.maximize { background: #28c840; }
+    .window-btn.close { background: #ff5f57; }
+
+    /* 搜索区域 */
+    .search-section {
+      padding: 16px;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-acrylic);
+      backdrop-filter: var(--blur);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .search-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--text-tertiary);
+    }
+
+    .search-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .search-shortcut {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      padding: 3px 6px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'Segoe UI Variable', sans-serif;
+    }
+
+    /* 命令栏 */
+    .command-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .command-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.1s ease;
+      position: relative;
+    }
+
+    .command-btn::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      transition: width 0.15s ease;
+    }
+
+    .command-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .command-btn:active {
+      background: var(--bg-pressed);
+    }
+
+    .command-btn.active {
+      color: var(--accent);
+    }
+
+    .command-btn.active::after {
+      width: 20px;
+    }
+
+    .command-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .command-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border-strong);
+      margin: 0 4px;
+    }
+
+    /* 筛选栏 */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    .filter-group {
+      display: flex;
+      gap: 4px;
+    }
+
+    .filter-chip {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.1s ease;
+    }
+
+    .filter-chip:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+    }
+
+    .filter-chip.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .filter-chip .count {
+      margin-left: 4px;
+      opacity: 0.8;
+    }
+
+    .sort-btn {
+      margin-left: auto;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sort-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .sort-btn svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* 结果列表 */
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      margin: 2px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      border: 1px solid transparent;
+    }
+
+    .result-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .result-item:active {
+      background: var(--bg-pressed);
+    }
+
+    .result-item.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+    }
+
+    .result-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .result-icon img {
+      width: 20px;
+      height: 20px;
+      border-radius: 2px;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+
+    .result-url {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .meta-stat {
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .meta-stat.primary {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .meta-stat svg {
+      width: 12px;
+      height: 12px;
+      opacity: 0.7;
+    }
+
+    /* 状态栏 */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--accent);
+    }
+
+    .keyboard-hints {
+      display: flex;
+      gap: 16px;
+    }
+
+    .hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-tertiary);
+    }
+
+    .hint kbd {
+      padding: 2px 5px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+
+    /* 主题切换 */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: var(--bg-mica);
+      backdrop-filter: var(--blur);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-primary);
+      box-shadow: var(--shadow-key);
+    }
+
+    /* 滚动条 */
+    .results::-webkit-scrollbar {
+      width: 12px;
+    }
+
+    .results::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .results::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 6px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .results::-webkit-scrollbar-thumb:hover {
+      background: var(--text-tertiary);
+      background-clip: content-box;
+    }
+
+    /* 设计说明 */
+    .design-notes {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 16px 20px;
+      background: var(--bg-mica);
+      backdrop-filter: var(--blur);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-key);
+    }
+
+    .design-notes h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .design-notes p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .design-notes ul {
+      margin-top: 8px;
+      padding-left: 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .design-notes li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 切换主题</button>
+
+  <div class="container">
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="app-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        </div>
+        <span class="app-title">书签搜索</span>
+      </div>
+      <div class="window-controls">
+        <button class="window-btn minimize"></button>
+        <button class="window-btn maximize"></button>
+        <button class="window-btn close"></button>
+      </div>
+    </div>
+
+    <div class="search-section">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="输入关键词搜索..." value="vscode 插件">
+        <span class="search-shortcut">Alt+B</span>
+      </div>
+    </div>
+
+    <div class="command-bar">
+      <button class="command-btn active">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        书签
+      </button>
+      <button class="command-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+        标签页
+      </button>
+      <button class="command-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        历史
+      </button>
+      <button class="command-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        下载
+      </button>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">筛选：</span>
+      <div class="filter-group">
+        <button class="filter-chip active">全部</button>
+        <button class="filter-chip">未使用<span class="count">238</span></button>
+        <button class="filter-chip">很少使用<span class="count">18</span></button>
+        <button class="filter-chip">休眠<span class="count">0</span></button>
+      </div>
+      <button class="sort-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+        智能
+      </button>
+    </div>
+
+    <div class="results">
+      <div class="result-item active">
+        <div class="result-icon">
+          <img src="https://code.visualstudio.com/favicon.ico" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-title">VS Code 必备插件推荐 - 2024完整指南</div>
+          <div class="result-url">code.visualstudio.com/docs/extensions</div>
+        </div>
+        <div class="result-meta">
+          <span class="meta-stat primary">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+            286次
+          </span>
+          <span class="meta-stat">1小时前</span>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://marketplace.visualstudio.com/favicon.ico" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-title">Visual Studio Marketplace - VS Code Extensions</div>
+          <div class="result-url">marketplace.visualstudio.com</div>
+        </div>
+        <div class="result-meta">
+          <span class="meta-stat primary">178次</span>
+          <span class="meta-stat">昨天</span>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-title">vscode-eslint - Microsoft ESLint extension for VS Code</div>
+          <div class="result-url">github.com/microsoft/vscode-eslint</div>
+        </div>
+        <div class="result-meta">
+          <span class="meta-stat">89次</span>
+          <span class="meta-stat">3天前</span>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://prettier.io/icon.png" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-title">Prettier - Code formatter for VS Code</div>
+          <div class="result-url">prettier.io/docs/en/editors.html</div>
+        </div>
+        <div class="result-meta">
+          <span class="meta-stat">67次</span>
+          <span class="meta-stat">1周前</span>
+        </div>
+      </div>
+
+      <div class="result-item">
+        <div class="result-icon">
+          <img src="https://www.gitpod.io/favicon192.png" alt="">
+        </div>
+        <div class="result-content">
+          <div class="result-title">GitLens — Git supercharged for VS Code</div>
+          <div class="result-url">gitlens.amod.io</div>
+        </div>
+        <div class="result-meta">
+          <span class="meta-stat">45次</span>
+          <span class="meta-stat">2周前</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-left">
+        <svg class="status-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span>找到 <strong>5</strong> 个结果</span>
+      </div>
+      <div class="keyboard-hints">
+        <span class="hint"><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+        <span class="hint"><kbd>Enter</kbd> 打开</span>
+        <span class="hint"><kbd>Ctrl+C</kbd> 复制</span>
+        <span class="hint"><kbd>Esc</kbd> 关闭</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>🪟 Demo 5: Fluent Design 风格 (Windows 11)</h3>
+    <p>灵感来源于 Windows 11 和 Microsoft Fluent Design System，强调层次和材质感。</p>
+    <ul>
+      <li><strong>Mica/Acrylic 效果</strong>：半透明毛玻璃背景，透出桌面壁纸色调</li>
+      <li><strong>微妙边框</strong>：1px 边框营造层次感</li>
+      <li><strong>圆角矩形</strong>：较小的圆角（4-8px），Windows 风格</li>
+      <li><strong>下划线指示器</strong>：活动选项卡使用底部指示条</li>
+      <li><strong>系统化图标</strong>：使用 Segoe UI 风格的线性图标</li>
+    </ul>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+
+    document.querySelectorAll('.result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.result-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.command-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.command-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

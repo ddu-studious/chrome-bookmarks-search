@@ -1,5 +1,5 @@
-# Chrome Bookmarks Search Extension (v1.4.1)
-# Chrome 书签搜索扩展 (v1.4.1)
+# Chrome Bookmarks Search Extension (v1.6.0)
+# Chrome 书签搜索扩展 (v1.6.0)
 
 ## Description 描述
 🇺🇸 **English**:
@@ -71,6 +71,15 @@ Tired of endless scrolling through your bookmarks? 🤔 Say goodbye to the frust
 
 ## Version History 版本历史
 🇺🇸 **English**:
+### v1.6.0 (2025-02-03) 🎨
+- **Global Overlay Search**: Search anywhere with a floating panel overlay instead of popup! 🌐
+- **Three UI Styles**: Choose between Spotlight (macOS), Raycast, or Fluent (Windows 11)! 🎭
+- **New Settings Page**: Full-featured options page with sidebar navigation! ⚙️
+- **Data Management**: View, search, and manage bookmarks/history/downloads in settings! 📊
+- **Enhanced Context Menu**: Style-matched right-click menus with keyboard shortcuts! 🖱️
+- **Usage Guide**: Built-in documentation with search syntax and tips! 📖
+- **Friend Links Management**: Add, edit, and delete quick links! 🔗
+
 ### v1.4.0 (2025-01-30) 🎯
 - **Multi-keyword AND search**: Space-separated keywords now match simultaneously! 🔍
 - **Exact phrase matching**: Use quotes like `"project meeting"` to match exact phrases! 📝
@@ -99,6 +108,15 @@ Tired of endless scrolling through your bookmarks? 🤔 Say goodbye to the frust
 - Turbocharged the performance - feel the speed! ⚡️
 
 🇨🇳 **中文**:
+### v1.6.0 (2025-02-03) 🎨
+- **全局浮层搜索**：告别弹出窗口，在任意页面覆盖式搜索！🌐
+- **三种界面风格**：Spotlight (macOS)、Raycast、Fluent (Windows 11) 随心切换！🎭
+- **全新设置页面**：侧边栏导航的完整设置中心！⚙️
+- **数据管理功能**：在设置中查看、搜索、管理书签/历史/下载！📊
+- **风格化右键菜单**：匹配主题风格的右键菜单，带快捷键提示！🖱️
+- **使用说明手册**：内置文档，搜索语法和技巧一目了然！📖
+- **友情链接管理**：自由添加、编辑、删除快捷链接！🔗
+
 ### v1.4.0 (2025-01-30) 🎯
 - **多关键字同时搜索**：空格分隔的关键字现在会同时匹配！🔍
 - **精确短语匹配**：使用引号如 `"项目会议"` 进行精确匹配！📝

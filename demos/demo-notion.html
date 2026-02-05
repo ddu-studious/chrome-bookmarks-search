@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Demo - Notion 风格</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f7f6f3;
+      --bg-hover: rgba(55, 53, 47, 0.04);
+      --bg-active: rgba(55, 53, 47, 0.08);
+      --text-primary: #37352f;
+      --text-secondary: #787774;
+      --text-light: #9b9a97;
+      --accent: #2383e2;
+      --accent-light: rgba(35, 131, 226, 0.1);
+      --red: #eb5757;
+      --orange: #fa9f47;
+      --border: rgba(55, 53, 47, 0.09);
+      --shadow: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1), 0 9px 24px rgba(15, 15, 15, 0.2);
+    }
+
+    .dark {
+      --bg-primary: #191919;
+      --bg-secondary: #202020;
+      --bg-hover: rgba(255, 255, 255, 0.05);
+      --bg-active: rgba(255, 255, 255, 0.1);
+      --text-primary: #ffffffcf;
+      --text-secondary: #9b9a97;
+      --text-light: #5a5a5a;
+      --accent: #529cca;
+      --accent-light: rgba(82, 156, 202, 0.15);
+      --border: rgba(255, 255, 255, 0.07);
+    }
+
+    body {
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+      padding: 20px;
+    }
+
+    .container {
+      width: 520px;
+      max-height: 560px;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* 侧边栏 */
+    .sidebar {
+      width: 180px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 8px 12px;
+      margin-bottom: 8px;
+    }
+
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-list {
+      list-style: none;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .nav-item.active {
+      background: var(--bg-active);
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .nav-text {
+      flex: 1;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    .nav-count {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-light);
+      padding: 8px 12px 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+      margin-bottom: 1px;
+    }
+
+    .filter-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .filter-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .filter-dot.red { background: var(--red); }
+    .filter-dot.orange { background: var(--orange); }
+    .filter-dot.gray { background: var(--text-light); }
+
+    .filter-text {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .filter-count {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* 主内容区 */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* 搜索区域 */
+    .search-area {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .search-box:focus-within {
+      background: var(--bg-primary);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .search-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--text-light);
+    }
+
+    .search-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-light);
+    }
+
+    .search-shortcut {
+      font-size: 11px;
+      color: var(--text-light);
+      padding: 2px 6px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    /* 排序和操作栏 */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sort-dropdown {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .sort-dropdown:hover {
+      background: var(--bg-hover);
+    }
+
+    .sort-dropdown svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .toolbar-btn {
+      padding: 4px 8px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.1s ease;
+    }
+
+    .toolbar-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .toolbar-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* 结果统计 */
+    .results-header {
+      padding: 8px 20px;
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .results-header strong {
+      color: var(--text-primary);
+    }
+
+    /* 结果列表 */
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px 12px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .result-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .result-item.active {
+      background: var(--bg-active);
+    }
+
+    .result-checkbox {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-radius: 3px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+    }
+
+    .result-item:hover .result-checkbox {
+      border-color: var(--text-light);
+    }
+
+    .result-item.selected .result-checkbox {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .result-item.selected .result-checkbox::after {
+      content: '✓';
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .result-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .result-icon img {
+      width: 18px;
+      height: 18px;
+      border-radius: 2px;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.4;
+      margin-bottom: 4px;
+    }
+
+    .result-title:hover {
+      text-decoration: underline;
+    }
+
+    .result-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .meta-tag {
+      padding: 2px 6px;
+      background: var(--accent-light);
+      border-radius: 3px;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .meta-tag.red {
+      background: rgba(235, 87, 87, 0.1);
+      color: var(--red);
+    }
+
+    .meta-tag.orange {
+      background: rgba(250, 159, 71, 0.1);
+      color: var(--orange);
+    }
+
+    /* 快捷键提示 */
+    .keyboard-hints {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 10px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-light);
+    }
+
+    .hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .hint kbd {
+      padding: 2px 5px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 10px;
+    }
+
+    /* 主题切换 */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    /* 滚动条 */
+    .results::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .results::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .results::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 5px;
+      border: 2px solid var(--bg-primary);
+    }
+
+    .results::-webkit-scrollbar-thumb:hover {
+      background: var(--text-light);
+    }
+
+    /* 设计说明 */
+    .design-notes {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .design-notes h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .design-notes p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .design-notes ul {
+      margin-top: 8px;
+      padding-left: 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .design-notes li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 切换主题</button>
+
+  <div class="container">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">搜索范围</div>
+      </div>
+      
+      <ul class="nav-list">
+        <li class="nav-item active">
+          <span class="nav-icon">📑</span>
+          <span class="nav-text">书签</span>
+          <span class="nav-count">303</span>
+        </li>
+        <li class="nav-item">
+          <span class="nav-icon">🗂️</span>
+          <span class="nav-text">标签页</span>
+          <span class="nav-count">12</span>
+        </li>
+        <li class="nav-item">
+          <span class="nav-icon">🕐</span>
+          <span class="nav-text">历史记录</span>
+          <span class="nav-count">847</span>
+        </li>
+        <li class="nav-item">
+          <span class="nav-icon">📥</span>
+          <span class="nav-text">下载</span>
+          <span class="nav-count">56</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-section-title">使用状态</div>
+      <div class="filter-item">
+        <span class="filter-dot red"></span>
+        <span class="filter-text">未使用</span>
+        <span class="filter-count">238</span>
+      </div>
+      <div class="filter-item">
+        <span class="filter-dot orange"></span>
+        <span class="filter-text">很少使用</span>
+        <span class="filter-count">18</span>
+      </div>
+      <div class="filter-item">
+        <span class="filter-dot gray"></span>
+        <span class="filter-text">休眠</span>
+        <span class="filter-count">0</span>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="search-area">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" class="search-input" placeholder="搜索书签..." value="vue 教程">
+          <span class="search-shortcut">⌥B</span>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="sort-dropdown">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+            智能排序
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
+        <div class="toolbar-right">
+          <button class="toolbar-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            列表
+          </button>
+          <button class="toolbar-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="results-header">
+        找到 <strong>6</strong> 个结果
+      </div>
+
+      <div class="results">
+        <div class="result-item active">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://cn.vuejs.org/logo.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Vue.js 官方教程 - 渐进式 JavaScript 框架</div>
+            <div class="result-meta">
+              <span class="meta-item">cn.vuejs.org</span>
+              <span class="meta-tag">156次访问</span>
+              <span class="meta-item">2小时前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://cn.vuejs.org/logo.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Vue 3 组合式 API 完全指南</div>
+            <div class="result-meta">
+              <span class="meta-item">vuejs.org</span>
+              <span class="meta-tag orange">很少使用</span>
+              <span class="meta-item">1周前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">GitHub - vuejs/vue: Vue.js is a progressive framework</div>
+            <div class="result-meta">
+              <span class="meta-item">github.com</span>
+              <span class="meta-tag">89次访问</span>
+              <span class="meta-item">昨天</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://pinia.vuejs.org/logo.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Pinia | Vue.js 状态管理库</div>
+            <div class="result-meta">
+              <span class="meta-item">pinia.vuejs.org</span>
+              <span class="meta-tag red">未使用</span>
+              <span class="meta-item">添加于 3个月前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://router.vuejs.org/logo.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Vue Router | Vue.js 官方路由</div>
+            <div class="result-meta">
+              <span class="meta-item">router.vuejs.org</span>
+              <span class="meta-tag">45次访问</span>
+              <span class="meta-item">3天前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-item">
+          <div class="result-checkbox"></div>
+          <div class="result-icon">
+            <img src="https://element-plus.org/images/element-plus-logo.svg" alt="">
+          </div>
+          <div class="result-content">
+            <div class="result-title">Element Plus - Vue 3 组件库</div>
+            <div class="result-meta">
+              <span class="meta-item">element-plus.org</span>
+              <span class="meta-tag">67次访问</span>
+              <span class="meta-item">昨天</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="keyboard-hints">
+        <span class="hint"><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+        <span class="hint"><kbd>Space</kbd> 多选</span>
+        <span class="hint"><kbd>↵</kbd> 打开</span>
+        <span class="hint"><kbd>Esc</kbd> 关闭</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>📝 Demo 3: Notion 风格 (生产力工具)</h3>
+    <p>灵感来源于 Notion 和 Linear，强调清晰的信息层次和功能性。</p>
+    <ul>
+      <li><strong>侧边栏导航</strong>：左侧固定导航，清晰的分类结构</li>
+      <li><strong>Emoji 图标</strong>：使用 emoji 作为图标，增加亲和力</li>
+      <li><strong>颜色标签</strong>：使用颜色区分不同状态（红/橙/灰）</li>
+      <li><strong>复选框</strong>：支持多选操作的视觉提示</li>
+      <li><strong>温和配色</strong>：米色调背景，眼睛友好</li>
+    </ul>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+
+    document.querySelectorAll('.result-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('result-checkbox') || e.target.closest('.result-checkbox')) {
+          item.classList.toggle('selected');
+        } else {
+          document.querySelectorAll('.result-item').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+        }
+      });
+    });
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
