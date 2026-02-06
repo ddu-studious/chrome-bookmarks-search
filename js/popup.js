@@ -484,6 +484,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // 处理键盘事件
   function handleKeydown(e) {
+    // IME 输入中（如中文输入法候选词选择），不拦截按键
+    if (e.isComposing || e.keyCode === 229) return;
+
     // 检查是否在编辑弹窗中（编辑弹窗内的输入框需要正常使用方向键）
     const editModal = document.getElementById('editModal');
     const isEditModalOpen = editModal && editModal.classList.contains('show');

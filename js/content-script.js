@@ -32,6 +32,23 @@
   let currentFilter = 'all';
   let currentStyle = 'spotlight'; // spotlight, raycast, fluent
 
+  // IME（中文输入法）组合输入状态
+  // 如果在 composition 期间反复 focus/selection，会导致输入法被打断，只落拼音
+  const imeState = {
+    searchComposing: false,
+    editTitleComposing: false,
+    editUrlComposing: false
+  };
+
+  // 用户意图（主动交互）与自动抢焦点节流
+  // 目的：避免与宿主页面 focus trap 打乒乓导致光标闪烁/IME 被打断
+  let lastUserIntentAt = 0;
+  let lastAutoRefocusAt = 0;
+
+  function markUserIntent() {
+    lastUserIntentAt = Date.now();
+  }
+
   // ==================== 事件隔离模块 ====================
   // 用于防止宿主页面的事件影响浮层
   const EventIsolation = {
@@ -81,6 +98,9 @@
         if (e.type === 'keydown' || e.type === 'keyup' || e.type === 'keypress') {
           // 如果是来自我们浮层的事件，不阻止
           if (isFromOverlay) return;
+
+          // IME 输入中，不拦截
+          if (e.isComposing || e.keyCode === 229) return;
           
           // 阻止宿主页面的键盘事件
           e.stopPropagation();
@@ -134,6 +154,9 @@
       // 5. 启用 focus/click 捕获拦截（解决输入框无法获得焦点的问题）
       this._enableFocusAndPointerTrap();
 
+      // 6. 启用 focusout 守卫（终极防线：焦点被抢走时自动恢复）
+      this.enableFocusGuard();
+
       console.log('[BookmarkSearch] Event isolation enabled');
     },
 
@@ -159,6 +182,9 @@
       // 4. 禁用 focus/click 捕获拦截
       this._disableFocusAndPointerTrap();
 
+      // 5. 禁用 focusout 守卫
+      this.disableFocusGuard();
+
       console.log('[BookmarkSearch] Event isolation disabled');
     },
 
@@ -183,9 +209,11 @@
 
       this._windowKeyHandler = (e) => {
         if (!isVisible) return;
-        if (!navKeys.has(e.key)) return;
 
-        // 编辑弹窗打开且焦点在输入框时：允许用户在输入框内正常使用方向键/回车等
+        // IME 输入中（如中文输入法候选词选择），不拦截
+        if (e.isComposing || e.keyCode === 229) return;
+
+        // 编辑弹窗打开且焦点在输入框时：允许用户正常使用键盘
         const editModal = shadowRoot?.getElementById('editModal');
         const isEditModalOpen = editModal?.classList.contains('show');
         if (isEditModalOpen) {
@@ -197,25 +225,37 @@
           }
         }
 
-        // 关键：先阻断页面侧的捕获/冒泡监听（很多站点的“弹窗焦点陷阱”就挂在这里）
-        e.preventDefault();
-        e.stopImmediatePropagation();
-
-        // 如果浮层没有焦点，尝试把焦点拉回搜索框（不做轮询，只在按键触发时尝试）
         const searchInput = shadowRoot?.getElementById('searchInput');
-        if (searchInput && shadowRoot?.activeElement !== searchInput) {
-          try {
-            searchInput.focus({ preventScroll: true });
-          } catch (err) {
-            // ignore
+
+        // 处理导航键（方向键、回车、ESC 等）
+        if (navKeys.has(e.key)) {
+          markUserIntent();
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          if (searchInput && shadowRoot?.activeElement !== searchInput) {
+            try { searchInput.focus({ preventScroll: true }); } catch (err) {}
           }
+
+          try { handleKeydown(e); } catch (err) {}
+          return;
         }
 
-        // 将同一个事件交给我们自己的按键处理逻辑（用于↑↓选择、←→切换、Esc关闭、Enter打开）
-        try {
-          handleKeydown(e);
-        } catch (err) {
-          // ignore
+        // 处理字符键输入：当焦点不在搜索框时（被页面 focus trap 抢走），
+        // 将焦点拉回搜索框，让用户能正常输入
+        if (searchInput && shadowRoot?.activeElement !== searchInput) {
+          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            markUserIntent();
+            e.stopImmediatePropagation();
+            try { searchInput.focus({ preventScroll: true }); } catch (err) {}
+            return;
+          }
+          if (e.key === 'Backspace' || e.key === 'Delete') {
+            markUserIntent();
+            e.stopImmediatePropagation();
+            try { searchInput.focus({ preventScroll: true }); } catch (err) {}
+            return;
+          }
         }
       };
 
@@ -234,24 +274,83 @@
     // 我们在更早（同样是 capture 阶段）发现事件来自扩展浮层时，直接 stopImmediatePropagation，
     // 让站点逻辑“看不到”这些事件，从而不会抢回焦点。
     _enableFocusAndPointerTrap() {
-      if (this._windowFocusHandler || this._windowPointerHandler) return;
+      if (this._windowFocusHandler || this._windowMousedownHandler) return;
 
       const isFromOverlay = (target) => {
         if (!overlayContainer) return false;
-        // Shadow DOM closed 时，事件对外通常会 retarget 到 host（overlayContainer）
         return target === overlayContainer || overlayContainer.contains(target);
       };
 
+      // 辅助函数：通过 composedPath 查找实际点击的可聚焦元素
+      const findFocusableTarget = (e) => {
+        try {
+          const path = e.composedPath();
+          for (const el of path) {
+            if (el === overlayContainer) break;
+            if (el.nodeType === 1 && (
+              el.tagName === 'INPUT' || 
+              el.tagName === 'TEXTAREA' || 
+              el.isContentEditable
+            )) {
+              return el;
+            }
+          }
+        } catch (err) {}
+        return null;
+      };
+
+      // 精简的聚焦函数：立即 + 单次 rAF 兜底
+      // 避免过多异步 focus 调用导致事件级联和性能问题
+      const safeFocus = (target) => {
+        if (!target || !isVisible) return;
+        markUserIntent();
+        try { target.focus({ preventScroll: true }); } catch (e) {}
+        // 仅一次 rAF 兜底，足以击败大部分 focus trap
+        requestAnimationFrame(() => {
+          if (!isVisible || shadowRoot?.activeElement === target) return;
+          try { target.focus({ preventScroll: true }); } catch (e) {}
+        });
+      };
+
+      // 防抖标志：mousedown 和 pointerdown 会对同一次点击各触发一次，
+      // 用时间戳去重，避免双倍 focus 调用
+      let lastPointerTime = 0;
+
+      // 层1：拦截 focusin 传播 —— 阻止页面看到焦点变化
       this._windowFocusHandler = (e) => {
         if (!isVisible) return;
         if (!isFromOverlay(e.target)) return;
-
-        // 不需要 preventDefault（focusin 不可取消），只要阻断传播即可
         e.stopImmediatePropagation();
         e.stopPropagation();
       };
-
       window.addEventListener('focusin', this._windowFocusHandler, true);
+
+      // 层2：拦截 mousedown/pointerdown 传播 + 编程式强制聚焦
+      // 很多站点的 focus trap（如 Prometheus、Grafana、Ant Design Modal）会在
+      // window/document capture 阶段监听 mousedown，检测到点击在 modal 外部后
+      // 就强制把焦点拉回 modal 内。
+      //
+      // 关键修复：由于 content script 在 document_idle 加载，页面的 capture handler
+      // 可能注册在我们之前，先执行 preventDefault() 阻止了浏览器默认聚焦行为。
+      // 因此我们必须通过编程方式（safeFocus）强制聚焦，不能依赖浏览器默认行为。
+      this._windowMousedownHandler = (e) => {
+        if (!isVisible) return;
+        if (!isFromOverlay(e.target)) return;
+        e.stopImmediatePropagation();
+        
+        // 防抖：mousedown 和 pointerdown 对同一次点击只处理一次
+        const now = Date.now();
+        if (now - lastPointerTime < 50) return;
+        lastPointerTime = now;
+        
+        // 尝试获取实际点击的可聚焦元素（如搜索框、编辑框）
+        const focusableTarget = findFocusableTarget(e);
+        if (focusableTarget) {
+          safeFocus(focusableTarget);
+        }
+      };
+      window.addEventListener('mousedown', this._windowMousedownHandler, true);
+      window.addEventListener('pointerdown', this._windowMousedownHandler, true);
     },
 
     _disableFocusAndPointerTrap() {
@@ -259,8 +358,64 @@
         window.removeEventListener('focusin', this._windowFocusHandler, true);
         this._windowFocusHandler = null;
       }
-      // 之前的 pointer/click trap 已移除：它会阻断事件到达浮层内部导致按钮不可点击
+      if (this._windowMousedownHandler) {
+        window.removeEventListener('mousedown', this._windowMousedownHandler, true);
+        window.removeEventListener('pointerdown', this._windowMousedownHandler, true);
+        this._windowMousedownHandler = null;
+      }
       this._windowPointerHandler = null;
+    },
+
+    // 层3：focusout 守卫 —— 轻量兜底
+    // 主要防线已由 focus-guard.js（MAIN world）在根源上拦截页面的 focus() 调用。
+    // 此守卫仅作为极端情况下的最后兜底（如页面通过非 focus() 方式转移焦点）。
+    _focusGuardHandler: null,
+
+    enableFocusGuard() {
+      if (this._focusGuardHandler) return;
+      if (!overlayContainer) return;
+
+      this._focusGuardHandler = (e) => {
+        if (!isVisible) return;
+
+        // 编辑弹窗打开时，不干预焦点
+        const editModal = shadowRoot?.getElementById('editModal');
+        if (editModal?.classList.contains('show')) return;
+
+        // IME 组合输入中，绝不抢焦点
+        if (imeState.searchComposing) return;
+
+        // 检查新焦点是否仍然在浮层容器内
+        const newFocus = e.relatedTarget;
+        if (newFocus && (newFocus === overlayContainer || overlayContainer.contains(newFocus))) {
+          return;
+        }
+
+        // 焦点被外部抢走，使用 rAF 延迟恢复
+        requestAnimationFrame(() => {
+          if (!isVisible || imeState.searchComposing) return;
+          const searchInput = shadowRoot?.getElementById('searchInput');
+          if (!searchInput) return;
+
+          const editModalNow = shadowRoot?.getElementById('editModal');
+          if (editModalNow?.classList.contains('show')) return;
+
+          if (shadowRoot?.activeElement === searchInput) return;
+
+          try {
+            searchInput.focus({ preventScroll: true });
+          } catch (err) {}
+        });
+      };
+
+      overlayContainer.addEventListener('focusout', this._focusGuardHandler);
+    },
+
+    disableFocusGuard() {
+      if (this._focusGuardHandler && overlayContainer) {
+        overlayContainer.removeEventListener('focusout', this._focusGuardHandler);
+        this._focusGuardHandler = null;
+      }
     },
 
     // 锁定页面滚动（更安全的方式，不使用 position: fixed）
@@ -1711,6 +1866,7 @@
       searchArea.addEventListener('click', (e) => {
         // 如果点击的不是输入框本身，聚焦到输入框
         if (e.target !== searchInput) {
+          markUserIntent();
           searchInput.focus();
         }
       });
@@ -1720,6 +1876,7 @@
     searchPanel.addEventListener('click', (e) => {
       // 只有点击的是面板本身（非子元素）时才聚焦
       if (e.target === searchPanel) {
+        markUserIntent();
         searchInput.focus();
       }
     });
@@ -1729,14 +1886,25 @@
       search(e.target.value);
     });
 
-    // 某些站点会用 focus trap 抢焦点：pointerdown 时主动聚焦一次，提升成功率
-    // 不要 preventDefault，否则会阻止浏览器默认的 focus 行为
+    // IME 组合输入状态跟踪（解决中文输入法只落拼音问题）
+    searchInput.addEventListener('compositionstart', () => {
+      imeState.searchComposing = true;
+    });
+    searchInput.addEventListener('compositionend', () => {
+      imeState.searchComposing = false;
+    });
+
+    // 某些站点会用 focus trap 抢焦点：pointerdown 时主动聚焦 + rAF 兜底
     searchInput.addEventListener('pointerdown', () => {
-      try {
-        searchInput.focus({ preventScroll: true });
-      } catch (e) {
-        // ignore
+      markUserIntent();
+      if (shadowRoot.activeElement !== searchInput) {
+        try { searchInput.focus({ preventScroll: true }); } catch (e) {}
       }
+      requestAnimationFrame(() => {
+        if (isVisible && !imeState.searchComposing && shadowRoot.activeElement !== searchInput) {
+          try { searchInput.focus({ preventScroll: true }); } catch (e) {}
+        }
+      });
     });
 
     // 键盘事件 - 在搜索框上
@@ -1762,6 +1930,7 @@
       
       // 其他按键时聚焦到搜索框
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.isComposing || e.keyCode === 229) return;
         searchInput.focus();
       }
     });
@@ -1852,6 +2021,35 @@
     shadowRoot.getElementById('editModalClose').addEventListener('click', hideEditModal);
     shadowRoot.getElementById('editCancel').addEventListener('click', hideEditModal);
     shadowRoot.getElementById('editSave').addEventListener('click', saveEdit);
+    
+    // 编辑弹窗输入框：pointerdown 时聚焦 + rAF 兜底
+    const editTitleInput = shadowRoot.getElementById('editTitle');
+    const editUrlInput = shadowRoot.getElementById('editUrl');
+
+    if (editTitleInput) {
+      editTitleInput.addEventListener('compositionstart', () => { imeState.editTitleComposing = true; });
+      editTitleInput.addEventListener('compositionend', () => { imeState.editTitleComposing = false; });
+    }
+    if (editUrlInput) {
+      editUrlInput.addEventListener('compositionstart', () => { imeState.editUrlComposing = true; });
+      editUrlInput.addEventListener('compositionend', () => { imeState.editUrlComposing = false; });
+    }
+
+    [editTitleInput, editUrlInput].forEach(input => {
+      if (!input) return;
+      input.addEventListener('pointerdown', () => {
+        if (shadowRoot.activeElement !== input) {
+          try { input.focus({ preventScroll: true }); } catch (e) {}
+        }
+        requestAnimationFrame(() => {
+          const isComposing = (input === editTitleInput && imeState.editTitleComposing) ||
+            (input === editUrlInput && imeState.editUrlComposing);
+          if (isVisible && !isComposing && shadowRoot.activeElement !== input) {
+            try { input.focus({ preventScroll: true }); } catch (e) {}
+          }
+        });
+      });
+    });
 
     // 加载友情链接
     loadFriendLinks();
@@ -1862,6 +2060,9 @@
     // 始终阻止事件传播到宿主页面
     e.stopPropagation();
     e.stopImmediatePropagation();
+
+    // IME 输入中（如中文输入法候选词选择），不拦截按键
+    if (e.isComposing || e.keyCode === 229) return;
     
     const items = shadowRoot.querySelectorAll('.result-item');
 
@@ -2352,34 +2553,23 @@
     panel.classList.add('show');
     isVisible = true;
 
+    // 激活 MAIN world focus guard —— 从根源上阻止页面 focus trap 抢焦点
+    document.documentElement.dataset.bookmarkSearchActive = 'true';
+
     // 启用事件隔离 - 防止宿主页面事件干扰
     EventIsolation.enable();
 
-    // 智能聚焦策略：有限次数尝试，避免与浏览器原生弹窗冲突
-    let focusAttempts = 0;
-    const maxAttempts = 3;
-    
-    const tryFocus = () => {
-      if (!isVisible || focusAttempts >= maxAttempts) return;
-      focusAttempts++;
-      
-      try {
-        searchInput.focus({ preventScroll: true });
-        // 检查是否成功获得焦点
-        if (shadowRoot.activeElement === searchInput) {
-          searchInput.select();
-          console.log('[BookmarkSearch] Focus acquired successfully');
-        } else if (focusAttempts < maxAttempts) {
-          // 如果没有成功，稍后重试
-          setTimeout(tryFocus, 100 * focusAttempts);
-        }
-      } catch (e) {
-        console.log('[BookmarkSearch] Focus attempt failed:', e);
+    // 聚焦策略：页面 focus trap 已由 focus-guard.js（MAIN world）从根源拦截，
+    // 只需一次聚焦 + rAF 兜底即可，不再需要多层重试
+    if (shadowRoot.activeElement !== searchInput) {
+      try { searchInput.focus({ preventScroll: true }); } catch (e) {}
+    }
+    requestAnimationFrame(() => {
+      if (!isVisible || imeState.searchComposing) return;
+      if (shadowRoot.activeElement !== searchInput) {
+        try { searchInput.focus({ preventScroll: true }); } catch (e) {}
       }
-    };
-    
-    // 立即尝试聚焦
-    tryFocus();
+    });
 
     // 初始化筛选栏显示状态（书签模式下显示）
     const filterBar = shadowRoot.getElementById('filterBar');
@@ -2403,6 +2593,9 @@
     backdrop.classList.remove('show');
     panel.classList.remove('show');
     isVisible = false;
+
+    // 关闭 MAIN world focus guard —— 恢复页面正常 focus 行为
+    delete document.documentElement.dataset.bookmarkSearchActive;
 
     // 禁用事件隔离 - 恢复宿主页面正常行为
     EventIsolation.disable();
@@ -2606,27 +2799,16 @@
     
     modal.classList.add('show');
     
-    // 智能聚焦策略：有限次数尝试
-    let focusAttempts = 0;
-    const maxAttempts = 3;
-    
-    const tryFocusTitle = () => {
-      if (!modal.classList.contains('show') || focusAttempts >= maxAttempts) return;
-      focusAttempts++;
-      
-      try {
-        titleInput.focus({ preventScroll: true });
-        if (shadowRoot.activeElement === titleInput) {
-          titleInput.select();
-        } else if (focusAttempts < maxAttempts) {
-          setTimeout(tryFocusTitle, 50 * focusAttempts);
-        }
-      } catch (e) {
-        console.log('[BookmarkSearch] Edit modal focus failed:', e);
+    // 聚焦策略：focus-guard.js 已阻止页面抢焦点，简单聚焦即可
+    if (shadowRoot.activeElement !== titleInput) {
+      try { titleInput.focus({ preventScroll: true }); } catch (e) {}
+    }
+    requestAnimationFrame(() => {
+      if (!modal.classList.contains('show') || imeState.editTitleComposing) return;
+      if (shadowRoot.activeElement !== titleInput) {
+        try { titleInput.focus({ preventScroll: true }); } catch (e) {}
       }
-    };
-    
-    tryFocusTitle();
+    });
     
     // 为编辑弹窗添加键盘事件处理
     const handleEditKeydown = (e) => {

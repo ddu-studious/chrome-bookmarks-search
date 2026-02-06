@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chrome Bookmarks Search",
   "description": "快速搜索Chrome书签、标签页、历史记录和下载内容",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "permissions": [
     "bookmarks",
     "tabs",
@@ -34,6 +34,12 @@
   },
   "options_page": "options.html",
   "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["js/focus-guard.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["<all_urls>"],
       "js": ["js/search-parser.js", "js/smart-sort.js", "js/content-script.js"],
