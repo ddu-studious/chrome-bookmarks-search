@@ -1,0 +1,1074 @@
+/**
+ * 独立搜索窗口样式
+ * 从 content-script.js 内联样式提取并适配
+ * 将 :host(...) 选择器转换为 body 选择器
+ * 移除浮层特有的定位/backdrop/隔离逻辑
+ */
+
+/* ==================== 基础变量 ==================== */
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --transition-duration: 0.2s;
+}
+
+/* 字体切换支持 */
+body.font-system { --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+body.font-pingfang { --font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body.font-yahei { --font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+body.font-inter { --font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body.font-noto { --font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body.font-sourcehans { --font-family: 'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* ==================== Spotlight 风格 (默认) ==================== */
+body.style-spotlight {
+  --bg-primary: rgba(255, 255, 255, 0.98);
+  --bg-secondary: rgba(248, 249, 250, 0.98);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: #007aff;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-active: #ffffff;
+  --accent: #007aff;
+  --accent-light: rgba(0, 122, 255, 0.1);
+  --border: rgba(0, 0, 0, 0.08);
+  --shadow: none;
+  --radius: 0;
+  --radius-sm: 10px;
+}
+
+body.style-spotlight.dark {
+  --bg-primary: rgba(30, 30, 30, 0.98);
+  --bg-secondary: rgba(45, 45, 45, 0.98);
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --accent: #0a84ff;
+  --accent-light: rgba(10, 132, 255, 0.15);
+  --border: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== Raycast 风格 ==================== */
+body.style-raycast {
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --bg-hover: #3f3f46;
+  --bg-active: transparent;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-active: #fafafa;
+  --accent: #a855f7;
+  --accent-secondary: #ec4899;
+  --accent-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  --accent-light: rgba(168, 85, 247, 0.15);
+  --border: rgba(255, 255, 255, 0.08);
+  --shadow: none;
+  --radius: 0;
+  --radius-sm: 8px;
+}
+
+body.style-raycast.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-hover: #e4e4e7;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --border: rgba(0, 0, 0, 0.08);
+}
+
+/* ==================== Fluent 风格 ==================== */
+body.style-fluent {
+  --bg-primary: rgba(243, 243, 243, 0.98);
+  --bg-secondary: rgba(255, 255, 255, 0.9);
+  --bg-hover: rgba(0, 0, 0, 0.03);
+  --bg-active: rgba(0, 120, 212, 0.1);
+  --text-primary: #1a1a1a;
+  --text-secondary: #616161;
+  --text-active: #0078d4;
+  --accent: #0078d4;
+  --accent-light: rgba(0, 120, 212, 0.1);
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --shadow: none;
+  --radius: 0;
+  --radius-sm: 4px;
+}
+
+body.style-fluent.dark {
+  --bg-primary: rgba(32, 32, 32, 0.98);
+  --bg-secondary: rgba(44, 44, 44, 0.95);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(96, 205, 255, 0.12);
+  --text-primary: #ffffff;
+  --text-secondary: #c5c5c5;
+  --text-active: #60cdff;
+  --accent: #60cdff;
+  --accent-light: rgba(96, 205, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== 基础重置 ==================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ==================== 主容器 ==================== */
+.search-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* ==================== 搜索区域 ==================== */
+.search-area {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: var(--text-primary);
+  outline: none;
+  font-weight: 400;
+  font-family: var(--font-family);
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.shortcut-badge {
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', Monaco, monospace;
+  flex-shrink: 0;
+}
+
+/* ==================== 模式标签 ==================== */
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.mode-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mode-tab.active {
+  background: var(--bg-primary);
+  color: var(--accent);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.mode-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab-count {
+  padding: 2px 6px;
+  background: var(--bg-hover);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mode-tab.active .tab-count {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* ==================== 筛选栏 ==================== */
+.filter-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.filter-bar.show {
+  display: flex;
+}
+
+.filter-group, .sort-group {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.filter-count {
+  margin-left: 2px;
+  opacity: 0.8;
+}
+
+.sort-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.sort-btn:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.sort-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.sort-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ==================== 结果列表 ==================== */
+.results-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.results-list {
+  padding: 8px;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.1s ease;
+  position: relative;
+}
+
+.result-item:hover {
+  background: var(--bg-hover);
+}
+
+.result-item.active {
+  background: var(--bg-active);
+}
+
+/* Spotlight 风格激活样式 */
+body.style-spotlight .result-item.active {
+  background: var(--accent);
+}
+
+body.style-spotlight .result-item.active .result-title,
+body.style-spotlight .result-item.active .result-url,
+body.style-spotlight .result-item.active .result-meta {
+  color: white !important;
+}
+
+/* Raycast 风格左侧指示条 */
+body.style-raycast .result-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: var(--accent-gradient);
+  border-radius: 2px;
+  transition: height 0.15s ease;
+}
+
+body.style-raycast .result-item:hover::before,
+body.style-raycast .result-item.active::before {
+  height: 24px;
+}
+
+/* Fluent 风格边框高亮 */
+body.style-fluent .result-item.active {
+  border: 1px solid var(--accent);
+  background: var(--accent-light);
+}
+
+.result-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.result-icon img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-url {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.result-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.meta-badge {
+  padding: 3px 8px;
+  background: var(--accent-light);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.meta-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.status-tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.status-tag.never-used {
+  background: rgba(255, 149, 0, 0.15);
+  color: #ff9500;
+}
+
+.status-tag.rarely-used {
+  background: rgba(52, 199, 89, 0.15);
+  color: #34c759;
+}
+
+.status-tag.dormant {
+  background: rgba(255, 59, 48, 0.15);
+  color: #ff3b30;
+}
+
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ==================== 状态栏 ==================== */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyboard-hints {
+  display: flex;
+  gap: 12px;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hint kbd {
+  padding: 2px 6px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 11px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.style-switcher,
+.font-switcher,
+.settings-btn-overlay {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: 8px;
+}
+
+.style-switcher:hover,
+.font-switcher:hover,
+.settings-btn-overlay:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.style-switcher svg,
+.font-switcher svg,
+.settings-btn-overlay svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ==================== 滚动条 ==================== */
+.results-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.results-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.results-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.results-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* ==================== 友情链接 ==================== */
+.friend-links {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.friend-links-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.friend-link-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-primary);
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border);
+}
+
+.friend-link-item:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.friend-link-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.friend-link-tag {
+  white-space: nowrap;
+}
+
+/* ==================== 右键菜单基础 ==================== */
+.context-menu {
+  position: fixed;
+  min-width: 200px;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.95);
+  transition: all 0.15s ease;
+}
+
+.context-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.1s;
+}
+
+.menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.menu-item-text {
+  flex: 1;
+}
+
+.menu-item-shortcut {
+  font-size: 11px;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.menu-separator {
+  height: 1px;
+}
+
+/* ==================== Spotlight 风格右键菜单 ==================== */
+body.style-spotlight .context-menu,
+body.style-spotlight.dark .context-menu {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 10px;
+  box-shadow: 
+    0 0 0 0.5px rgba(0, 0, 0, 0.1),
+    0 12px 24px rgba(0, 0, 0, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 5px 0;
+}
+
+body.style-spotlight.dark .context-menu {
+  background: rgba(40, 40, 40, 0.92);
+  box-shadow: 
+    0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+body.style-spotlight .menu-item,
+body.style-spotlight.dark .menu-item {
+  padding: 6px 12px;
+  margin: 0 5px;
+  border-radius: 5px;
+  color: #1d1d1f;
+}
+
+body.style-spotlight.dark .menu-item {
+  color: #f5f5f7;
+}
+
+body.style-spotlight .menu-item:hover,
+body.style-spotlight.dark .menu-item:hover {
+  background: #007aff;
+  color: white;
+}
+
+body.style-spotlight .menu-item:hover svg,
+body.style-spotlight.dark .menu-item:hover svg {
+  color: white;
+}
+
+body.style-spotlight .menu-item svg,
+body.style-spotlight.dark .menu-item svg {
+  color: #6e6e73;
+}
+
+body.style-spotlight .menu-item-shortcut {
+  color: #a1a1a6;
+}
+
+body.style-spotlight .menu-item:hover .menu-item-shortcut {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+body.style-spotlight .menu-separator,
+body.style-spotlight.dark .menu-separator {
+  background: rgba(0, 0, 0, 0.1);
+  margin: 5px 12px;
+}
+
+body.style-spotlight.dark .menu-separator {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.style-spotlight .menu-item.delete-action {
+  color: #ff3b30;
+}
+
+body.style-spotlight .menu-item.delete-action svg {
+  color: #ff3b30;
+}
+
+body.style-spotlight .menu-item.delete-action:hover {
+  background: #ff3b30;
+  color: white;
+}
+
+body.style-spotlight .menu-item.delete-action:hover svg {
+  color: white;
+}
+
+body.style-spotlight .menu-item.edit-action {
+  color: #007aff;
+}
+
+body.style-spotlight .menu-item.edit-action svg {
+  color: #007aff;
+}
+
+/* ==================== Raycast 风格右键菜单 ==================== */
+body.style-raycast .context-menu,
+body.style-raycast.light .context-menu {
+  background: #1e1e20;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.style-raycast.light .context-menu {
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body.style-raycast .menu-item,
+body.style-raycast.light .menu-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #e5e5e5;
+  position: relative;
+}
+
+body.style-raycast.light .menu-item {
+  color: #1d1d1f;
+}
+
+body.style-raycast .menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  border-radius: 2px;
+  transition: height 0.15s;
+}
+
+body.style-raycast .menu-item:hover {
+  background: #2a2a2c;
+}
+
+body.style-raycast.light .menu-item:hover {
+  background: #f5f5f7;
+}
+
+body.style-raycast .menu-item:hover::before {
+  height: 20px;
+}
+
+body.style-raycast .menu-item svg {
+  color: #8e8e93;
+}
+
+body.style-raycast .menu-item:hover svg {
+  color: #a855f7;
+}
+
+body.style-raycast .menu-item-shortcut {
+  color: #5e5e63;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+
+body.style-raycast .menu-separator {
+  background: rgba(255, 255, 255, 0.06);
+  margin: 6px 0;
+}
+
+body.style-raycast.light .menu-separator {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body.style-raycast .menu-item.delete-action {
+  color: #ff6b6b;
+}
+
+body.style-raycast .menu-item.delete-action svg {
+  color: #ff6b6b;
+}
+
+body.style-raycast .menu-item.delete-action:hover::before {
+  background: linear-gradient(135deg, #ff6b6b, #ff3b30);
+}
+
+body.style-raycast .menu-item.edit-action {
+  color: #a855f7;
+}
+
+body.style-raycast .menu-item.edit-action svg {
+  color: #a855f7;
+}
+
+/* ==================== Fluent 风格右键菜单 ==================== */
+body.style-fluent .context-menu,
+body.style-fluent.dark .context-menu {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 8px;
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+}
+
+body.style-fluent.dark .context-menu {
+  background: rgba(40, 40, 40, 0.95);
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+body.style-fluent .menu-item,
+body.style-fluent.dark .menu-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: #1a1a1a;
+}
+
+body.style-fluent.dark .menu-item {
+  color: #f5f5f7;
+}
+
+body.style-fluent .menu-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.style-fluent.dark .menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body.style-fluent .menu-item:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.style-fluent .menu-item svg {
+  color: #424242;
+}
+
+body.style-fluent.dark .menu-item svg {
+  color: #a1a1a6;
+}
+
+body.style-fluent .menu-item-shortcut {
+  color: #6e6e6e;
+}
+
+body.style-fluent .menu-separator {
+  background: rgba(0, 0, 0, 0.08);
+  margin: 4px 8px;
+}
+
+body.style-fluent.dark .menu-separator {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.style-fluent .menu-item.delete-action {
+  color: #c42b1c;
+}
+
+body.style-fluent .menu-item.delete-action svg {
+  color: #c42b1c;
+}
+
+body.style-fluent .menu-item.delete-action:hover {
+  background: rgba(196, 43, 28, 0.08);
+}
+
+body.style-fluent .menu-item.edit-action {
+  color: #0078d4;
+}
+
+body.style-fluent .menu-item.edit-action svg {
+  color: #0078d4;
+}
+
+/* ==================== 编辑弹窗 ==================== */
+.edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.edit-modal.show {
+  display: flex;
+}
+
+.edit-modal-content {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 22px 70px 4px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.edit-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.edit-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-modal-close:hover {
+  background: var(--bg-hover);
+}
+
+.edit-modal-body {
+  padding: 20px;
+}
+
+.edit-field {
+  margin-bottom: 16px;
+}
+
+.edit-field:last-child {
+  margin-bottom: 0;
+}
+
+.edit-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.edit-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: var(--font-family);
+}
+
+.edit-field input:focus {
+  border-color: var(--accent);
+}
+
+.edit-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.edit-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-family);
+}
+
+.edit-btn-cancel {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.edit-btn-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.edit-btn-save {
+  background: var(--accent);
+  color: white;
+}
+
+.edit-btn-save:hover {
+  opacity: 0.9;
+}
+
+/* ==================== Toast 提示 ==================== */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 10002;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+}

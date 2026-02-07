@@ -431,56 +431,82 @@ function canInjectIntoTab(tab) {
   return true;
 }
 
-async function findBestInjectableTabInCurrentWindow() {
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const injectable = tabs.filter(canInjectIntoTab);
-  if (injectable.length === 0) return null;
+// ==================== 独立搜索窗口管理 ====================
+// 用于在 chrome:// 等不可注入页面上提供搜索功能
+let searchWindowId = null;
 
-  // 选最近访问的可注入标签页（lastAccessed 越大越新）
-  injectable.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-  return injectable[0];
-}
+/**
+ * 打开独立搜索窗口（居中显示于当前窗口）
+ * 窗口类型为 popup（无地址栏、无标签栏），接近 Spotlight 体验
+ */
+async function openSearchWindow() {
+  const currentWindow = await chrome.windows.getCurrent();
+  const w = 640, h = 540;
+  const left = Math.round(currentWindow.left + (currentWindow.width - w) / 2);
+  const top = Math.round(currentWindow.top + (currentWindow.height - h) / 2);
 
-async function openFallbackTabAndToggleOverlay() {
-  // 在没有任何可注入标签页时，打开一个普通网页作为“承载页”
-  const fallbackUrl = 'https://example.com/';
-  console.log('[BookmarkSearch] Opening fallback tab:', fallbackUrl);
+  console.log('[BookmarkSearch] Opening search window (centered)');
 
-  const createdTab = await chrome.tabs.create({ url: fallbackUrl, active: true });
-  if (!createdTab?.id) return;
-
-  await new Promise((resolve) => {
-    const listener = (tabId, changeInfo) => {
-      if (tabId === createdTab.id && changeInfo.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
+  const win = await chrome.windows.create({
+    url: 'search-window.html',
+    type: 'popup',
+    width: w,
+    height: h,
+    left: left,
+    top: top,
+    focused: true
   });
 
-  await injectAndToggleOverlay(createdTab.id);
+  searchWindowId = win.id;
 }
 
+// 监听窗口关闭，清理搜索窗口引用
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === searchWindowId) {
+    searchWindowId = null;
+    console.log('[BookmarkSearch] Search window closed');
+  }
+});
+
+/**
+ * 统一入口：判断当前页面环境，路由到最佳搜索体验
+ * 
+ * 路由逻辑：
+ * 1. 如果独立搜索窗口已打开 → 关闭它（toggle off）
+ *    - 如果当前标签页可注入 → 继续在当前页打开浮层
+ *    - 如果当前标签页不可注入 → 仅关闭窗口（toggle off）
+ * 2. 当前标签页可注入 → 注入 Content Script 浮层（最佳 Spotlight 体验）
+ * 3. 当前标签页不可注入 → 打开独立搜索窗口（优雅降级）
+ */
 async function ensureOverlayVisibleFromAnyPage(tab) {
+  // 如果独立搜索窗口已打开，先关闭它
+  if (searchWindowId) {
+    try {
+      await chrome.windows.get(searchWindowId);
+      await chrome.windows.remove(searchWindowId);
+      searchWindowId = null;
+      console.log('[BookmarkSearch] Closed existing search window');
+
+      // 如果当前标签页不可注入，仅关闭窗口（toggle off）
+      if (!tab || !canInjectIntoTab(tab)) {
+        return;
+      }
+      // 当前标签页可注入，继续往下走，在当前页打开浮层
+    } catch (e) {
+      // 窗口已被用户手动关闭
+      searchWindowId = null;
+    }
+  }
+
+  // 可注入页面 → Content Script 浮层（最佳体验）
   if (tab && canInjectIntoTab(tab)) {
     await injectAndToggleOverlay(tab.id);
     return;
   }
 
-  console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url);
-
-  // 优雅降级：切换到最近一个可注入的普通网页标签页
-  const bestTab = await findBestInjectableTabInCurrentWindow();
-  if (bestTab?.id) {
-    console.log('[BookmarkSearch] Switching to injectable tab:', bestTab.id, bestTab.url);
-    await chrome.tabs.update(bestTab.id, { active: true });
-    await injectAndToggleOverlay(bestTab.id);
-    return;
-  }
-
-  // 当前窗口没有任何可注入网页：新开一个承载页
-  await openFallbackTabAndToggleOverlay();
+  // 不可注入页面 → 独立搜索窗口（优雅降级，无跳转）
+  console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url, '→ opening search window');
+  await openSearchWindow();
 }
 
 // 点击扩展图标

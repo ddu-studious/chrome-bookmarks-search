@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome Bookmarks Search</title>
+  <link rel="stylesheet" href="css/search-window.css">
+</head>
+<body class="style-spotlight">
+  <div class="search-container" id="searchPanel">
+    <!-- 搜索区域 -->
+    <div class="search-area">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索书签、标签页、历史记录..." autocomplete="off" autofocus>
+        <span class="shortcut-badge">Alt+B</span>
+      </div>
+    </div>
+
+    <!-- 模式标签 -->
+    <div class="mode-tabs" id="modeTabs">
+      <button class="mode-tab active" data-mode="bookmarks">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        <span>书签</span>
+        <span class="tab-count" id="bookmarksCount">0</span>
+      </button>
+      <button class="mode-tab" data-mode="tabs">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+        <span>标签页</span>
+        <span class="tab-count" id="tabsCount">0</span>
+      </button>
+      <button class="mode-tab" data-mode="history">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        <span>历史</span>
+        <span class="tab-count" id="historyCount">0</span>
+      </button>
+      <button class="mode-tab" data-mode="downloads">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        <span>下载</span>
+        <span class="tab-count" id="downloadsCount">0</span>
+      </button>
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="filter-bar" id="filterBar">
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">全部</button>
+        <button class="filter-btn" data-filter="never_used">未使用 <span class="filter-count">0</span></button>
+        <button class="filter-btn" data-filter="rarely_used">很少使用 <span class="filter-count">0</span></button>
+        <button class="filter-btn" data-filter="dormant">休眠 <span class="filter-count">0</span></button>
+      </div>
+      <div class="sort-group">
+        <button class="sort-btn active" data-sort="smart" title="智能排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+        </button>
+        <button class="sort-btn" data-sort="time" title="时间排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+        </button>
+        <button class="sort-btn" data-sort="frequency" title="频率排序">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 搜索结果 -->
+    <div class="results-container" id="results">
+      <div class="results-list" id="resultsList"></div>
+    </div>
+
+    <!-- 友情链接区域 -->
+    <div class="friend-links" id="friendLinks">
+      <div class="friend-links-container" id="friendLinksContainer">
+        <!-- 动态生成 -->
+      </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <div class="status-left">
+        <span class="result-count" id="searchStats">准备就绪</span>
+      </div>
+      <div class="keyboard-hints">
+        <span class="hint"><kbd>↑↓</kbd> 选择</span>
+        <span class="hint"><kbd>↵</kbd> 打开</span>
+        <span class="hint"><kbd>←→</kbd> 切换</span>
+        <span class="hint"><kbd>Esc</kbd> 关闭</span>
+      </div>
+      <button class="font-switcher" id="fontSwitcher" title="切换字体">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <path d="M9.93 13.5h4.14L12 7.98 9.93 13.5zM20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-4.05 16.5l-1.14-3H9.17l-1.12 3H5.96l5.11-13h1.86l5.11 13h-2.09z"/>
+        </svg>
+      </button>
+      <button class="settings-btn-overlay" id="settingsBtn" title="设置">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </button>
+      <button class="style-switcher" id="styleSwitcher" title="切换样式">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+      <div class="menu-item" data-action="open-new">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        <span class="menu-item-text">在新标签页打开</span>
+        <span class="menu-item-shortcut">⌘↵</span>
+      </div>
+      <div class="menu-item" data-action="open-incognito">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        <span class="menu-item-text">在隐私窗口打开</span>
+        <span class="menu-item-shortcut">⇧⌘N</span>
+      </div>
+      <div class="menu-separator"></div>
+      <div class="menu-item" data-action="copy">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        <span class="menu-item-text">复制链接</span>
+        <span class="menu-item-shortcut">⌘C</span>
+      </div>
+      <div class="menu-item" data-action="share">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+        <span class="menu-item-text">分享链接</span>
+      </div>
+      <div class="menu-separator"></div>
+      <div class="menu-item edit-action" data-action="edit">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        <span class="menu-item-text edit-text">编辑书签</span>
+        <span class="menu-item-shortcut">⌘E</span>
+      </div>
+      <div class="menu-item delete-action" data-action="delete">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        <span class="menu-item-text delete-text">删除书签</span>
+        <span class="menu-item-shortcut">⌘⌫</span>
+      </div>
+    </div>
+
+    <!-- 编辑弹窗 -->
+    <div class="edit-modal" id="editModal">
+      <div class="edit-modal-content">
+        <div class="edit-modal-header">
+          <span class="edit-modal-title">编辑书签</span>
+          <button class="edit-modal-close" id="editModalClose">×</button>
+        </div>
+        <div class="edit-modal-body">
+          <div class="edit-field">
+            <label for="editTitle">标题</label>
+            <input type="text" id="editTitle" placeholder="输入书签标题...">
+          </div>
+          <div class="edit-field">
+            <label for="editUrl">网址</label>
+            <input type="url" id="editUrl" placeholder="输入网址...">
+          </div>
+        </div>
+        <div class="edit-modal-footer">
+          <button class="edit-btn edit-btn-cancel" id="editCancel">取消</button>
+          <button class="edit-btn edit-btn-save" id="editSave">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 提示 -->
+  <div class="toast" id="toast"></div>
+
+  <!-- 复用已有搜索模块 -->
+  <script src="js/search-parser.js"></script>
+  <script src="js/smart-sort.js"></script>
+  <!-- 独立窗口逻辑 -->
+  <script src="js/search-window.js"></script>
+</body>
+</html>
