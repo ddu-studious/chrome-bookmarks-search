@@ -1,5 +1,5 @@
-# Chrome Bookmarks Search Extension (v1.6.2)
-# Chrome 书签搜索扩展 (v1.6.2)
+# Chrome Bookmarks Search Extension (v1.7.1)
+# Chrome 书签搜索扩展 (v1.7.1)
 
 ## Description 描述
 🇺🇸 **English**:
@@ -71,6 +71,10 @@ Tired of endless scrolling through your bookmarks? 🤔 Say goodbye to the frust
 
 ## Version History 版本历史
 🇺🇸 **English**:
+### v1.7.1 (2026-02-24) 🚀
+- **Tag Page Group Search**: Support searching for saved groups and tag pages within groups! 🔍
+- **Tag Page Group Search**: Support searching for saved groups and tag pages within groups! 🔍
+
 ### v1.6.0 (2025-02-03) 🎨
 - **Global Overlay Search**: Search anywhere with a floating panel overlay instead of popup! 🌐
 - **Three UI Styles**: Choose between Spotlight (macOS), Raycast, or Fluent (Windows 11)! 🎭
@@ -108,6 +112,11 @@ Tired of endless scrolling through your bookmarks? 🤔 Say goodbye to the frust
 - Turbocharged the performance - feel the speed! ⚡️
 
 🇨🇳 **中文**:
+### v1.7.1 (2026-02-24) 🚀
+- 标签页分组能力增强
+- 支持搜索已保存的分组
+- 支持搜索分组内标签页
+
 ### v1.6.0 (2025-02-03) 🎨
 - **全局浮层搜索**：告别弹出窗口，在任意页面覆盖式搜索！🌐
 - **三种界面风格**：Spotlight (macOS)、Raycast、Fluent (Windows 11) 随心切换！🎭

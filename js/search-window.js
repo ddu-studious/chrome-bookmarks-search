@@ -386,6 +386,31 @@
     purple: '#a142f4', cyan: '#007b83', orange: '#e8710a'
   };
 
+  async function restoreGroupViaBackground(savedGroup, activateUrl) {
+    return new Promise((resolve) => {
+      safeSendMessage({ type: 'RESTORE_GROUP', group: savedGroup, activateUrl }, (response) => {
+        if (!response) {
+          resolve({ success: false, error: 'Service Worker 未响应' });
+          return;
+        }
+        resolve(response);
+      });
+    });
+  }
+
+  async function shouldRestoreWholeGroupOnChildClick() {
+    try {
+      const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
+      if (result.optionsSettings && result.optionsSettings.groupChildClickRestoreAll !== undefined) {
+        return result.optionsSettings.groupChildClickRestoreAll;
+      }
+      if (result.settings && result.settings.groupChildClickRestoreAll !== undefined) {
+        return result.settings.groupChildClickRestoreAll;
+      }
+    } catch (_) {}
+    return true;
+  }
+
   function searchGroups(query, groups) {
     if (!query || !query.trim()) return groups;
     const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -441,11 +466,34 @@
       count.className = 'group-tab-count';
       count.textContent = `${group.tabs.length} 个标签`;
 
+      const openBtn = document.createElement('span');
+      openBtn.className = 'group-open-btn';
+      openBtn.textContent = group.isOpen ? '切换' : '打开';
+      openBtn.title = group.isOpen ? '聚焦到该分组窗口' : '以分组方式恢复打开所有标签页';
+      openBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (group.isOpen && group.windowId) {
+          safeSendMessage({ type: 'OPEN_RESULT', mode: 'tabs', item: { id: group.tabs[0]?.id, windowId: group.windowId } });
+          window.close();
+        } else {
+          openBtn.textContent = '打开中…';
+          openBtn.style.pointerEvents = 'none';
+          const restored = await restoreGroupViaBackground(group);
+          if (restored && restored.success === false) {
+            openBtn.textContent = '打开';
+            openBtn.style.pointerEvents = '';
+            showToast(`分组恢复失败：${restored.error || '未知错误'}`);
+            return;
+          }
+          window.close();
+        }
+      });
+
       const toggle = document.createElement('span');
       toggle.className = 'group-toggle-icon';
       toggle.textContent = isSearching ? '▼' : '▶';
 
-      header.append(colorDot, title, badge, count, toggle);
+      header.append(colorDot, title, badge, count, openBtn, toggle);
 
       const body = document.createElement('div');
       body.className = 'group-body' + (isSearching ? '' : ' collapsed');
@@ -479,12 +527,17 @@
         tabItem.append(favicon, content);
         body.appendChild(tabItem);
 
-        tabItem.addEventListener('click', (e) => {
+        tabItem.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (group.isOpen && tab.id) {
             safeSendMessage({ type: 'OPEN_RESULT', mode: 'tabs', item: { id: tab.id, windowId: tab.windowId || group.windowId } });
           } else if (tab.url) {
-            safeSendMessage({ type: 'OPEN_RESULT', mode: 'bookmarks', item: { url: tab.url } });
+            const restoreWholeGroup = await shouldRestoreWholeGroupOnChildClick();
+            const restored = await restoreGroupViaBackground(group, restoreWholeGroup ? undefined : tab.url);
+            if (restored && restored.success === false) {
+              showToast(`分组恢复失败：${restored.error || '未知错误'}`);
+              return;
+            }
           }
           window.close();
         });

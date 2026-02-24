@@ -383,13 +383,182 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  // 以分组方式恢复已保存的标签页组
+  // activateUrl: 可选，恢复后激活匹配此 URL 的标签页并展开分组
+  if (request.type === 'RESTORE_GROUP') {
+    (async () => {
+      let requestSignature = '';
+      try {
+        const group = request.group;
+        const activateUrl = request.activateUrl;
+        const targetStableKey = makeGroupStableKey(group?.title, group?.color);
+        const targetUrlSignature = buildGroupUrlSignature(group?.tabs || []);
+        requestSignature = `${targetStableKey}::${targetUrlSignature}`;
+
+        if (inFlightGroupRestoreMap.has(requestSignature)) {
+          const inFlightResult = await inFlightGroupRestoreMap.get(requestSignature);
+          sendResponse(inFlightResult);
+          return;
+        }
+
+        const ensureNormalWindow = async () => {
+          const normalWindows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+          if (normalWindows.length > 0) {
+            const focused = normalWindows.find(w => w.focused);
+            return (focused || normalWindows[0]).id;
+          }
+          const newWin = await chrome.windows.create({ type: 'normal' });
+          return newWin.id;
+        };
+
+        let latestCreatedTabIds = [];
+
+        const restoreIntoWindow = async (targetWindowId) => {
+          const createdTabIds = [];
+          let activateTabId = null;
+
+          for (const tabInfo of (group.tabs || [])) {
+            if (!tabInfo.url) continue;
+            const tab = await chrome.tabs.create({
+              url: tabInfo.url,
+              active: false,
+              windowId: targetWindowId
+            });
+            createdTabIds.push(tab.id);
+            latestCreatedTabIds = [...createdTabIds];
+            if (activateUrl && tabInfo.url === activateUrl) {
+              activateTabId = tab.id;
+            }
+          }
+
+          if (createdTabIds.length === 0) {
+            return { createdTabIds: [], activateTabId: null };
+          }
+
+          const groupId = await chrome.tabs.group({
+            tabIds: createdTabIds,
+            createProperties: { windowId: targetWindowId }
+          });
+
+          await chrome.tabGroups.update(groupId, {
+            title: group.title || '',
+            color: group.color || 'grey',
+            collapsed: !activateUrl
+          });
+
+          if (activateTabId) {
+            await chrome.tabs.update(activateTabId, { active: true });
+          }
+
+          await chrome.windows.update(targetWindowId, { focused: true });
+          latestCreatedTabIds = [...createdTabIds];
+          return { createdTabIds, activateTabId };
+        };
+
+        const restoreTask = (async () => {
+          // 优先复用“已打开且同组”的标签页分组，避免重复创建分组
+          const openGroups = await chrome.tabGroups.query({});
+          let matchedOpenGroup = null;
+          for (const openGroup of openGroups) {
+            const openTabs = await chrome.tabs.query({ groupId: openGroup.id });
+            const openStableKey = makeGroupStableKey(openGroup.title, openGroup.color);
+            const openSignature = buildGroupUrlSignature(openTabs);
+            const sameByStableKey = !!targetStableKey && openStableKey === targetStableKey;
+            const sameByTabSignature = !!targetUrlSignature && openSignature === targetUrlSignature;
+            if (sameByStableKey || sameByTabSignature) {
+              matchedOpenGroup = { group: openGroup, tabs: openTabs };
+              break;
+            }
+          }
+
+          if (matchedOpenGroup) {
+            const { group: openGroup, tabs: openTabs } = matchedOpenGroup;
+            let activateTabId = null;
+            if (activateUrl) {
+              const targetUrl = normalizeGroupTabUrl(activateUrl);
+              const matchedTab = openTabs.find(t => normalizeGroupTabUrl(t.url) === targetUrl);
+              activateTabId = matchedTab?.id || null;
+            }
+            if (activateTabId) {
+              await chrome.tabs.update(activateTabId, { active: true });
+            }
+            await chrome.windows.update(openGroup.windowId, { focused: true });
+            return { success: true, reused: true };
+          }
+
+          let targetWindowId = await ensureNormalWindow();
+
+          try {
+            latestCreatedTabIds = [];
+            const restored = await restoreIntoWindow(targetWindowId);
+            latestCreatedTabIds = restored.createdTabIds;
+          } catch (firstErr) {
+            const errMsg = String(firstErr?.message || '');
+            const shouldRetryInFreshWindow = /Tabs can only be moved to and from normal windows/i.test(errMsg);
+
+            if (!shouldRetryInFreshWindow) {
+              throw firstErr;
+            }
+
+            // 清理第一次尝试创建但未成功分组的标签页，避免留下独立 tab
+            if (latestCreatedTabIds.length > 0) {
+              try {
+                await chrome.tabs.remove(latestCreatedTabIds);
+              } catch (_) {}
+            }
+
+            const freshWin = await chrome.windows.create({ type: 'normal' });
+            targetWindowId = freshWin.id;
+            latestCreatedTabIds = [];
+            const restored = await restoreIntoWindow(targetWindowId);
+            latestCreatedTabIds = restored.createdTabIds;
+          }
+
+          return { success: true, reused: false };
+        })();
+
+        inFlightGroupRestoreMap.set(requestSignature, restoreTask);
+        const restoredResult = await restoreTask;
+        sendResponse(restoredResult);
+      } catch (e) {
+        console.error('[BookmarkSearch] RESTORE_GROUP error:', e);
+        sendResponse({ success: false, error: e.message });
+      } finally {
+        if (requestSignature) {
+          inFlightGroupRestoreMap.delete(requestSignature);
+        }
+      }
+    })();
+    return true;
+  }
 });
 
 // ==================== 标签页分组快照服务 ====================
 const TAB_GROUP_STORAGE_KEY = 'tabGroupSnapshots';
+const inFlightGroupRestoreMap = new Map();
 
 function makeGroupStableKey(title, color) {
   return `${title || ''}_${color}`;
+}
+
+function normalizeGroupTabUrl(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const parsed = new URL(rawUrl);
+    const pathname = (parsed.pathname || '/').replace(/\/+$/, '') || '/';
+    return `${parsed.hostname.toLowerCase()}${pathname}${parsed.search}`;
+  } catch (_) {
+    return String(rawUrl);
+  }
+}
+
+function buildGroupUrlSignature(tabInfos) {
+  return (tabInfos || [])
+    .map(t => normalizeGroupTabUrl(t.url))
+    .filter(Boolean)
+    .sort()
+    .join('\n');
 }
 
 async function saveGroupSnapshot(groupId) {
@@ -501,8 +670,14 @@ async function loadGroups() {
     const snapshots = stored[TAB_GROUP_STORAGE_KEY] || {};
 
     const openKeys = new Set(openGroupsWithTabs.map(g => g.stableKey));
+    const openSignatures = new Set(openGroupsWithTabs.map(g => buildGroupUrlSignature(g.tabs)));
     const closedGroups = Object.values(snapshots)
-      .filter(s => !openKeys.has(s.stableKey) && s.tabs && s.tabs.length > 0)
+      .filter(s => {
+        if (!s.tabs || s.tabs.length === 0) return false;
+        if (openKeys.has(s.stableKey)) return false;
+        const signature = buildGroupUrlSignature(s.tabs);
+        return !openSignatures.has(signature);
+      })
       .map(s => ({ ...s, isOpen: false }));
 
     const allGroups = [...openGroupsWithTabs, ...closedGroups];
@@ -622,28 +797,31 @@ chrome.windows.onRemoved.addListener((windowId) => {
  * 统一入口：判断当前页面环境，路由到最佳搜索体验
  * 
  * 路由逻辑：
- * 1. 如果独立搜索窗口已打开 → 关闭它（toggle off）
- *    - 如果当前标签页可注入 → 继续在当前页打开浮层
- *    - 如果当前标签页不可注入 → 仅关闭窗口（toggle off）
- * 2. 当前标签页可注入 → 注入 Content Script 浮层（最佳 Spotlight 体验）
- * 3. 当前标签页不可注入 → 打开独立搜索窗口（优雅降级）
+ * 1. 如果独立搜索窗口已存在且聚焦中 → 关闭它（toggle off）
+ * 2. 如果独立搜索窗口已存在但沉底 → 聚焦回来（不关闭）
+ * 3. 当前标签页可注入 → 注入 Content Script 浮层（最佳 Spotlight 体验）
+ * 4. 当前标签页不可注入 → 打开独立搜索窗口（优雅降级）
  */
 async function ensureOverlayVisibleFromAnyPage(tab) {
-  // 如果独立搜索窗口已打开，先关闭它
+  // 如果独立搜索窗口已存在
   if (searchWindowId) {
     try {
-      await chrome.windows.get(searchWindowId);
-      await chrome.windows.remove(searchWindowId);
-      searchWindowId = null;
-      console.log('[BookmarkSearch] Closed existing search window');
+      const win = await chrome.windows.get(searchWindowId);
 
-      // 如果当前标签页不可注入，仅关闭窗口（toggle off）
-      if (!tab || !canInjectIntoTab(tab)) {
+      if (win.focused) {
+        // 窗口在前台 → 关闭（toggle off）
+        await chrome.windows.remove(searchWindowId);
+        searchWindowId = null;
+        console.log('[BookmarkSearch] Closed focused search window (toggle off)');
+        return;
+      } else {
+        // 窗口在后台（沉底） → 聚焦回来
+        await chrome.windows.update(searchWindowId, { focused: true });
+        console.log('[BookmarkSearch] Re-focused search window');
         return;
       }
-      // 当前标签页可注入，继续往下走，在当前页打开浮层
     } catch (e) {
-      // 窗口已被用户手动关闭
+      // 窗口已不存在
       searchWindowId = null;
     }
   }

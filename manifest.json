@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chrome Bookmarks Search",
   "description": "快速搜索Chrome书签、标签页、历史记录和下载内容",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "permissions": [
     "bookmarks",
     "tabs",

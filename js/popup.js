@@ -292,6 +292,68 @@ document.addEventListener('DOMContentLoaded', async function() {
     purple: '#a142f4', cyan: '#007b83', orange: '#e8710a'
   };
 
+  async function shouldRestoreWholeGroupOnChildClick() {
+    try {
+      const currentSettings = await window.settings.get();
+      return currentSettings.groupChildClickRestoreAll !== false;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function normalizeGroupTabUrl(rawUrl) {
+    if (!rawUrl) return '';
+    try {
+      const parsed = new URL(rawUrl);
+      const pathname = (parsed.pathname || '/').replace(/\/+$/, '') || '/';
+      return `${parsed.hostname.toLowerCase()}${pathname}${parsed.search}`;
+    } catch (_) {
+      return String(rawUrl);
+    }
+  }
+
+  function buildGroupUrlSignature(tabInfos) {
+    return (tabInfos || [])
+      .map(t => normalizeGroupTabUrl(t.url))
+      .filter(Boolean)
+      .sort()
+      .join('\n');
+  }
+
+  function showToast(message) {
+    let toast = document.getElementById('popupToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'popupToast';
+      toast.style.cssText = `
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        background: rgba(32,33,36,0.92);
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        z-index: 9999;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        pointer-events: none;
+        max-width: 90%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      `;
+      document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 2600);
+  }
+
   // 加载分组数据
   async function loadGroups() {
     try {
@@ -318,8 +380,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       const snapshots = data.tabGroupSnapshots || {};
 
       const openKeys = new Set(openGroupsWithTabs.map(g => g.stableKey));
+      const openSignatures = new Set(openGroupsWithTabs.map(g => buildGroupUrlSignature(g.tabs)));
       const closedGroups = Object.values(snapshots)
-        .filter(s => !openKeys.has(s.stableKey) && s.tabs && s.tabs.length > 0)
+        .filter(s => {
+          if (!s.tabs || s.tabs.length === 0) return false;
+          if (openKeys.has(s.stableKey)) return false;
+          const signature = buildGroupUrlSignature(s.tabs);
+          return !openSignatures.has(signature);
+        })
         .map(s => ({ ...s, isOpen: false }));
 
       allGroups = [...openGroupsWithTabs, ...closedGroups];
@@ -422,11 +490,36 @@ document.addEventListener('DOMContentLoaded', async function() {
       count.className = 'group-tab-count';
       count.textContent = `${group.tabs.length} 个标签`;
 
+      const openBtn = document.createElement('span');
+      openBtn.className = 'group-open-btn';
+      openBtn.textContent = group.isOpen ? '切换' : '打开';
+      openBtn.title = group.isOpen ? '聚焦到该分组窗口' : '以分组方式恢复打开所有标签页';
+      openBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (group.isOpen && group.windowId) {
+          await chrome.windows.update(group.windowId, { focused: true });
+          const firstTab = group.tabs.find(t => t.id);
+          if (firstTab) await chrome.tabs.update(firstTab.id, { active: true });
+          window.close();
+        } else {
+          openBtn.textContent = '打开中…';
+          openBtn.style.pointerEvents = 'none';
+          const restored = await restoreGroup(group);
+          if (restored.success) {
+            window.close();
+          } else {
+            openBtn.textContent = '打开';
+            openBtn.style.pointerEvents = '';
+            showToast(`分组恢复失败：${restored.error || '未知错误'}`);
+          }
+        }
+      });
+
       const toggle = document.createElement('span');
       toggle.className = 'group-toggle-icon';
       toggle.textContent = isSearching ? '▼' : '▶';
 
-      header.append(colorDot, title, badge, count, toggle);
+      header.append(colorDot, title, badge, count, openBtn, toggle);
 
       const body = document.createElement('div');
       body.className = 'group-body' + (isSearching ? '' : ' collapsed');
@@ -460,13 +553,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         tabItem.append(favicon, content);
         body.appendChild(tabItem);
 
-        tabItem.addEventListener('click', (e) => {
+        tabItem.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (group.isOpen && tab.id) {
             chrome.tabs.update(tab.id, { active: true });
             chrome.windows.update(tab.windowId || group.windowId, { focused: true });
           } else if (tab.url) {
-            chrome.tabs.create({ url: tab.url });
+            const restoreWholeGroup = await shouldRestoreWholeGroupOnChildClick();
+            const restored = await restoreGroup(group, restoreWholeGroup ? undefined : tab.url);
+            if (!restored.success) {
+              showToast(`分组恢复失败：${restored.error || '未知错误'}`);
+              return;
+            }
           }
           window.close();
         });
@@ -488,26 +586,26 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   // 恢复已保存的分组
-  async function restoreGroup(savedGroup) {
-    try {
-      const tabIds = [];
-      for (const tabInfo of savedGroup.tabs) {
-        if (tabInfo.url) {
-          const tab = await chrome.tabs.create({ url: tabInfo.url, active: false });
-          tabIds.push(tab.id);
+  // activateUrl: 可选，恢复后激活匹配此 URL 的标签页并展开分组
+  async function restoreGroup(savedGroup, activateUrl) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'RESTORE_GROUP', group: savedGroup, activateUrl },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            const error = chrome.runtime.lastError.message;
+            console.error('[BookmarkSearch] restoreGroup error:', error);
+            resolve({ success: false, error });
+            return;
+          } else if (response && response.success === false) {
+            console.error('[BookmarkSearch] restoreGroup error:', response.error);
+            resolve({ success: false, error: response.error });
+            return;
+          }
+          resolve({ success: true });
         }
-      }
-      if (tabIds.length > 0) {
-        const groupId = await chrome.tabs.group({ tabIds });
-        await chrome.tabGroups.update(groupId, {
-          title: savedGroup.title || '',
-          color: savedGroup.color,
-          collapsed: true
-        });
-      }
-    } catch (e) {
-      console.error('[BookmarkSearch] restoreGroup error:', e);
-    }
+      );
+    });
   }
 
   // 显示搜索结果
@@ -1059,6 +1157,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelector(`input[name="lineHeight"][value="${settings.lineHeight}"]`).checked = true;
     document.getElementById('animation').checked = settings.animation;
     document.getElementById('highContrast').checked = settings.highContrast;
+    document.getElementById('groupChildClickRestoreAll').checked = settings.groupChildClickRestoreAll !== false;
     
     // 打开设置面板
     settingsBtn.addEventListener('click', () => {
@@ -1090,6 +1189,9 @@ document.addEventListener('DOMContentLoaded', async function() {
           break;
         case 'highContrast':
           settings.highContrast = target.checked;
+          break;
+        case 'groupChildClickRestoreAll':
+          settings.groupChildClickRestoreAll = target.checked;
           break;
       }
       

@@ -4,7 +4,8 @@ const DEFAULT_SETTINGS = {
   fontSize: 'medium', // small, medium, large
   lineHeight: 'normal', // compact, normal, relaxed
   animation: true, // true, false
-  highContrast: false // true, false
+  highContrast: false, // true, false
+  groupChildClickRestoreAll: true // 点击分组内子标签时是否整组恢复
 };
 
 // 获取当前设置
@@ -20,7 +21,10 @@ async function getSettings() {
       fontSize: result.optionsSettings.fontSize || DEFAULT_SETTINGS.fontSize,
       animation: result.optionsSettings.animation !== undefined ? result.optionsSettings.animation : DEFAULT_SETTINGS.animation,
       highContrast: result.optionsSettings.highContrast !== undefined ? result.optionsSettings.highContrast : DEFAULT_SETTINGS.highContrast,
-      lineHeight: DEFAULT_SETTINGS.lineHeight
+      lineHeight: DEFAULT_SETTINGS.lineHeight,
+      groupChildClickRestoreAll: result.optionsSettings.groupChildClickRestoreAll !== undefined
+        ? result.optionsSettings.groupChildClickRestoreAll
+        : DEFAULT_SETTINGS.groupChildClickRestoreAll
     };
   }
   

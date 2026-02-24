@@ -1119,6 +1119,25 @@ body.style-fluent .menu-item.edit-action svg {
   flex-shrink: 0;
 }
 
+.group-open-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-link, #1a73e8);
+  background: transparent;
+  border: 1px solid var(--text-link, #1a73e8);
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.group-open-btn:hover {
+  background: var(--text-link, #1a73e8);
+  color: #fff;
+}
+
 .group-toggle-icon {
   font-size: 10px;
   color: var(--text-secondary);
