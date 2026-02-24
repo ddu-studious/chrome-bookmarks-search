@@ -331,7 +331,7 @@ function renderBookmarkList() {
     return `
       <div class="data-item" data-id="${item.id}">
         <div class="data-item-icon">
-          <img src="${getFaviconUrl(item.url)}" onerror="this.style.display='none'">
+          <img src="${getFaviconUrl(item.url)}" data-hide-on-error="true">
         </div>
         <div class="data-item-content">
           <div class="data-item-title">${escapeHtml(item.title || '无标题')}</div>
@@ -353,6 +353,10 @@ function renderBookmarkList() {
       </div>
     `;
   }).join('');
+
+  listBody.querySelectorAll('img[data-hide-on-error]').forEach(img => {
+    img.addEventListener('error', function() { this.style.display = 'none'; }, { once: true });
+  });
   
   renderPagination('bookmarks', data.length);
 }
@@ -428,7 +432,7 @@ function renderHistoryList() {
   listBody.innerHTML = pageData.map(item => `
     <div class="data-item" data-url="${escapeHtml(item.url)}">
       <div class="data-item-icon">
-        <img src="${getFaviconUrl(item.url)}" onerror="this.style.display='none'">
+        <img src="${getFaviconUrl(item.url)}" data-hide-on-error="true">
       </div>
       <div class="data-item-content">
         <div class="data-item-title">${escapeHtml(item.title || '无标题')}</div>
@@ -446,6 +450,10 @@ function renderHistoryList() {
       </div>
     </div>
   `).join('');
+
+  listBody.querySelectorAll('img[data-hide-on-error]').forEach(img => {
+    img.addEventListener('error', function() { this.style.display = 'none'; }, { once: true });
+  });
   
   renderPagination('history', data.length);
 }
@@ -706,7 +714,7 @@ async function loadFriendLinks() {
   const container = document.getElementById('linkList');
   container.innerHTML = links.map((link, index) => `
     <div class="link-item" data-index="${index}">
-      <img class="link-favicon" src="${getFaviconUrl(link.url)}" onerror="this.style.display='none'">
+      <img class="link-favicon" src="${getFaviconUrl(link.url)}" data-hide-on-error="true">
       <div class="link-info">
         <div class="link-name">${escapeHtml(link.name)}</div>
         <div class="link-url">${escapeHtml(link.url)}</div>
@@ -721,6 +729,10 @@ async function loadFriendLinks() {
       </div>
     </div>
   `).join('');
+
+  container.querySelectorAll('img[data-hide-on-error]').forEach(img => {
+    img.addEventListener('error', function() { this.style.display = 'none'; }, { once: true });
+  });
   
   // 绑定事件
   container.querySelectorAll('.link-item').forEach(item => {

@@ -87,13 +87,14 @@ body {
 .tab-btn {
   border: none;
   background: none;
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
   color: var(--color-text-secondary);
   border-bottom: 2px solid transparent;
   transition: all var(--transition-duration);
   position: relative;
   outline: none;
+  font-size: 13px;
 }
 
 .tab-btn:hover {
@@ -123,6 +124,7 @@ body {
 /* Ensure proper styling for different modes */
 [data-mode="bookmarks"].active,
 [data-mode="tabs"].active,
+[data-mode="groups"].active,
 [data-mode="history"].active,
 [data-mode="downloads"].active {
   color: var(--color-primary);
@@ -1394,4 +1396,273 @@ body {
 
 .dark-theme .edit-btn-save:hover {
   background: #aecbfa;
+}
+
+/* ===== 标签页分组颜色变量 ===== */
+:root {
+  --group-color-grey: #5f6368;
+  --group-color-blue: #1a73e8;
+  --group-color-red: #d93025;
+  --group-color-yellow: #f9ab00;
+  --group-color-green: #188038;
+  --group-color-pink: #d01884;
+  --group-color-purple: #a142f4;
+  --group-color-cyan: #007b83;
+  --group-color-orange: #e8710a;
+}
+
+/* ===== 分组头 ===== */
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 4px 0 0;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: background-color 0.15s ease-out;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+}
+
+.group-header.collapsed-header {
+  border-radius: 8px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0;
+}
+
+.group-header:hover {
+  background: var(--color-hover);
+}
+
+.group-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.group-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+
+.group-status-badge.open {
+  background: #188038;
+  color: white;
+}
+
+.group-status-badge.saved {
+  background: var(--color-text-secondary);
+  color: white;
+  opacity: 0.7;
+}
+
+.group-tab-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.group-toggle-icon {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+/* ===== 分组体（标签页列表） ===== */
+.group-body {
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  max-height: 600px;
+  transition: max-height 0.25s ease-out, opacity 0.2s ease;
+}
+
+.group-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+  border: none;
+  margin-bottom: 0;
+}
+
+.group-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px 7px 32px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  border-top: 1px solid var(--color-border);
+}
+
+.group-tab-item:hover {
+  background: var(--color-hover);
+}
+
+.group-tab-favicon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.group-tab-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-tab-title {
+  font-size: 13px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.group-tab-url {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* ===== 分组空状态 ===== */
+.groups-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  gap: 8px;
+}
+
+.groups-empty-state .empty-icon {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+.groups-empty-state .empty-text {
+  font-size: 14px;
+}
+
+.groups-empty-state .empty-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ===== 分组冷启动引导提示 ===== */
+.groups-cold-start-tip {
+  margin: 6px 8px 4px;
+  border-radius: 8px;
+  background: #fef7e0;
+  border: 1px solid #f5e6b8;
+  padding: 10px 12px;
+  animation: tipFadeIn 0.3s ease-out;
+}
+
+.groups-cold-start-tip .tip-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.groups-cold-start-tip .tip-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.groups-cold-start-tip .tip-text {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #5f4b08;
+}
+
+.groups-cold-start-tip .tip-dismiss {
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #9a8344;
+  line-height: 1.4;
+  padding: 0 2px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.groups-cold-start-tip .tip-dismiss:hover {
+  color: #5f4b08;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@keyframes tipFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 深色主题 - 分组适配 ===== */
+.dark-theme .group-status-badge.open {
+  background: #34a853;
+}
+
+.dark-theme .group-status-badge.saved {
+  opacity: 0.6;
+}
+
+.dark-theme .group-header {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.dark-theme .group-body {
+  border-color: var(--color-border);
+}
+
+.dark-theme .group-tab-item {
+  border-top-color: var(--color-border);
+}
+
+.dark-theme .groups-cold-start-tip {
+  background: #3a3520;
+  border-color: #4a4230;
+}
+
+.dark-theme .groups-cold-start-tip .tip-text {
+  color: #e8d9a0;
+}
+
+.dark-theme .groups-cold-start-tip .tip-dismiss {
+  color: #b0a06a;
+}
+
+.dark-theme .groups-cold-start-tip .tip-dismiss:hover {
+  color: #e8d9a0;
+  background: rgba(255, 255, 255, 0.08);
 }

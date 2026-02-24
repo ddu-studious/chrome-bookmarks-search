@@ -3,6 +3,8 @@ console.log('[BookmarkSearch] Background script loaded');
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[BookmarkSearch] Extension installed');
+  // 延迟执行，确保 Service Worker 完全就绪
+  setTimeout(() => syncAllGroups().catch(e => console.warn('[BookmarkSearch] Initial sync failed:', e.message)), 500);
 });
 
 // 书签使用状态常量
@@ -238,6 +240,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           case 'tabs':
             data = await loadTabs();
             break;
+          case 'groups':
+            await syncAllGroups();
+            data = await loadGroups();
+            break;
           case 'history':
             data = await loadHistory();
             break;
@@ -377,6 +383,150 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+});
+
+// ==================== 标签页分组快照服务 ====================
+const TAB_GROUP_STORAGE_KEY = 'tabGroupSnapshots';
+
+function makeGroupStableKey(title, color) {
+  return `${title || ''}_${color}`;
+}
+
+async function saveGroupSnapshot(groupId) {
+  try {
+    const group = await chrome.tabGroups.get(groupId);
+    const tabs = await chrome.tabs.query({ groupId });
+    const stableKey = makeGroupStableKey(group.title, group.color);
+
+    const snapshot = {
+      stableKey,
+      title: group.title || '',
+      color: group.color,
+      tabs: tabs.map(t => ({
+        url: t.url,
+        title: t.title,
+        favIconUrl: t.favIconUrl,
+        id: t.id,
+        windowId: t.windowId
+      })),
+      isOpen: true,
+      lastSeen: Date.now(),
+      closedAt: null,
+      createdAt: null
+    };
+
+    const data = await chrome.storage.local.get(TAB_GROUP_STORAGE_KEY);
+    const snapshots = data[TAB_GROUP_STORAGE_KEY] || {};
+
+    if (snapshots[stableKey]) {
+      snapshot.createdAt = snapshots[stableKey].createdAt;
+    } else {
+      snapshot.createdAt = Date.now();
+    }
+
+    snapshots[stableKey] = snapshot;
+    await chrome.storage.local.set({ [TAB_GROUP_STORAGE_KEY]: snapshots });
+    console.log('[BookmarkSearch] Group snapshot saved:', stableKey, tabs.length, 'tabs');
+  } catch (e) {
+    // 分组可能已被关闭
+  }
+}
+
+async function handleGroupRemoved(group) {
+  const stableKey = makeGroupStableKey(group.title, group.color);
+  const data = await chrome.storage.local.get(TAB_GROUP_STORAGE_KEY);
+  const snapshots = data[TAB_GROUP_STORAGE_KEY] || {};
+
+  if (snapshots[stableKey]) {
+    snapshots[stableKey].isOpen = false;
+    snapshots[stableKey].closedAt = Date.now();
+    await chrome.storage.local.set({ [TAB_GROUP_STORAGE_KEY]: snapshots });
+    console.log('[BookmarkSearch] Group marked closed:', stableKey);
+  }
+}
+
+async function syncAllGroups() {
+  try {
+    if (!chrome.tabGroups) {
+      console.warn('[BookmarkSearch] tabGroups API not available');
+      return;
+    }
+    const openGroups = await chrome.tabGroups.query({});
+    const stored = await chrome.storage.local.get(TAB_GROUP_STORAGE_KEY);
+    const snapshots = stored[TAB_GROUP_STORAGE_KEY] || {};
+
+    const openKeys = new Set();
+    for (const group of openGroups) {
+      await saveGroupSnapshot(group.id);
+      openKeys.add(makeGroupStableKey(group.title, group.color));
+    }
+
+    for (const key of Object.keys(snapshots)) {
+      if (!openKeys.has(key) && snapshots[key].isOpen) {
+        snapshots[key].isOpen = false;
+        snapshots[key].closedAt = Date.now();
+      }
+    }
+
+    await chrome.storage.local.set({ [TAB_GROUP_STORAGE_KEY]: snapshots });
+    console.log('[BookmarkSearch] Full group sync complete:', openGroups.length, 'open groups');
+  } catch (e) {
+    console.warn('[BookmarkSearch] Group sync failed:', e.message);
+  }
+}
+
+// 加载所有分组数据（供 GET_DATA 调用）
+async function loadGroups() {
+  try {
+    const openGroups = await chrome.tabGroups.query({});
+    const openGroupsWithTabs = await Promise.all(
+      openGroups.map(async group => {
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+        return {
+          stableKey: makeGroupStableKey(group.title, group.color),
+          title: group.title || '',
+          color: group.color,
+          tabs: tabs.map(t => ({
+            id: t.id, url: t.url, title: t.title,
+            favIconUrl: t.favIconUrl, windowId: t.windowId
+          })),
+          isOpen: true,
+          groupId: group.id,
+          windowId: group.windowId
+        };
+      })
+    );
+
+    const stored = await chrome.storage.local.get(TAB_GROUP_STORAGE_KEY);
+    const snapshots = stored[TAB_GROUP_STORAGE_KEY] || {};
+
+    const openKeys = new Set(openGroupsWithTabs.map(g => g.stableKey));
+    const closedGroups = Object.values(snapshots)
+      .filter(s => !openKeys.has(s.stableKey) && s.tabs && s.tabs.length > 0)
+      .map(s => ({ ...s, isOpen: false }));
+
+    const allGroups = [...openGroupsWithTabs, ...closedGroups];
+    console.log('[BookmarkSearch] Groups loaded:', allGroups.length, '(open:', openGroupsWithTabs.length, ', saved:', closedGroups.length, ')');
+    return allGroups;
+  } catch (e) {
+    console.error('[BookmarkSearch] loadGroups error:', e);
+    return [];
+  }
+}
+
+if (chrome.tabGroups) {
+  chrome.tabGroups.onCreated.addListener(g => saveGroupSnapshot(g.id));
+  chrome.tabGroups.onUpdated.addListener(g => saveGroupSnapshot(g.id));
+  chrome.tabGroups.onRemoved.addListener(handleGroupRemoved);
+}
+
+chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'syncTabGroups') syncAllGroups();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  syncAllGroups().catch(e => console.warn('[BookmarkSearch] Startup sync failed:', e.message));
 });
 
 // 注入并打开浮层的核心函数

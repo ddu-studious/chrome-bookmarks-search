@@ -1052,6 +1052,142 @@ body.style-fluent .menu-item.edit-action svg {
   opacity: 0.9;
 }
 
+/* ==================== 分组样式 ==================== */
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 4px 0 0;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: background-color 0.15s ease-out;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.group-header.collapsed-header {
+  border-radius: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.group-header:hover {
+  background: var(--bg-hover);
+}
+
+.group-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.group-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+  color: white;
+}
+
+.group-status-badge.open {
+  background: #188038;
+}
+
+.group-status-badge.saved {
+  background: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.group-tab-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.group-toggle-icon {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.group-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  transition: max-height 0.25s ease-out, opacity 0.2s;
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.group-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+  border: none;
+  margin-bottom: 0;
+}
+
+.group-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 32px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  border-top: 1px solid var(--border);
+}
+
+.group-tab-item:hover {
+  background: var(--bg-hover);
+}
+
+.group-tab-favicon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.group-tab-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-tab-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-tab-url {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ==================== Toast 提示 ==================== */
 .toast {
   position: fixed;

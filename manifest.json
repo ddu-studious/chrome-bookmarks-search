@@ -2,16 +2,18 @@
   "manifest_version": 3,
   "name": "Chrome Bookmarks Search",
   "description": "快速搜索Chrome书签、标签页、历史记录和下载内容",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "permissions": [
     "bookmarks",
     "tabs",
+    "tabGroups",
     "history",
     "downloads",
     "storage",
     "favicon",
     "activeTab",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "*://*/*",

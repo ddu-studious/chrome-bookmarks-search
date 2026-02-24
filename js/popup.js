@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   let currentMode = 'bookmarks';
   let allBookmarks = [];
   let allTabs = [];
+  let allGroups = [];
   let allHistory = [];
   let allDownloads = [];
   let visitCounts = new Map();
@@ -284,6 +285,231 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
+  // 分组颜色映射（CSS 变量名）
+  const GROUP_COLORS = {
+    grey: '#5f6368', blue: '#1a73e8', red: '#d93025',
+    yellow: '#f9ab00', green: '#188038', pink: '#d01884',
+    purple: '#a142f4', cyan: '#007b83', orange: '#e8710a'
+  };
+
+  // 加载分组数据
+  async function loadGroups() {
+    try {
+      const openGroups = await chrome.tabGroups.query({});
+      const openGroupsWithTabs = await Promise.all(
+        openGroups.map(async group => {
+          const tabs = await chrome.tabs.query({ groupId: group.id });
+          return {
+            stableKey: `${group.title || ''}_${group.color}`,
+            title: group.title || '',
+            color: group.color,
+            tabs: tabs.map(t => ({
+              id: t.id, url: t.url, title: t.title,
+              favIconUrl: t.favIconUrl, windowId: t.windowId
+            })),
+            isOpen: true,
+            groupId: group.id,
+            windowId: group.windowId
+          };
+        })
+      );
+
+      const data = await chrome.storage.local.get('tabGroupSnapshots');
+      const snapshots = data.tabGroupSnapshots || {};
+
+      const openKeys = new Set(openGroupsWithTabs.map(g => g.stableKey));
+      const closedGroups = Object.values(snapshots)
+        .filter(s => !openKeys.has(s.stableKey) && s.tabs && s.tabs.length > 0)
+        .map(s => ({ ...s, isOpen: false }));
+
+      allGroups = [...openGroupsWithTabs, ...closedGroups];
+      totalCountElement.textContent = allGroups.length;
+
+      if (currentMode === 'groups') {
+        displayGroupResults(allGroups);
+      }
+    } catch (e) {
+      console.error('[BookmarkSearch] loadGroups error:', e);
+      allGroups = [];
+      if (currentMode === 'groups') {
+        displayGroupResults([]);
+      }
+    }
+  }
+
+  // 分组穿透搜索
+  function searchGroups(query, groups) {
+    if (!query || !query.trim()) return groups;
+    const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+    return groups.map(group => {
+      const titleText = (group.title || '').toLowerCase();
+      const titleMatch = keywords.every(kw => titleText.includes(kw));
+      if (titleMatch) return { ...group };
+
+      const matchedTabs = group.tabs.filter(tab => {
+        const tabTitle = (tab.title || '').toLowerCase();
+        const tabUrl = (tab.url || '').toLowerCase();
+        return keywords.every(kw => tabTitle.includes(kw) || tabUrl.includes(kw));
+      });
+      if (matchedTabs.length > 0) return { ...group, tabs: matchedTabs };
+      return null;
+    }).filter(Boolean);
+  }
+
+  // 显示分组结果（树状 UI）
+  function displayGroupResults(groups) {
+    const resultsList = document.getElementById('resultsList');
+    if (!resultsList) return;
+    resultsList.innerHTML = '';
+    currentResults = groups;
+
+    if (groups.length === 0) {
+      resultsList.innerHTML = `
+        <div class="groups-empty-state">
+          <div class="empty-icon">📂</div>
+          <div class="empty-text">没有找到标签页分组</div>
+          <div class="empty-hint">在 Chrome 中创建标签页分组后，这里会自动记录</div>
+        </div>`;
+      selectedIndex = -1;
+      return;
+    }
+
+    const isSearching = document.getElementById('searchInput').value.trim().length > 0;
+    const savedCount = groups.filter(g => !g.isOpen).length;
+    const openCount = groups.filter(g => g.isOpen).length;
+
+    if (!isSearching && openCount > 0 && savedCount === 0) {
+      chrome.storage.local.get('groupsColdStartDismissed', (res) => {
+        if (res.groupsColdStartDismissed) return;
+        const existing = resultsList.querySelector('.groups-cold-start-tip');
+        if (existing) return;
+        const tip = document.createElement('div');
+        tip.className = 'groups-cold-start-tip';
+        tip.innerHTML = `
+          <div class="tip-content">
+            <span class="tip-icon">💡</span>
+            <span class="tip-text">仅显示当前打开的分组。Chrome 不允许扩展读取已关闭的分组 — 请逐个打开书签栏的已保存分组，打开一次后即可被永久记录。</span>
+            <span class="tip-dismiss" title="不再提示">✕</span>
+          </div>`;
+        resultsList.insertBefore(tip, resultsList.firstChild);
+        tip.querySelector('.tip-dismiss').addEventListener('click', (e) => {
+          e.stopPropagation();
+          chrome.storage.local.set({ groupsColdStartDismissed: true });
+          tip.remove();
+        });
+      });
+    }
+
+    groups.forEach((group, groupIndex) => {
+      const header = document.createElement('div');
+      header.className = 'group-header' + (isSearching ? '' : ' collapsed-header');
+      header.dataset.groupIndex = groupIndex;
+
+      const colorDot = document.createElement('span');
+      colorDot.className = 'group-color-dot';
+      colorDot.style.background = GROUP_COLORS[group.color] || GROUP_COLORS.grey;
+
+      const title = document.createElement('span');
+      title.className = 'group-title';
+      title.textContent = group.title || '未命名分组';
+
+      const badge = document.createElement('span');
+      badge.className = `group-status-badge ${group.isOpen ? 'open' : 'saved'}`;
+      badge.textContent = group.isOpen ? '打开' : '已保存';
+
+      const count = document.createElement('span');
+      count.className = 'group-tab-count';
+      count.textContent = `${group.tabs.length} 个标签`;
+
+      const toggle = document.createElement('span');
+      toggle.className = 'group-toggle-icon';
+      toggle.textContent = isSearching ? '▼' : '▶';
+
+      header.append(colorDot, title, badge, count, toggle);
+
+      const body = document.createElement('div');
+      body.className = 'group-body' + (isSearching ? '' : ' collapsed');
+
+      group.tabs.forEach(tab => {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'group-tab-item';
+        tabItem.dataset.url = tab.url;
+
+        const favicon = document.createElement('img');
+        favicon.className = 'group-tab-favicon';
+        try {
+          favicon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=16`;
+        } catch (e) {
+          favicon.src = 'icons/icon16.png';
+        }
+        favicon.onerror = () => { favicon.src = 'icons/icon16.png'; };
+
+        const content = document.createElement('div');
+        content.className = 'group-tab-content';
+
+        const tabTitle = document.createElement('div');
+        tabTitle.className = 'group-tab-title';
+        tabTitle.textContent = tab.title || '无标题';
+
+        const tabUrl = document.createElement('div');
+        tabUrl.className = 'group-tab-url';
+        tabUrl.textContent = tab.url || '';
+
+        content.append(tabTitle, tabUrl);
+        tabItem.append(favicon, content);
+        body.appendChild(tabItem);
+
+        tabItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (group.isOpen && tab.id) {
+            chrome.tabs.update(tab.id, { active: true });
+            chrome.windows.update(tab.windowId || group.windowId, { focused: true });
+          } else if (tab.url) {
+            chrome.tabs.create({ url: tab.url });
+          }
+          window.close();
+        });
+      });
+
+      resultsList.appendChild(header);
+      resultsList.appendChild(body);
+
+      header.addEventListener('click', () => {
+        const isCollapsed = body.classList.contains('collapsed');
+        body.classList.toggle('collapsed');
+        header.classList.toggle('collapsed-header', !isCollapsed);
+        toggle.textContent = isCollapsed ? '▼' : '▶';
+      });
+    });
+
+    selectedIndex = -1;
+    searchStatsElement.textContent = isSearching ? `找到 ${groups.length} 个分组` : '';
+  }
+
+  // 恢复已保存的分组
+  async function restoreGroup(savedGroup) {
+    try {
+      const tabIds = [];
+      for (const tabInfo of savedGroup.tabs) {
+        if (tabInfo.url) {
+          const tab = await chrome.tabs.create({ url: tabInfo.url, active: false });
+          tabIds.push(tab.id);
+        }
+      }
+      if (tabIds.length > 0) {
+        const groupId = await chrome.tabs.group({ tabIds });
+        await chrome.tabGroups.update(groupId, {
+          title: savedGroup.title || '',
+          color: savedGroup.color,
+          collapsed: true
+        });
+      }
+    } catch (e) {
+      console.error('[BookmarkSearch] restoreGroup error:', e);
+    }
+  }
+
   // 显示搜索结果
   function displayResults(items) {
     const resultsList = document.getElementById('resultsList');
@@ -504,12 +730,10 @@ document.addEventListener('DOMContentLoaded', async function() {
       return;
     }
     
-    const items = document.querySelectorAll('.result-item');
-    
-    // 处理左右键切换模式
+    // 处理左右键切换模式（所有模式通用）
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
-      const modes = ['bookmarks', 'tabs', 'history', 'downloads'];
+      const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
       const currentIndex = modes.indexOf(currentMode);
       let newIndex;
       
@@ -527,7 +751,10 @@ document.addEventListener('DOMContentLoaded', async function() {
       return;
     }
 
-    // 如果没有结果，不处理上下键和回车
+    // 分组模式下不使用上下键/Enter 选中（树状结构用鼠标交互）
+    if (currentMode === 'groups') return;
+
+    const items = document.querySelectorAll('.result-item');
     if (items.length === 0) return;
 
     switch (e.key) {
@@ -632,12 +859,19 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // 搜索函数
   function search(query) {
+    // 分组模式使用独立的搜索逻辑
+    if (currentMode === 'groups') {
+      const filtered = searchGroups(query, allGroups);
+      displayGroupResults(filtered);
+      selectedIndex = -1;
+      return;
+    }
+
     let items;
     
     // 根据当前模式获取数据
     switch (currentMode) {
       case 'bookmarks':
-        // 书签模式下先应用筛选器
         items = filterByUsageStatus(allBookmarks, currentFilter);
         break;
       case 'tabs':
@@ -686,21 +920,21 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     });
     
-    // 更新placeholder
-    switch (mode) {
-      case 'bookmarks':
-        searchInput.placeholder = '搜索书签...';
-        break;
-      case 'tabs':
-        searchInput.placeholder = '搜索标签页...';
-        break;
-      case 'history':
-        searchInput.placeholder = '搜索历史记录...';
-        break;
-      case 'downloads':
-        searchInput.placeholder = '搜索下载记录...';
-        break;
-    }
+    // 更新placeholder和模式标签
+    const placeholders = {
+      bookmarks: '搜索书签...',
+      tabs: '搜索标签页...',
+      groups: '搜索分组或分组内标签页...',
+      history: '搜索历史记录...',
+      downloads: '搜索下载记录...'
+    };
+    searchInput.placeholder = placeholders[mode] || '搜索...';
+
+    const modeLabels = {
+      bookmarks: '书签', tabs: '标签页', groups: '分组',
+      history: '历史记录', downloads: '下载'
+    };
+    if (modeLabel) modeLabel.textContent = modeLabels[mode] || mode;
     
     // 重置搜索和选中状态
     searchInput.value = '';
@@ -721,6 +955,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         break;
       case 'tabs':
         loadTabs();
+        break;
+      case 'groups':
+        loadGroups();
         break;
       case 'history':
         loadHistory();
@@ -1109,6 +1346,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       const textMap = {
         bookmarks: '删除书签',
         tabs: '关闭标签页',
+        groups: '删除快照',
         history: '删除此记录',
         downloads: '删除记录'
       };
@@ -1116,9 +1354,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         deleteText.textContent = textMap[currentMode] || '删除';
       }
       
-      // 只有书签模式显示编辑选项
       if (editAction) {
         editAction.style.display = currentMode === 'bookmarks' ? 'flex' : 'none';
+      }
+      
+      // 分组模式下，菜单简化为打开/复制
+      const deleteAction = contextMenu.querySelector('.delete-action');
+      if (deleteAction) {
+        deleteAction.style.display = currentMode === 'groups' ? 'none' : 'flex';
       }
     }
 
@@ -1190,7 +1433,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       
       const itemId = activeItem.dataset.id;
       const url = activeItem.dataset.url;
-      const title = activeItem.querySelector('.result-title')?.textContent || '未知项目';
+      const title = (activeItem.querySelector('.result-title') || activeItem.querySelector('.group-tab-title'))?.textContent || '未知项目';
       
       // 截断过长的标题
       const displayTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
@@ -1278,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           if (navigator.share) {
             navigator.share({
               url,
-              title: activeItem.querySelector('.result-title')?.textContent || '',
+              title: (activeItem.querySelector('.result-title') || activeItem.querySelector('.group-tab-title'))?.textContent || '',
             }).catch(() => {
               // 如果分享失败，复制到剪贴板
               navigator.clipboard.writeText(url);
@@ -1306,7 +1549,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 监听结果项的右键事件
     document.getElementById('resultsList').addEventListener('contextmenu', (e) => {
-      const item = e.target.closest('.result-item');
+      const item = e.target.closest('.result-item') || e.target.closest('.group-tab-item');
       if (item) {
         showContextMenu(e, item);
       }

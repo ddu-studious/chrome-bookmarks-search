@@ -20,6 +20,7 @@
   let selectedIndex = -1;
   let allBookmarks = [];
   let allTabs = [];
+  let allGroups = [];
   let allHistory = [];
   let allDownloads = [];
   let currentSort = 'smart';
@@ -58,10 +59,27 @@
   const editModal = document.getElementById('editModal');
   const toast = document.getElementById('toast');
 
+  // 安全发送消息，处理 Service Worker 未就绪的情况
+  function safeSendMessage(message, callback) {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[BookmarkSearch] sendMessage error:', chrome.runtime.lastError.message);
+          if (callback) callback(null);
+          return;
+        }
+        if (callback) callback(response);
+      });
+    } catch (e) {
+      console.warn('[BookmarkSearch] sendMessage exception:', e.message);
+      if (callback) callback(null);
+    }
+  }
+
   // ==================== 初始化 ====================
   async function init() {
     // 加载保存的样式
-    chrome.runtime.sendMessage({ type: 'GET_STYLE' }, (response) => {
+    safeSendMessage({ type: 'GET_STYLE' }, (response) => {
       if (response && response.style) {
         setStyle(response.style);
       } else {
@@ -70,7 +88,7 @@
     });
 
     // 加载保存的字体
-    chrome.runtime.sendMessage({ type: 'GET_FONT' }, (response) => {
+    safeSendMessage({ type: 'GET_FONT' }, (response) => {
       if (response && response.font) {
         setFont(response.font);
       } else {
@@ -158,7 +176,7 @@
 
     // 设置按钮
     settingsBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
+      safeSendMessage({ type: 'OPEN_OPTIONS' });
     });
 
     // 结果项点击
@@ -217,6 +235,25 @@
 
   // ==================== 键盘导航 ====================
   function handleKeydown(e) {
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        switchModePrev();
+        return;
+
+      case 'ArrowRight':
+        e.preventDefault();
+        switchModeNext();
+        return;
+
+      case 'Tab':
+        e.preventDefault();
+        return;
+    }
+
+    // 分组模式下不使用上下键/Enter 选中
+    if (currentMode === 'groups') return;
+
     const items = document.querySelectorAll('.result-item');
 
     switch (e.key) {
@@ -236,25 +273,11 @@
         }
         break;
 
-      case 'ArrowLeft':
-        e.preventDefault();
-        switchModePrev();
-        break;
-
-      case 'ArrowRight':
-        e.preventDefault();
-        switchModeNext();
-        break;
-
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0) {
           openResult(selectedIndex);
         }
-        break;
-
-      case 'Tab':
-        e.preventDefault();
         break;
     }
   }
@@ -273,28 +296,34 @@
     const placeholders = {
       bookmarks: '搜索书签...',
       tabs: '搜索标签页...',
+      groups: '搜索分组或分组内标签页...',
       history: '搜索历史记录...',
       downloads: '搜索下载文件...'
     };
-    searchInput.placeholder = placeholders[mode];
+    searchInput.placeholder = placeholders[mode] || '搜索...';
 
     // 显示/隐藏筛选器
     filterBar.classList.toggle('show', mode === 'bookmarks');
 
     // 加载数据并搜索
     loadData().then(() => {
-      search(searchInput.value);
+      if (mode === 'groups') {
+        const filtered = searchGroups(searchInput.value, allGroups);
+        displayGroupResults(filtered);
+      } else {
+        search(searchInput.value);
+      }
     });
   }
 
   function switchModePrev() {
-    const modes = ['bookmarks', 'tabs', 'history', 'downloads'];
+    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
     const currentIndex = modes.indexOf(currentMode);
     switchMode(modes[currentIndex <= 0 ? modes.length - 1 : currentIndex - 1]);
   }
 
   function switchModeNext() {
-    const modes = ['bookmarks', 'tabs', 'history', 'downloads'];
+    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
     const currentIndex = modes.indexOf(currentMode);
     switchMode(modes[currentIndex >= modes.length - 1 ? 0 : currentIndex + 1]);
   }
@@ -302,7 +331,7 @@
   // ==================== 数据加载 ====================
   async function loadData() {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
+      safeSendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
         if (response) {
           switch (currentMode) {
             case 'bookmarks':
@@ -313,6 +342,10 @@
             case 'tabs':
               allTabs = response.data || [];
               document.getElementById('tabsCount').textContent = allTabs.length;
+              break;
+            case 'groups':
+              allGroups = response.data || [];
+              document.getElementById('groupsCount').textContent = allGroups.length;
               break;
             case 'history':
               allHistory = response.data || [];
@@ -346,8 +379,142 @@
     if (dormantCount) dormantCount.textContent = counts.dormant;
   }
 
+  // ==================== 分组搜索与显示 ====================
+  const GROUP_COLORS = {
+    grey: '#5f6368', blue: '#1a73e8', red: '#d93025',
+    yellow: '#f9ab00', green: '#188038', pink: '#d01884',
+    purple: '#a142f4', cyan: '#007b83', orange: '#e8710a'
+  };
+
+  function searchGroups(query, groups) {
+    if (!query || !query.trim()) return groups;
+    const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return groups.map(group => {
+      const titleText = (group.title || '').toLowerCase();
+      const titleMatch = keywords.every(kw => titleText.includes(kw));
+      if (titleMatch) return { ...group };
+      const matchedTabs = group.tabs.filter(tab => {
+        const tabTitle = (tab.title || '').toLowerCase();
+        const tabUrl = (tab.url || '').toLowerCase();
+        return keywords.every(kw => tabTitle.includes(kw) || tabUrl.includes(kw));
+      });
+      if (matchedTabs.length > 0) return { ...group, tabs: matchedTabs };
+      return null;
+    }).filter(Boolean);
+  }
+
+  function displayGroupResults(groups) {
+    resultsList.innerHTML = '';
+    currentResults = groups;
+
+    if (groups.length === 0) {
+      resultsList.innerHTML = `
+        <div class="no-results" style="text-align:center;padding:40px 20px;">
+          <div style="font-size:32px;margin-bottom:8px;">📂</div>
+          <div>没有找到标签页分组</div>
+          <div style="font-size:12px;margin-top:4px;opacity:0.6;">在 Chrome 中创建标签页分组后，这里会自动记录</div>
+        </div>`;
+      selectedIndex = -1;
+      searchStats.textContent = '无结果';
+      return;
+    }
+
+    const isSearching = searchInput.value.trim().length > 0;
+
+    groups.forEach((group, groupIndex) => {
+      const header = document.createElement('div');
+      header.className = 'group-header' + (isSearching ? '' : ' collapsed-header');
+
+      const colorDot = document.createElement('span');
+      colorDot.className = 'group-color-dot';
+      colorDot.style.background = GROUP_COLORS[group.color] || GROUP_COLORS.grey;
+
+      const title = document.createElement('span');
+      title.className = 'group-title';
+      title.textContent = group.title || '未命名分组';
+
+      const badge = document.createElement('span');
+      badge.className = `group-status-badge ${group.isOpen ? 'open' : 'saved'}`;
+      badge.textContent = group.isOpen ? '打开' : '已保存';
+
+      const count = document.createElement('span');
+      count.className = 'group-tab-count';
+      count.textContent = `${group.tabs.length} 个标签`;
+
+      const toggle = document.createElement('span');
+      toggle.className = 'group-toggle-icon';
+      toggle.textContent = isSearching ? '▼' : '▶';
+
+      header.append(colorDot, title, badge, count, toggle);
+
+      const body = document.createElement('div');
+      body.className = 'group-body' + (isSearching ? '' : ' collapsed');
+
+      group.tabs.forEach(tab => {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'group-tab-item';
+        tabItem.dataset.url = tab.url;
+
+        const favicon = document.createElement('img');
+        favicon.className = 'group-tab-favicon';
+        try {
+          favicon.src = `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}&sz=16`;
+        } catch (e) {
+          favicon.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>';
+        }
+        favicon.onerror = () => { favicon.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'; };
+
+        const content = document.createElement('div');
+        content.className = 'group-tab-content';
+
+        const tabTitle = document.createElement('div');
+        tabTitle.className = 'group-tab-title';
+        tabTitle.textContent = tab.title || '无标题';
+
+        const tabUrl = document.createElement('div');
+        tabUrl.className = 'group-tab-url';
+        tabUrl.textContent = tab.url || '';
+
+        content.append(tabTitle, tabUrl);
+        tabItem.append(favicon, content);
+        body.appendChild(tabItem);
+
+        tabItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (group.isOpen && tab.id) {
+            safeSendMessage({ type: 'OPEN_RESULT', mode: 'tabs', item: { id: tab.id, windowId: tab.windowId || group.windowId } });
+          } else if (tab.url) {
+            safeSendMessage({ type: 'OPEN_RESULT', mode: 'bookmarks', item: { url: tab.url } });
+          }
+          window.close();
+        });
+      });
+
+      resultsList.appendChild(header);
+      resultsList.appendChild(body);
+
+      header.addEventListener('click', () => {
+        const isCollapsed = body.classList.contains('collapsed');
+        body.classList.toggle('collapsed');
+        header.classList.toggle('collapsed-header', !isCollapsed);
+        toggle.textContent = isCollapsed ? '▼' : '▶';
+      });
+    });
+
+    selectedIndex = -1;
+    searchStats.textContent = isSearching ? `找到 ${groups.length} 个分组` : `共 ${groups.length} 个分组`;
+  }
+
   // ==================== 搜索 ====================
   function search(query) {
+    // 分组模式使用独立的搜索逻辑
+    if (currentMode === 'groups') {
+      const filtered = searchGroups(query, allGroups);
+      displayGroupResults(filtered);
+      selectedIndex = -1;
+      return;
+    }
+
     let items;
     switch (currentMode) {
       case 'bookmarks': items = filterByUsageStatus(allBookmarks, currentFilter); break;
@@ -434,7 +601,7 @@
       return `
         <div class="result-item ${isActive}" data-index="${index}">
           <div class="result-icon">
-            <img src="${faviconUrl}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'">
+            <img src="${faviconUrl}" data-fallback="true">
           </div>
           <div class="result-content">
             <div class="result-title">${escapeHtml(item.title || item.filename?.split('/').pop() || '无标题')}</div>
@@ -446,6 +613,13 @@
     }).join('');
 
     searchStats.textContent = `找到 ${items.length} 个结果`;
+
+    const fallbackSvg = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>';
+    resultsList.querySelectorAll('img[data-fallback]').forEach(img => {
+      img.addEventListener('error', function() {
+        this.src = fallbackSvg;
+      }, { once: true });
+    });
   }
 
   function updateSelection() {
@@ -465,7 +639,7 @@
     const item = currentResults[index];
     if (!item) return;
 
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       type: 'OPEN_RESULT',
       mode: currentMode,
       item: item
@@ -523,7 +697,7 @@
     const nextIndex = (currentIndex + 1) % styles.length;
     setStyle(styles[nextIndex]);
 
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       type: 'SAVE_STYLE',
       style: styles[nextIndex]
     });
@@ -543,7 +717,7 @@
     const nextIndex = (currentIndex + 1) % fonts.length;
     setFont(fonts[nextIndex]);
 
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       type: 'SAVE_FONT',
       font: fonts[nextIndex]
     });
@@ -617,7 +791,7 @@
 
     switch (action) {
       case 'open-new':
-        chrome.runtime.sendMessage({
+        safeSendMessage({
           type: 'OPEN_RESULT',
           mode: currentMode,
           item: contextMenuTarget,
@@ -626,7 +800,7 @@
         break;
 
       case 'open-incognito':
-        chrome.runtime.sendMessage({
+        safeSendMessage({
           type: 'OPEN_INCOGNITO',
           url: contextMenuTarget.url
         });
@@ -712,7 +886,7 @@
       return;
     }
 
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       type: 'EDIT_BOOKMARK',
       id: editingItem.id,
       title: newTitle,
@@ -739,7 +913,7 @@
     }[currentMode] || '项目';
 
     if (confirm(`确定要删除这个${typeText}吗？\n${item.title || item.url}`)) {
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         type: 'DELETE_ITEM',
         mode: currentMode,
         item: item
@@ -777,11 +951,17 @@
 
         return `
           <a href="${escapeHtml(link.url)}" class="friend-link-item" target="_blank" title="${escapeHtml(link.name)}">
-            <img class="friend-link-favicon" src="https://www.google.com/s2/favicons?domain=${hostname}&sz=32" onerror="this.style.display='none'">
+            <img class="friend-link-favicon" src="https://www.google.com/s2/favicons?domain=${hostname}&sz=32" data-hide-on-error="true">
             <span class="friend-link-tag">${escapeHtml(link.name)}</span>
           </a>
         `;
       }).join('');
+
+      container.querySelectorAll('img[data-hide-on-error]').forEach(img => {
+        img.addEventListener('error', function() {
+          this.style.display = 'none';
+        }, { once: true });
+      });
 
       // 点击友情链接
       container.addEventListener('click', (e) => {
