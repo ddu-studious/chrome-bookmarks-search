@@ -249,6 +249,13 @@
         setStyle(currentStyle);
       }
     });
+
+    // 监听书签变化消息，自动刷新
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'BOOKMARK_CHANGED' && currentMode === 'bookmarks') {
+        loadData();
+      }
+    });
   }
 
   // ==================== 键盘导航 ====================

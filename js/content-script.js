@@ -3115,6 +3115,11 @@
       console.log('[BookmarkSearch] Toggling overlay...');
       toggleOverlay();
       sendResponse({ success: true });
+    } else if (request.type === 'BOOKMARK_CHANGED') {
+      // 书签变化时，若当前显示的是书签模式则刷新数据
+      if (overlayContainer && currentMode === 'bookmarks') {
+        loadData();
+      }
     }
     return true;
   });

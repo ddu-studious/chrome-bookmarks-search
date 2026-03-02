@@ -60,6 +60,7 @@ FILES_TO_PACK=(
     "manifest.json"
     "popup.html"
     "options.html"
+    "search-window.html"
     "background.js"
     "css"
     "js"

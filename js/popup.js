@@ -2030,6 +2030,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 加载 favicon
     loadFavicons();
+
+    // 监听书签变化，自动刷新（带防抖，避免批量操作时频繁刷新）
+    let bookmarkRefreshTimer = null;
+    function scheduleBookmarkRefresh() {
+      if (currentMode !== 'bookmarks') return;
+      clearTimeout(bookmarkRefreshTimer);
+      bookmarkRefreshTimer = setTimeout(() => {
+        loadBookmarks();
+      }, 300);
+    }
+    chrome.bookmarks.onCreated.addListener(scheduleBookmarkRefresh);
+    chrome.bookmarks.onRemoved.addListener(scheduleBookmarkRefresh);
+    chrome.bookmarks.onChanged.addListener(scheduleBookmarkRefresh);
+    chrome.bookmarks.onMoved.addListener(scheduleBookmarkRefresh);
   }
 
   init();

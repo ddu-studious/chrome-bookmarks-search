@@ -729,6 +729,28 @@ if (chrome.tabGroups) {
   chrome.tabGroups.onRemoved.addListener(handleGroupRemoved);
 }
 
+// 监听书签变化，广播给 content-script 和 search-window
+function broadcastBookmarkChanged() {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, { type: 'BOOKMARK_CHANGED' }).catch(() => {});
+    });
+  });
+  // 通知所有 search-window（runtime 广播）
+  chrome.runtime.sendMessage({ type: 'BOOKMARK_CHANGED' }).catch(() => {});
+}
+
+let bookmarkBroadcastTimer = null;
+function scheduleBroadcastBookmarkChanged() {
+  clearTimeout(bookmarkBroadcastTimer);
+  bookmarkBroadcastTimer = setTimeout(broadcastBookmarkChanged, 300);
+}
+
+chrome.bookmarks.onCreated.addListener(scheduleBroadcastBookmarkChanged);
+chrome.bookmarks.onRemoved.addListener(scheduleBroadcastBookmarkChanged);
+chrome.bookmarks.onChanged.addListener(scheduleBroadcastBookmarkChanged);
+chrome.bookmarks.onMoved.addListener(scheduleBroadcastBookmarkChanged);
+
 chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === 'syncTabGroups') syncAllGroups();

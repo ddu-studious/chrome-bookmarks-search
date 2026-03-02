@@ -1,5 +1,5 @@
-# Chrome Bookmarks Search Extension (v1.7.1)
-# Chrome 书签搜索扩展 (v1.7.1)
+# Chrome Bookmarks Search Extension (v1.8.0)
+# Chrome 书签搜索扩展 (v1.8.0)
 
 ## Description 描述
 🇺🇸 **English**:
