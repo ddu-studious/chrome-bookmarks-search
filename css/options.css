@@ -910,6 +910,79 @@ kbd {
 .status-dot.success { background: var(--success); }
 .status-dot.danger { background: var(--danger); }
 
+/* 快速开始步骤 */
+.guide-steps {
+  display: flex;
+  gap: 24px;
+}
+
+.guide-step {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.step-content strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.step-content p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.step-content kbd {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.guide-card code {
+  padding: 2px 6px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.guide-card ul kbd {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+@media (max-width: 768px) {
+  .guide-steps {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
 /* ==================== 关于页面 ==================== */
 .about-hero {
   text-align: center;

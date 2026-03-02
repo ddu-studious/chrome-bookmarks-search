@@ -608,17 +608,89 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
+  // 获取用户配置的搜索引擎（或自动检测）
+  async function getSearchEngine() {
+    try {
+      const settings = await window.settings.get();
+      const engineKey = settings.defaultSearchEngine || window.getDefaultSearchEngine();
+      return { key: engineKey, ...window.SEARCH_ENGINES[engineKey] };
+    } catch {
+      const key = window.getDefaultSearchEngine();
+      return { key, ...window.SEARCH_ENGINES[key] };
+    }
+  }
+
+  // 创建 URL 直接打开项
+  function createUrlOpenItem(url) {
+    const item = document.createElement('div');
+    item.className = 'result-item special-item url-open-item';
+    item.dataset.specialAction = 'open-url';
+    item.dataset.url = url;
+    item.innerHTML = `
+      <div class="result-icon special-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+      </div>
+      <div class="result-item-content">
+        <div class="result-title">打开 ${escapeHtml(url)}</div>
+        <div class="result-url">在新标签页中打开此链接</div>
+      </div>
+    `;
+    item.addEventListener('click', () => {
+      chrome.tabs.create({ url });
+      window.close();
+    });
+    return item;
+  }
+
+  // 创建搜索引擎跳转项
+  function createSearchEngineItem(query, engine) {
+    const item = document.createElement('div');
+    item.className = 'result-item special-item search-engine-item';
+    item.dataset.specialAction = 'search-engine';
+    const searchUrl = engine.url.replace('{query}', encodeURIComponent(query));
+    item.dataset.url = searchUrl;
+    item.innerHTML = `
+      <div class="result-icon special-icon search-engine-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      </div>
+      <div class="result-item-content">
+        <div class="result-title">使用 ${escapeHtml(engine.name)} 搜索 "<strong>${escapeHtml(query)}</strong>"</div>
+        <div class="result-url">在新标签页中搜索</div>
+      </div>
+    `;
+    item.addEventListener('click', () => {
+      chrome.tabs.create({ url: searchUrl });
+      window.close();
+    });
+    return item;
+  }
+
   // 显示搜索结果
-  function displayResults(items) {
+  function displayResults(items, query = '') {
     const resultsList = document.getElementById('resultsList');
     if (!resultsList) return;
     
     resultsList.innerHTML = '';
     
     currentResults = items;
+    const trimmedQuery = query.trim();
 
-    if (items.length === 0) {
+    if (items.length === 0 && !trimmedQuery) {
       resultsList.innerHTML = '<div class="no-results">没有找到匹配的结果</div>';
+      selectedIndex = -1;
+      return;
+    }
+
+    // 有搜索词但无结果时，显示搜索引擎跳转
+    if (items.length === 0 && trimmedQuery) {
+      const detectedUrl = window.normalizeUrl(trimmedQuery);
+      if (detectedUrl) {
+        resultsList.appendChild(createUrlOpenItem(detectedUrl));
+      }
+      getSearchEngine().then(engine => {
+        resultsList.appendChild(createSearchEngineItem(trimmedQuery, engine));
+      });
+      resultsList.insertAdjacentHTML('beforeend', '<div class="no-results">没有找到匹配的本地结果</div>');
       selectedIndex = -1;
       return;
     }
@@ -776,6 +848,25 @@ document.addEventListener('DOMContentLoaded', async function() {
       
       resultsList.appendChild(resultItem);
     });
+
+    // 有搜索词时，在结果末尾追加搜索引擎跳转项
+    if (trimmedQuery) {
+      const detectedUrl = window.normalizeUrl(trimmedQuery);
+      if (detectedUrl) {
+        const divider = document.createElement('div');
+        divider.className = 'suggestion-divider';
+        resultsList.appendChild(divider);
+        resultsList.appendChild(createUrlOpenItem(detectedUrl));
+      }
+      getSearchEngine().then(engine => {
+        if (!detectedUrl) {
+          const divider = document.createElement('div');
+          divider.className = 'suggestion-divider';
+          resultsList.appendChild(divider);
+        }
+        resultsList.appendChild(createSearchEngineItem(trimmedQuery, engine));
+      });
+    }
     
     // 初始化时不选中任何项
     selectedIndex = -1;
@@ -900,6 +991,13 @@ document.addEventListener('DOMContentLoaded', async function() {
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0 && selectedIndex < items.length) {
+          const selectedEl = items[selectedIndex];
+          const specialAction = selectedEl?.dataset?.specialAction;
+          if (specialAction && selectedEl.dataset.url) {
+            chrome.tabs.create({ url: selectedEl.dataset.url });
+            window.close();
+            break;
+          }
           const item = currentResults[selectedIndex];
           if (item) {
             switch (currentMode) {
@@ -1016,7 +1114,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     // 更新结果显示
-    displayResults(filteredResults);
+    displayResults(filteredResults, query);
     
     // 更新计数
     searchStatsElement.textContent = query ? `找到 ${filteredResults.length} 个结果` : '';
@@ -1326,6 +1424,8 @@ document.addEventListener('DOMContentLoaded', async function() {
       <ul>
         <li><code>关键字1 关键字2</code> - 多关键字同时匹配</li>
         <li><code>"精确词组"</code> - 引号内精确匹配</li>
+        <li><code>-关键字</code> - 排除包含该关键字的结果</li>
+        <li><code>-词1,词2,词3</code> - 一次排除多个关键字</li>
         <li><code>site:github.com</code> - 限定特定网站</li>
         <li><code>type:pdf</code> - 按文件类型过滤</li>
         <li><code>in:title</code> - 仅搜索标题</li>

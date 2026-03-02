@@ -396,6 +396,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // 在新标签页中打开 URL（供 content-script / search-window 使用）
+  if (request.type === 'OPEN_URL') {
+    chrome.tabs.create({ url: request.url });
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 获取设置（供 content-script 获取搜索引擎等配置）
+  if (request.type === 'GET_SETTINGS') {
+    chrome.storage.sync.get(['optionsSettings'], (result) => {
+      sendResponse(result.optionsSettings || {});
+    });
+    return true;
+  }
+
   // 打开设置页面
   if (request.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
@@ -753,7 +768,12 @@ async function injectAndToggleOverlay(tabId) {
         return false;
       }
     } catch (injectError) {
-      console.error('[BookmarkSearch] Failed to inject content script:', injectError);
+      const msg = injectError?.message || '';
+      if (msg.includes('error page') || msg.includes('Cannot access') || msg.includes('missing host permission')) {
+        console.log('[BookmarkSearch] Tab is showing error page or inaccessible, falling back to search window');
+      } else {
+        console.warn('[BookmarkSearch] Failed to inject content script:', msg);
+      }
       return false;
     }
   }
@@ -764,7 +784,6 @@ function canInjectIntoTab(tab) {
   if (!tab || !tab.url) return false;
   
   const url = tab.url;
-  // 不能注入的页面
   if (url.startsWith('chrome://') ||
       url.startsWith('chrome-extension://') ||
       url.startsWith('edge://') ||
@@ -774,6 +793,11 @@ function canInjectIntoTab(tab) {
       url === 'about:blank') {
     return false;
   }
+
+  if (tab.status === 'loading' && !tab.title) {
+    return false;
+  }
+
   return true;
 }
 

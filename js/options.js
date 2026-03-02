@@ -20,7 +20,8 @@ const DEFAULT_SETTINGS = {
     { name: '爱奇艺', url: 'https://www.iqiyi.com' },
     { name: '哔哩哔哩', url: 'https://www.bilibili.com' },
     { name: 'YouTube', url: 'https://www.youtube.com' }
-  ]
+  ],
+  defaultSearchEngine: null
 };
 
 // 分页配置
@@ -125,6 +126,12 @@ async function loadSettings() {
   document.getElementById('showStats').checked = settings.showStats;
   document.getElementById('showGroupsMode').checked = !!settings.showGroupsMode;
   
+  // 搜索引擎
+  const engineSelect = document.getElementById('defaultSearchEngine');
+  if (engineSelect) {
+    engineSelect.value = settings.defaultSearchEngine || 'auto';
+  }
+  
   // 加载快捷键
   loadCurrentShortcut();
 }
@@ -155,7 +162,8 @@ async function saveSettings() {
     defaultSort: document.getElementById('defaultSort').value,
     historyRange: parseInt(document.getElementById('historyRange').value),
     showStats: document.getElementById('showStats').checked,
-    showGroupsMode: document.getElementById('showGroupsMode').checked
+    showGroupsMode: document.getElementById('showGroupsMode').checked,
+    defaultSearchEngine: document.getElementById('defaultSearchEngine')?.value === 'auto' ? null : document.getElementById('defaultSearchEngine')?.value || null
   };
   
   // 保存友情链接

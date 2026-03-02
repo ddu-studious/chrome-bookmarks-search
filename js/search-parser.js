@@ -9,7 +9,9 @@
  * - 空格分隔多关键字      (AND 逻辑)
  * - "精确匹配"           (引号内作为整体匹配)
  * - -keyword             (排除包含该关键字的结果)
+ * - -kw1,kw2,kw3        (逗号分隔，一次排除多个关键字)
  * - -"精确排除"          (排除包含该精确词组的结果)
+ * - -"词组1,词组2"       (逗号分隔，一次排除多个精确词组)
  */
 
 class SearchParser {
@@ -75,10 +77,10 @@ class SearchParser {
     const excludeExact = [];
     const excludeKeywords = [];
     
-    // 提取 -"排除精确匹配" 和 "精确匹配"
+    // 提取 -"排除精确匹配" 和 "精确匹配"（支持逗号分隔多个排除词组）
     let remaining = text.replace(/-"([^"]+)"/g, (match, p1) => {
       if (p1.trim()) {
-        excludeExact.push(p1.trim());
+        p1.split(/[,，]/).map(s => s.trim()).filter(Boolean).forEach(s => excludeExact.push(s));
       }
       return '';
     }).replace(/"([^"]+)"/g, (match, p1) => {
@@ -88,10 +90,10 @@ class SearchParser {
       return '';
     });
     
-    // 剩余文本按空格分割，区分包含和排除关键字
+    // 剩余文本按空格分割，区分包含和排除关键字（支持逗号分隔多个排除关键字）
     remaining.trim().split(/\s+/).filter(Boolean).forEach(kw => {
       if (kw.startsWith('-') && kw.length > 1) {
-        excludeKeywords.push(kw.substring(1));
+        kw.substring(1).split(/[,，]/).filter(Boolean).forEach(k => excludeKeywords.push(k));
       } else {
         keywords.push(kw);
       }

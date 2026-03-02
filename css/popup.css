@@ -533,6 +533,33 @@ body {
   font-style: italic;
 }
 
+.special-item {
+  border-left: 3px solid var(--color-primary);
+}
+
+.special-item .special-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+}
+
+.special-item .result-title strong {
+  color: var(--color-primary);
+}
+
+.url-open-item .special-icon {
+  color: #34a853;
+}
+
+.url-open-item {
+  border-left-color: #34a853;
+}
+
+.search-engine-item .result-url {
+  font-style: italic;
+}
+
 .result-item {
   display: flex;
   align-items: flex-start;

@@ -180,6 +180,19 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">默认搜索引擎</div>
+                <div class="setting-desc">搜索无结果时，使用该引擎进行网络搜索</div>
+              </div>
+              <select class="form-select" id="defaultSearchEngine">
+                <option value="auto">自动检测（中文百度 / 其他 Google）</option>
+                <option value="google">Google</option>
+                <option value="baidu">百度</option>
+                <option value="bing">Bing</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+              </select>
+            </div>
           </div>
         </div>
       </section>
@@ -421,10 +434,60 @@
       <section id="guide" class="content-section">
         <div class="section-header">
           <h1>使用说明</h1>
-          <p>快速上手 Chrome Bookmarks Search</p>
+          <p>全面了解 Chrome Bookmarks Search 的功能和使用技巧</p>
+        </div>
+
+        <!-- 快速开始 -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header"><h3>快速开始</h3></div>
+          <div class="card-body">
+            <div class="guide-steps">
+              <div class="guide-step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                  <strong>唤起搜索</strong>
+                  <p>按下 <kbd>Alt + B</kbd>（可在常规设置中修改），即可在任意网页上唤起搜索浮层。</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                  <strong>输入关键字</strong>
+                  <p>直接输入搜索词，结果会实时过滤。支持多关键字、高级语法和排除语法。</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                  <strong>选择并打开</strong>
+                  <p>用 <kbd>↑</kbd> <kbd>↓</kbd> 选择结果，<kbd>Enter</kbd> 打开。也可以直接鼠标点击。</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="guide-grid">
+          <!-- 搜索模式 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </div>
+            <h3>五大搜索模式</h3>
+            <p>使用 <kbd>←</kbd> <kbd>→</kbd> 方向键快速切换模式：</p>
+            <ul class="style-list">
+              <li><strong>书签</strong> - 搜索所有保存的书签，显示访问统计和状态标签</li>
+              <li><strong>标签页</strong> - 搜索当前打开的所有标签页，点击可切换到对应标签</li>
+              <li><strong>历史记录</strong> - 搜索最近浏览历史（时间范围可在设置中调整）</li>
+              <li><strong>下载</strong> - 搜索下载的文件，按文件类型显示不同图标</li>
+              <li><strong>分组</strong> - 搜索 Chrome 标签页分组（需在设置中开启）</li>
+            </ul>
+          </div>
+
+          <!-- 快捷键 -->
           <div class="guide-card">
             <div class="guide-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -434,15 +497,18 @@
             </div>
             <h3>快捷键指南</h3>
             <div class="keyboard-grid">
-              <div class="key-item"><kbd>Alt + B</kbd><span>打开搜索</span></div>
-              <div class="key-item"><kbd>↑ ↓</kbd><span>上下选择</span></div>
-              <div class="key-item"><kbd>← →</kbd><span>切换模式</span></div>
-              <div class="key-item"><kbd>Enter</kbd><span>打开选中</span></div>
-              <div class="key-item"><kbd>Esc</kbd><span>关闭窗口</span></div>
-              <div class="key-item"><kbd>⌘ Click</kbd><span>多选</span></div>
+              <div class="key-item"><kbd>Alt + B</kbd><span>打开/关闭搜索</span></div>
+              <div class="key-item"><kbd>↑ ↓</kbd><span>上下选择结果</span></div>
+              <div class="key-item"><kbd>← →</kbd><span>切换搜索模式</span></div>
+              <div class="key-item"><kbd>Enter</kbd><span>打开选中项</span></div>
+              <div class="key-item"><kbd>Esc</kbd><span>关闭搜索窗口</span></div>
+              <div class="key-item"><kbd>Ctrl/⌘ + Click</kbd><span>多选项目</span></div>
+              <div class="key-item"><kbd>Shift + Click</kbd><span>范围选择</span></div>
+              <div class="key-item"><kbd>右键点击</kbd><span>打开操作菜单</span></div>
             </div>
           </div>
 
+          <!-- 搜索语法 - 完整版 -->
           <div class="guide-card">
             <div class="guide-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -454,7 +520,23 @@
             <div class="syntax-list">
               <div class="syntax-item">
                 <code>关键字1 关键字2</code>
-                <span>多关键字 AND 搜索</span>
+                <span>多关键字同时匹配 (AND)</span>
+              </div>
+              <div class="syntax-item">
+                <code>"精确词组"</code>
+                <span>引号内作为整体精确匹配</span>
+              </div>
+              <div class="syntax-item">
+                <code>-排除词</code>
+                <span>排除包含该关键字的结果</span>
+              </div>
+              <div class="syntax-item">
+                <code>-词1,词2,词3</code>
+                <span>逗号分隔，一次排除多个关键字</span>
+              </div>
+              <div class="syntax-item">
+                <code>-"词组1,词组2"</code>
+                <span>逗号分隔，排除多个精确词组</span>
               </div>
               <div class="syntax-item">
                 <code>site:github.com</code>
@@ -462,23 +544,60 @@
               </div>
               <div class="syntax-item">
                 <code>in:title / in:url</code>
-                <span>限定搜索范围</span>
+                <span>限定仅搜索标题或网址</span>
               </div>
               <div class="syntax-item">
                 <code>after:2024-01</code>
-                <span>指定日期之后</span>
+                <span>指定日期之后的结果</span>
               </div>
               <div class="syntax-item">
                 <code>before:2024-06</code>
-                <span>指定日期之前</span>
+                <span>指定日期之前的结果</span>
               </div>
               <div class="syntax-item">
                 <code>type:pdf</code>
-                <span>文件类型过滤</span>
+                <span>下载模式中按文件类型过滤</span>
               </div>
             </div>
           </div>
 
+          <!-- 搜索引擎跳转 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <h3>搜索引擎跳转</h3>
+            <p>当本地搜索没有结果时，可以一键跳转到外部搜索引擎继续搜索：</p>
+            <ul class="style-list">
+              <li><strong>有结果时</strong> - 搜索结果底部显示"使用 Google/百度 搜索"跳转项</li>
+              <li><strong>无结果时</strong> - 顶部醒目显示搜索引擎跳转入口</li>
+              <li><strong>URL 识别</strong> - 输入网址格式的文字（如 <code>github.com</code>），顶部出现"打开链接"选项，可直接在新标签页打开</li>
+              <li><strong>可配置</strong> - 在常规设置中选择默认搜索引擎（Google / 百度 / Bing / DuckDuckGo）</li>
+            </ul>
+          </div>
+
+          <!-- 批量操作 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <h3>批量操作</h3>
+            <p>选中多个结果后可执行批量操作：</p>
+            <ul class="style-list">
+              <li><kbd>Ctrl/⌘ + 点击</kbd> 逐一多选，<kbd>Shift + 点击</kbd> 范围选择</li>
+              <li>选中后弹出工具栏，支持<strong>批量打开</strong>、<strong>批量复制链接</strong></li>
+              <li>在书签模式下右键点击可<strong>编辑</strong>或<strong>删除</strong>书签</li>
+              <li>在历史/下载模式下右键可<strong>删除</strong>对应记录</li>
+            </ul>
+          </div>
+
+          <!-- 界面风格 -->
           <div class="guide-card">
             <div class="guide-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -486,26 +605,47 @@
               </svg>
             </div>
             <h3>界面风格</h3>
-            <p>点击搜索浮层右下角的调色盘按钮切换风格：</p>
+            <p>点击搜索浮层右下角的调色盘按钮切换风格，或在外观设置中选择：</p>
             <ul class="style-list">
-              <li><strong>Spotlight</strong> - macOS 风格，毛玻璃效果</li>
-              <li><strong>Raycast</strong> - 命令面板风格，深色主题</li>
-              <li><strong>Fluent</strong> - Windows 11 风格，亚克力效果</li>
+              <li><strong>Spotlight</strong> - macOS 风格，毛玻璃效果，简约优雅</li>
+              <li><strong>Raycast</strong> - 命令面板风格，深色主题，开发者最爱</li>
+              <li><strong>Fluent</strong> - Windows 11 风格，亚克力效果，现代感</li>
             </ul>
+            <p style="margin-top: 8px; color: var(--text-secondary);">还可以切换字体：点击浮层右下角的 <strong>Aa</strong> 按钮循环切换系统默认、苹方、Inter、Noto 等字体。</p>
           </div>
 
+          <!-- 书签状态 -->
           <div class="guide-card">
             <div class="guide-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
               </svg>
             </div>
-            <h3>书签状态</h3>
+            <h3>书签状态智能分析</h3>
+            <p>扩展会根据浏览历史自动分析每个书签的使用状态：</p>
             <ul class="status-list">
-              <li><span class="status-dot warning"></span><strong>未使用</strong> - 从未访问过的书签</li>
-              <li><span class="status-dot success"></span><strong>很少使用</strong> - 访问次数少于3次</li>
-              <li><span class="status-dot danger"></span><strong>休眠</strong> - 超过180天未访问</li>
+              <li><span class="status-dot warning"></span><strong>未使用</strong> - 从未访问过的书签，可能是过时链接</li>
+              <li><span class="status-dot success"></span><strong>很少使用</strong> - 访问次数少于 3 次</li>
+              <li><span class="status-dot danger"></span><strong>休眠</strong> - 超过 180 天未访问，建议清理或归档</li>
               <li><span class="status-dot primary"></span><strong>活跃</strong> - 正常使用的书签</li>
+            </ul>
+            <p style="margin-top: 8px; color: var(--text-secondary);">在书签搜索模式中，可以通过筛选按钮快速过滤出不同状态的书签。</p>
+          </div>
+
+          <!-- 实用技巧 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+              </svg>
+            </div>
+            <h3>实用技巧</h3>
+            <ul class="style-list">
+              <li><strong>智能排序</strong> — 结合标题相关度、访问频率和最近访问时间综合排序，最可能需要的结果排在前面</li>
+              <li><strong>最近访问提示</strong> — 在书签/标签页模式下搜索时，底部会自动补充匹配的最近浏览历史</li>
+              <li><strong>组合语法</strong> — 多种语法可组合使用，例如 <code>site:github.com after:2024-01 -fork</code></li>
+              <li><strong>友情链接</strong> — 在设置中自定义搜索窗口底部的快捷链接，方便一键访问常用网站</li>
+              <li><strong>降级兜底</strong> — 在 <code>chrome://</code> 等无法注入浮层的页面，自动使用独立搜索窗口</li>
             </ul>
           </div>
         </div>

@@ -195,9 +195,14 @@
     // 结果项点击
     resultsList.addEventListener('click', (e) => {
       const item = e.target.closest('.result-item');
-      if (item) {
-        openResult(parseInt(item.dataset.index));
+      if (!item) return;
+      const specialAction = item.dataset.specialAction;
+      if (specialAction && item.dataset.url) {
+        safeSendMessage({ type: 'OPEN_URL', url: item.dataset.url });
+        window.close();
+        return;
       }
+      openResult(parseInt(item.dataset.index));
     });
 
     // 结果项右键菜单
@@ -289,6 +294,13 @@
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0) {
+          const allItems = document.querySelectorAll('.result-item');
+          const selectedEl = allItems[selectedIndex];
+          if (selectedEl?.dataset?.specialAction && selectedEl.dataset.url) {
+            safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
+            window.close();
+            break;
+          }
           openResult(selectedIndex);
         }
         break;
@@ -625,7 +637,7 @@
 
     currentResults = items;
     selectedIndex = items.length > 0 ? 0 : -1;
-    displayResults(items);
+    displayResults(items, query);
 
     // 非 history 模式且有搜索词时，补充最近访问记录
     if (query && query.trim() && currentMode !== 'history') {
@@ -723,11 +735,87 @@
     return sorted;
   }
 
+  // 搜索引擎定义（本地兜底，不依赖 settings.js 加载）
+  const SW_SEARCH_ENGINES = {
+    google: { name: 'Google', url: 'https://www.google.com/search?q={query}' },
+    baidu: { name: '百度', url: 'https://www.baidu.com/s?wd={query}' },
+    bing: { name: 'Bing', url: 'https://www.bing.com/search?q={query}' },
+    duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q={query}' }
+  };
+
+  function getDefaultSearchEngine() {
+    return navigator.language.startsWith('zh') ? 'baidu' : 'google';
+  }
+
+  async function getSearchEngine() {
+    try {
+      const result = await new Promise(resolve => {
+        chrome.storage.sync.get(['optionsSettings'], resolve);
+      });
+      const engineKey = result.optionsSettings?.defaultSearchEngine || getDefaultSearchEngine();
+      const engine = SW_SEARCH_ENGINES[engineKey] || SW_SEARCH_ENGINES[getDefaultSearchEngine()];
+      return { key: engineKey, ...engine };
+    } catch {
+      const key = getDefaultSearchEngine();
+      return { key, ...SW_SEARCH_ENGINES[key] };
+    }
+  }
+
+  // URL 识别
+  const URL_PATTERN_LOCAL = /^(https?:\/\/|www\.)|(\w+\.(?:com|cn|org|net|io|dev|edu|gov|app|me|co)\b)/i;
+
+  function normalizeUrlLocal(input) {
+    if (/^https?:\/\//.test(input)) return input;
+    if (input.startsWith('www.')) return 'https://' + input;
+    if (URL_PATTERN_LOCAL.test(input)) return 'https://' + input;
+    return null;
+  }
+
+  function createSpecialItemHtml(type, title, subtitle, url) {
+    const iconSvg = type === 'url'
+      ? '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+    const itemClass = type === 'url' ? 'url-open-item' : 'search-engine-item';
+    return `
+      <div class="result-item special-item ${itemClass}" data-special-action="${type === 'url' ? 'open-url' : 'search-engine'}" data-url="${escapeHtml(url)}">
+        <div class="result-icon special-icon">${iconSvg}</div>
+        <div class="result-content">
+          <div class="result-title">${title}</div>
+          <div class="result-url">${escapeHtml(subtitle)}</div>
+        </div>
+      </div>
+    `;
+  }
+
   // ==================== 显示结果 ====================
-  function displayResults(items) {
-    if (items.length === 0) {
+  function displayResults(items, query = '') {
+    const trimmedQuery = query.trim();
+
+    if (items.length === 0 && !trimmedQuery) {
       resultsList.innerHTML = '<div class="no-results">没有找到匹配的结果</div>';
       searchStats.textContent = '无结果';
+      return;
+    }
+
+    if (items.length === 0 && trimmedQuery) {
+      let html = '';
+      const detectedUrl = normalizeUrlLocal(trimmedQuery);
+      if (detectedUrl) {
+        html += createSpecialItemHtml('url', `打开 ${escapeHtml(detectedUrl)}`, '在新标签页中打开此链接', detectedUrl);
+      }
+      resultsList.innerHTML = html + '<div class="no-results">没有找到匹配的本地结果</div>';
+      searchStats.textContent = '无结果';
+
+      getSearchEngine().then(engine => {
+        const searchUrl = engine.url.replace('{query}', encodeURIComponent(trimmedQuery));
+        const engineHtml = createSpecialItemHtml('search', `使用 ${escapeHtml(engine.name)} 搜索 "<strong>${escapeHtml(trimmedQuery)}</strong>"`, '在新标签页中搜索', searchUrl);
+        const noResultsEl = resultsList.querySelector('.no-results');
+        if (noResultsEl) {
+          noResultsEl.insertAdjacentHTML('beforebegin', engineHtml);
+        } else {
+          resultsList.insertAdjacentHTML('beforeend', engineHtml);
+        }
+      });
       return;
     }
 
@@ -749,6 +837,23 @@
         </div>
       `;
     }).join('');
+
+    // 有搜索词时追加搜索引擎跳转
+    if (trimmedQuery) {
+      const detectedUrl = normalizeUrlLocal(trimmedQuery);
+      let extraHtml = '<div class="suggestion-divider"></div>';
+      if (detectedUrl) {
+        extraHtml += createSpecialItemHtml('url', `打开 ${escapeHtml(detectedUrl)}`, '在新标签页中打开此链接', detectedUrl);
+      }
+      resultsList.insertAdjacentHTML('beforeend', extraHtml);
+
+      getSearchEngine().then(engine => {
+        const searchUrl = engine.url.replace('{query}', encodeURIComponent(trimmedQuery));
+        resultsList.insertAdjacentHTML('beforeend',
+          createSpecialItemHtml('search', `使用 ${escapeHtml(engine.name)} 搜索 "<strong>${escapeHtml(trimmedQuery)}</strong>"`, '在新标签页中搜索', searchUrl)
+        );
+      });
+    }
 
     searchStats.textContent = `找到 ${items.length} 个结果`;
 

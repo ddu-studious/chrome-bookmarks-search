@@ -1,3 +1,25 @@
+// 搜索引擎定义
+const SEARCH_ENGINES = {
+  google: { name: 'Google', url: 'https://www.google.com/search?q={query}' },
+  baidu: { name: '百度', url: 'https://www.baidu.com/s?wd={query}' },
+  bing: { name: 'Bing', url: 'https://www.bing.com/search?q={query}' },
+  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q={query}' }
+};
+
+const URL_PATTERN = /^(https?:\/\/|www\.)|(\w+\.(?:com|cn|org|net|io|dev|edu|gov|app|me|co)\b)/i;
+
+function normalizeUrl(input) {
+  if (/^https?:\/\//.test(input)) return input;
+  if (input.startsWith('www.')) return 'https://' + input;
+  if (URL_PATTERN.test(input)) return 'https://' + input;
+  return null;
+}
+
+function getDefaultSearchEngine() {
+  const lang = (typeof navigator !== 'undefined' && navigator.language) || 'en';
+  return lang.startsWith('zh') ? 'baidu' : 'google';
+}
+
 // 默认设置
 const DEFAULT_SETTINGS = {
   theme: 'system', // system, light, dark
@@ -6,7 +28,8 @@ const DEFAULT_SETTINGS = {
   animation: true, // true, false
   highContrast: false, // true, false
   showGroupsMode: false, // 是否显示分组搜索模式（官方 API 能力有限，默认关闭）
-  groupChildClickRestoreAll: true // 点击分组内子标签时是否整组恢复
+  groupChildClickRestoreAll: true, // 点击分组内子标签时是否整组恢复
+  defaultSearchEngine: null // null = 自动检测(中文环境百度/其他Google), 或 google/baidu/bing/duckduckgo
 };
 
 // 获取当前设置
@@ -28,7 +51,10 @@ async function getSettings() {
         : DEFAULT_SETTINGS.showGroupsMode,
       groupChildClickRestoreAll: result.optionsSettings.groupChildClickRestoreAll !== undefined
         ? result.optionsSettings.groupChildClickRestoreAll
-        : DEFAULT_SETTINGS.groupChildClickRestoreAll
+        : DEFAULT_SETTINGS.groupChildClickRestoreAll,
+      defaultSearchEngine: result.optionsSettings.defaultSearchEngine !== undefined
+        ? result.optionsSettings.defaultSearchEngine
+        : DEFAULT_SETTINGS.defaultSearchEngine
     };
   }
   
@@ -90,9 +116,13 @@ async function initSettings() {
   watchSystemTheme();
 }
 
-// 导出函数
+// 导出函数和常量
 window.settings = {
   get: getSettings,
   save: saveSettings,
   init: initSettings
 };
+window.SEARCH_ENGINES = SEARCH_ENGINES;
+window.URL_PATTERN = URL_PATTERN;
+window.normalizeUrl = normalizeUrl;
+window.getDefaultSearchEngine = getDefaultSearchEngine;
