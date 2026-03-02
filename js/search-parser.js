@@ -8,6 +8,8 @@
  * - before:2024-02       (时间过滤)
  * - 空格分隔多关键字      (AND 逻辑)
  * - "精确匹配"           (引号内作为整体匹配)
+ * - -keyword             (排除包含该关键字的结果)
+ * - -"精确排除"          (排除包含该精确词组的结果)
  */
 
 class SearchParser {
@@ -63,40 +65,52 @@ class SearchParser {
   };
 
   /**
-   * 解析关键字，支持引号精确匹配和空格分隔的多关键字
+   * 解析关键字，支持引号精确匹配、排除关键字和空格分隔的多关键字
    * @param {string} text 搜索文本（已去除命令）
-   * @returns {{exactMatches: string[], keywords: string[]}} 解析结果
+   * @returns {{exactMatches: string[], keywords: string[], excludeExact: string[], excludeKeywords: string[]}} 解析结果
    */
   static parseKeywords(text) {
     const exactMatches = [];
     const keywords = [];
+    const excludeExact = [];
+    const excludeKeywords = [];
     
-    // 提取引号内的精确匹配词组
-    let remaining = text.replace(/"([^"]+)"/g, (match, p1) => {
+    // 提取 -"排除精确匹配" 和 "精确匹配"
+    let remaining = text.replace(/-"([^"]+)"/g, (match, p1) => {
+      if (p1.trim()) {
+        excludeExact.push(p1.trim());
+      }
+      return '';
+    }).replace(/"([^"]+)"/g, (match, p1) => {
       if (p1.trim()) {
         exactMatches.push(p1.trim());
       }
       return '';
     });
     
-    // 剩余文本按空格分割为关键字
+    // 剩余文本按空格分割，区分包含和排除关键字
     remaining.trim().split(/\s+/).filter(Boolean).forEach(kw => {
-      keywords.push(kw);
+      if (kw.startsWith('-') && kw.length > 1) {
+        excludeKeywords.push(kw.substring(1));
+      } else {
+        keywords.push(kw);
+      }
     });
     
-    return { exactMatches, keywords };
+    return { exactMatches, keywords, excludeExact, excludeKeywords };
   }
 
   /**
-   * 检查项目是否匹配所有关键字（AND 逻辑）
+   * 检查项目是否匹配所有关键字（AND 逻辑），并排除指定关键字
    * @param {Object} item 项目对象
    * @param {string[]} exactMatches 精确匹配词组
    * @param {string[]} keywords 关键字列表
    * @param {string|null} inField 限定搜索字段 (title/url/null)
+   * @param {string[]} excludeExact 排除的精确词组
+   * @param {string[]} excludeKeywords 排除的关键字
    * @returns {boolean} 是否匹配
    */
-  static matchAllKeywords(item, exactMatches, keywords, inField = null) {
-    // 构建可搜索文本
+  static matchAllKeywords(item, exactMatches, keywords, inField = null, excludeExact = [], excludeKeywords = []) {
     let searchable;
     if (inField === 'title') {
       searchable = (item.title || '').toLowerCase();
@@ -108,6 +122,20 @@ class SearchParser {
         item.url || '',
         item.filename || ''
       ].join(' ').toLowerCase();
+    }
+    
+    // 排除精确词组：包含任一则排除
+    for (const exact of excludeExact) {
+      if (searchable.includes(exact.toLowerCase())) {
+        return false;
+      }
+    }
+    
+    // 排除关键字：包含任一则排除
+    for (const kw of excludeKeywords) {
+      if (searchable.includes(kw.toLowerCase())) {
+        return false;
+      }
     }
     
     // 检查所有精确匹配词组
@@ -130,7 +158,7 @@ class SearchParser {
   /**
    * 解析搜索文本，提取命令和搜索词
    * @param {string} searchText 完整的搜索文本
-   * @returns {{commands: Object, remainingText: string, exactMatches: string[], keywords: string[]}} 解析结果
+   * @returns {{commands: Object, remainingText: string, exactMatches: string[], keywords: string[], excludeExact: string[], excludeKeywords: string[]}} 解析结果
    */
   static parse(searchText) {
     const commands = {};
@@ -145,14 +173,15 @@ class SearchParser {
       }
     });
 
-    // 解析剩余文本中的关键字
-    const { exactMatches, keywords } = this.parseKeywords(text);
+    const { exactMatches, keywords, excludeExact, excludeKeywords } = this.parseKeywords(text);
 
     return {
       commands,
       remainingText: text,
       exactMatches,
-      keywords
+      keywords,
+      excludeExact,
+      excludeKeywords
     };
   }
 
@@ -165,15 +194,12 @@ class SearchParser {
   static filter(items, searchText) {
     if (!searchText.trim()) return items;
 
-    const { commands, exactMatches, keywords } = this.parse(searchText);
+    const { commands, exactMatches, keywords, excludeExact, excludeKeywords } = this.parse(searchText);
     
     return items.filter(item => {
-      // 应用所有命令过滤
       for (const [name, value] of Object.entries(commands)) {
         const command = this.COMMANDS[name];
-        // 对于 in: 命令，需要特殊处理
         if (name === 'in') {
-          // in: 命令会在后面的关键字匹配中处理
           continue;
         }
         if (!command.process(value, item, '')) {
@@ -181,10 +207,12 @@ class SearchParser {
         }
       }
 
-      // 如果有关键字或精确匹配词，进行多关键字 AND 匹配
-      if (exactMatches.length > 0 || keywords.length > 0) {
+      const hasInclude = exactMatches.length > 0 || keywords.length > 0;
+      const hasExclude = excludeExact.length > 0 || excludeKeywords.length > 0;
+
+      if (hasInclude || hasExclude) {
         const inField = commands.in || null;
-        return this.matchAllKeywords(item, exactMatches, keywords, inField);
+        return this.matchAllKeywords(item, exactMatches, keywords, inField, excludeExact, excludeKeywords);
       }
 
       return true;

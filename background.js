@@ -260,6 +260,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // 历史记录建议（轻量查询，用于非 history 模式下的地址栏式提示）
+  if (request.type === 'SUGGEST_HISTORY') {
+    chrome.history.search({
+      text: request.query || '',
+      maxResults: request.maxResults || 5,
+      startTime: Date.now() - (30 * 24 * 60 * 60 * 1000)
+    }, (results) => {
+      const suggestions = (results || []).map(item => ({
+        title: item.title,
+        url: item.url,
+        lastVisit: item.lastVisitTime,
+        visitCount: item.visitCount,
+        _isSuggestion: true
+      }));
+      sendResponse({ suggestions });
+    });
+    return true;
+  }
+
   // 打开结果
   if (request.type === 'OPEN_RESULT') {
     const { mode, item } = request;
@@ -705,17 +724,17 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // 注入并打开浮层的核心函数
+// 返回 true 表示成功，false 表示注入失败（需要降级到独立搜索窗口）
 async function injectAndToggleOverlay(tabId) {
   console.log('[BookmarkSearch] Attempting to toggle overlay in tab:', tabId);
   
   try {
-    // 先尝试发送消息
     const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
     console.log('[BookmarkSearch] Message sent successfully, response:', response);
+    return true;
   } catch (error) {
     console.log('[BookmarkSearch] Content script not ready, injecting...', error.message);
     
-    // 注入 content script
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
@@ -723,17 +742,19 @@ async function injectAndToggleOverlay(tabId) {
       });
       console.log('[BookmarkSearch] Content script injected');
       
-      // 等待一小段时间后发送消息
       await new Promise(resolve => setTimeout(resolve, 150));
       
       try {
         const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
         console.log('[BookmarkSearch] Message sent after injection, response:', response);
+        return true;
       } catch (msgError) {
         console.error('[BookmarkSearch] Failed to send message after injection:', msgError);
+        return false;
       }
     } catch (injectError) {
       console.error('[BookmarkSearch] Failed to inject content script:', injectError);
+      return false;
     }
   }
 }
@@ -827,13 +848,16 @@ async function ensureOverlayVisibleFromAnyPage(tab) {
   }
 
   // 可注入页面 → Content Script 浮层（最佳体验）
+  // 注入可能因页面加载失败（ERR_CONNECTION_REFUSED 等）而失败，此时降级到独立搜索窗口
   if (tab && canInjectIntoTab(tab)) {
-    await injectAndToggleOverlay(tab.id);
-    return;
+    const success = await injectAndToggleOverlay(tab.id);
+    if (success) return;
+    console.log('[BookmarkSearch] Injection failed (page may not be loaded), falling back to search window');
+  } else {
+    console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url);
   }
 
-  // 不可注入页面 → 独立搜索窗口（优雅降级，无跳转）
-  console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url, '→ opening search window');
+  // 不可注入页面或注入失败 → 独立搜索窗口（优雅降级）
   await openSearchWindow();
 }
 

@@ -806,6 +806,31 @@ document.addEventListener('DOMContentLoaded', async function() {
       .replace(/'/g, "&#039;");
   }
 
+  // 获取当前可见的模式列表（根据 groups 按钮是否显示）
+  function getVisibleModes() {
+    const groupsBtn = document.querySelector('.tab-btn[data-mode="groups"]');
+    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
+    return showGroups
+      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
+      : ['bookmarks', 'tabs', 'history', 'downloads'];
+  }
+
+  // 根据设置显示/隐藏分组模式
+  function applyGroupsModeVisibility(show) {
+    const groupsBtn = document.querySelector('.tab-btn[data-mode="groups"]');
+    if (groupsBtn) {
+      groupsBtn.style.display = show ? '' : 'none';
+    }
+    const childOption = document.getElementById('groupChildClickOption');
+    if (childOption) {
+      childOption.style.display = show ? '' : 'none';
+    }
+    // 如果当前在 groups 模式但被隐藏了，切换回 bookmarks
+    if (!show && currentMode === 'groups') {
+      switchMode('bookmarks');
+    }
+  }
+
   // 处理键盘事件
   function handleKeydown(e) {
     // IME 输入中（如中文输入法候选词选择），不拦截按键
@@ -831,7 +856,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 处理左右键切换模式（所有模式通用）
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
-      const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
+      const modes = getVisibleModes();
       const currentIndex = modes.indexOf(currentMode);
       let newIndex;
       
@@ -841,10 +866,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         newIndex = currentIndex >= modes.length - 1 ? 0 : currentIndex + 1;
       }
       
-      // 更新UI和切换模式
-      const tabBtns = document.querySelectorAll('.tab-btn');
-      tabBtns.forEach(btn => btn.classList.remove('active'));
-      tabBtns[newIndex].classList.add('active');
       switchMode(modes[newIndex]);
       return;
     }
@@ -1000,8 +1021,80 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 更新计数
     searchStatsElement.textContent = query ? `找到 ${filteredResults.length} 个结果` : '';
     
+    // 非 history 模式且有搜索词时，补充展示匹配的最近访问记录
+    if (query.trim() && currentMode !== 'history') {
+      appendHistorySuggestions(query, filteredResults);
+    }
+    
     // 重置选中状态
     selectedIndex = -1;
+  }
+
+  // 追加历史记录建议到搜索结果底部
+  function appendHistorySuggestions(query, existingResults) {
+    const existingUrls = new Set(existingResults.map(r => r.url).filter(Boolean));
+
+    chrome.history.search({
+      text: query,
+      maxResults: 8,
+      startTime: Date.now() - (30 * 24 * 60 * 60 * 1000)
+    }, (results) => {
+      if (!results || results.length === 0) return;
+      // 搜索词可能已变，检查是否仍然匹配
+      if (document.getElementById('searchInput').value.trim() !== query.trim()) return;
+
+      const suggestions = results
+        .filter(item => item.url && !existingUrls.has(item.url))
+        .slice(0, 5);
+
+      if (suggestions.length === 0) return;
+
+      const resultsList = document.getElementById('resultsList');
+
+      // 分隔标题
+      const divider = document.createElement('div');
+      divider.className = 'suggestion-divider';
+      divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
+      resultsList.appendChild(divider);
+
+      suggestions.forEach((item, idx) => {
+        const el = document.createElement('div');
+        el.className = 'result-item suggestion-item';
+        el.dataset.url = item.url;
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'result-icon';
+        const icon = document.createElement('img');
+        icon.width = 16; icon.height = 16;
+        try {
+          const host = new URL(item.url).hostname;
+          icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
+        } catch { icon.src = 'icons/icon16.png'; }
+        icon.onerror = () => { icon.src = 'icons/icon16.png'; };
+        iconWrap.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'result-item-content';
+        const title = document.createElement('div');
+        title.className = 'result-title';
+        title.textContent = item.title || '无标题';
+        const url = document.createElement('div');
+        url.className = 'result-url';
+        url.textContent = item.url;
+        content.appendChild(title);
+        content.appendChild(url);
+
+        el.appendChild(iconWrap);
+        el.appendChild(content);
+
+        el.addEventListener('click', () => {
+          chrome.tabs.create({ url: item.url });
+          window.close();
+        });
+
+        resultsList.appendChild(el);
+      });
+    });
   }
 
   // 切换搜索模式
@@ -1157,7 +1250,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelector(`input[name="lineHeight"][value="${settings.lineHeight}"]`).checked = true;
     document.getElementById('animation').checked = settings.animation;
     document.getElementById('highContrast').checked = settings.highContrast;
+    document.getElementById('showGroupsMode').checked = !!settings.showGroupsMode;
     document.getElementById('groupChildClickRestoreAll').checked = settings.groupChildClickRestoreAll !== false;
+    applyGroupsModeVisibility(!!settings.showGroupsMode);
     
     // 打开设置面板
     settingsBtn.addEventListener('click', () => {
@@ -1189,6 +1284,10 @@ document.addEventListener('DOMContentLoaded', async function() {
           break;
         case 'highContrast':
           settings.highContrast = target.checked;
+          break;
+        case 'showGroupsMode':
+          settings.showGroupsMode = target.checked;
+          applyGroupsModeVisibility(target.checked);
           break;
         case 'groupChildClickRestoreAll':
           settings.groupChildClickRestoreAll = target.checked;

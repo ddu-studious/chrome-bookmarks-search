@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   lineHeight: 'normal', // compact, normal, relaxed
   animation: true, // true, false
   highContrast: false, // true, false
+  showGroupsMode: false, // 是否显示分组搜索模式（官方 API 能力有限，默认关闭）
   groupChildClickRestoreAll: true // 点击分组内子标签时是否整组恢复
 };
 
@@ -22,6 +23,9 @@ async function getSettings() {
       animation: result.optionsSettings.animation !== undefined ? result.optionsSettings.animation : DEFAULT_SETTINGS.animation,
       highContrast: result.optionsSettings.highContrast !== undefined ? result.optionsSettings.highContrast : DEFAULT_SETTINGS.highContrast,
       lineHeight: DEFAULT_SETTINGS.lineHeight,
+      showGroupsMode: result.optionsSettings.showGroupsMode !== undefined
+        ? result.optionsSettings.showGroupsMode
+        : DEFAULT_SETTINGS.showGroupsMode,
       groupChildClickRestoreAll: result.optionsSettings.groupChildClickRestoreAll !== undefined
         ? result.optionsSettings.groupChildClickRestoreAll
         : DEFAULT_SETTINGS.groupChildClickRestoreAll

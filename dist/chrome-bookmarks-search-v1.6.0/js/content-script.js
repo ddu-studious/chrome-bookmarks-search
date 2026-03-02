@@ -2096,7 +2096,6 @@
     try {
       const result = await chrome.storage.sync.get('optionsSettings');
       const defaultLinks = [
-        { name: 'Codeium', url: 'https://www.codeium.com' },
         { name: 'DeepSeek', url: 'https://www.deepseek.com' },
         { name: '爱奇艺', url: 'https://www.iqiyi.com' },
         { name: '哔哩哔哩', url: 'https://www.bilibili.com' },

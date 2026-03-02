@@ -1227,3 +1227,34 @@ body.style-fluent .menu-item.edit-action svg {
 .toast.show {
   opacity: 1;
 }
+
+/* 历史记录建议分隔线 */
+.suggestion-divider {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px 2px;
+  gap: 8px;
+}
+
+.suggestion-divider::before,
+.suggestion-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.suggestion-divider-text {
+  font-size: 11px;
+  color: rgba(128, 128, 128, 0.7);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.suggestion-item {
+  opacity: 0.75;
+}
+
+.suggestion-item:hover {
+  opacity: 1;
+}

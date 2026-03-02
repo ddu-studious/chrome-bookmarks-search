@@ -14,8 +14,8 @@ const DEFAULT_SETTINGS = {
   defaultSort: 'smart',
   historyRange: 30,
   showStats: true,
+  showGroupsMode: false,
   friendLinks: [
-    { name: 'Codeium', url: 'https://www.codeium.com' },
     { name: 'DeepSeek', url: 'https://www.deepseek.com' },
     { name: '爱奇艺', url: 'https://www.iqiyi.com' },
     { name: '哔哩哔哩', url: 'https://www.bilibili.com' },
@@ -123,6 +123,7 @@ async function loadSettings() {
   document.getElementById('defaultSort').value = settings.defaultSort;
   document.getElementById('historyRange').value = settings.historyRange;
   document.getElementById('showStats').checked = settings.showStats;
+  document.getElementById('showGroupsMode').checked = !!settings.showGroupsMode;
   
   // 加载快捷键
   loadCurrentShortcut();
@@ -153,7 +154,8 @@ async function saveSettings() {
     defaultMode: document.getElementById('defaultMode').value,
     defaultSort: document.getElementById('defaultSort').value,
     historyRange: parseInt(document.getElementById('historyRange').value),
-    showStats: document.getElementById('showStats').checked
+    showStats: document.getElementById('showStats').checked,
+    showGroupsMode: document.getElementById('showGroupsMode').checked
   };
   
   // 保存友情链接

@@ -99,6 +99,19 @@
     // 绑定事件
     bindEvents();
 
+    // 根据设置显示/隐藏分组模式
+    try {
+      const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
+      let showGroups = false;
+      if (result.optionsSettings && result.optionsSettings.showGroupsMode !== undefined) {
+        showGroups = result.optionsSettings.showGroupsMode;
+      } else if (result.settings && result.settings.showGroupsMode !== undefined) {
+        showGroups = result.settings.showGroupsMode;
+      }
+      const groupsBtn = document.querySelector('.mode-tab[data-mode="groups"]');
+      if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
+    } catch (_) {}
+
     // 初始化筛选栏（书签模式下显示）
     filterBar.classList.toggle('show', currentMode === 'bookmarks');
 
@@ -316,14 +329,22 @@
     });
   }
 
+  function getVisibleModes() {
+    const groupsBtn = document.querySelector('.mode-tab[data-mode="groups"]');
+    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
+    return showGroups
+      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
+      : ['bookmarks', 'tabs', 'history', 'downloads'];
+  }
+
   function switchModePrev() {
-    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
+    const modes = getVisibleModes();
     const currentIndex = modes.indexOf(currentMode);
     switchMode(modes[currentIndex <= 0 ? modes.length - 1 : currentIndex - 1]);
   }
 
   function switchModeNext() {
-    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
+    const modes = getVisibleModes();
     const currentIndex = modes.indexOf(currentMode);
     switchMode(modes[currentIndex >= modes.length - 1 ? 0 : currentIndex + 1]);
   }
@@ -605,6 +626,70 @@
     currentResults = items;
     selectedIndex = items.length > 0 ? 0 : -1;
     displayResults(items);
+
+    // 非 history 模式且有搜索词时，补充最近访问记录
+    if (query && query.trim() && currentMode !== 'history') {
+      appendHistorySuggestions(query, items);
+    }
+  }
+
+  function appendHistorySuggestions(query, existingResults) {
+    const existingUrls = new Set(existingResults.map(r => r.url).filter(Boolean));
+
+    safeSendMessage({ type: 'SUGGEST_HISTORY', query: query, maxResults: 8 }, (response) => {
+      if (!response || !response.suggestions || response.suggestions.length === 0) return;
+      if (searchInput.value.trim() !== query.trim()) return;
+
+      const suggestions = response.suggestions
+        .filter(item => item.url && !existingUrls.has(item.url))
+        .slice(0, 5);
+      if (suggestions.length === 0) return;
+
+      const resultsList = document.getElementById('resultsList');
+
+      const divider = document.createElement('div');
+      divider.className = 'suggestion-divider';
+      divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
+      resultsList.appendChild(divider);
+
+      suggestions.forEach((item) => {
+        const el = document.createElement('div');
+        el.className = 'result-item suggestion-item';
+        el.dataset.url = item.url;
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'result-icon';
+        const icon = document.createElement('img');
+        icon.width = 16; icon.height = 16;
+        try {
+          const host = new URL(item.url).hostname;
+          icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.url)}&size=16`;
+          icon.onerror = () => { icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`; };
+        } catch { icon.src = 'icons/icon16.png'; }
+        iconWrap.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'result-item-content';
+        const title = document.createElement('div');
+        title.className = 'result-title';
+        title.textContent = item.title || '无标题';
+        const url = document.createElement('div');
+        url.className = 'result-url';
+        url.textContent = item.url;
+        content.appendChild(title);
+        content.appendChild(url);
+
+        el.appendChild(iconWrap);
+        el.appendChild(content);
+
+        el.addEventListener('click', () => {
+          safeSendMessage({ type: 'OPEN_RESULT', mode: 'history', item: { url: item.url } });
+          window.close();
+        });
+
+        resultsList.appendChild(el);
+      });
+    });
   }
 
   function filterByUsageStatus(bookmarks, filter) {
@@ -988,7 +1073,6 @@
     try {
       const result = await chrome.storage.sync.get('optionsSettings');
       const defaultLinks = [
-        { name: 'Codeium', url: 'https://www.codeium.com' },
         { name: 'DeepSeek', url: 'https://www.deepseek.com' },
         { name: '爱奇艺', url: 'https://www.iqiyi.com' },
         { name: '哔哩哔哩', url: 'https://www.bilibili.com' },

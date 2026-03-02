@@ -555,7 +555,7 @@
             <span>标签页</span>
             <span class="tab-count" id="tabsCount">0</span>
           </button>
-          <button class="mode-tab" data-mode="groups">
+          <button class="mode-tab" data-mode="groups" style="display:none">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
             <span>分组</span>
             <span class="tab-count" id="groupsCount">0</span>
@@ -2135,9 +2135,17 @@
     });
   }
 
+  function getVisibleModes() {
+    const groupsBtn = shadowRoot.querySelector('.mode-tab[data-mode="groups"]');
+    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
+    return showGroups
+      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
+      : ['bookmarks', 'tabs', 'history', 'downloads'];
+  }
+
   // 切换到上一个模式
   function switchModePrev() {
-    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
+    const modes = getVisibleModes();
     const currentIndex = modes.indexOf(currentMode);
     const newIndex = currentIndex <= 0 ? modes.length - 1 : currentIndex - 1;
     switchMode(modes[newIndex]);
@@ -2145,7 +2153,7 @@
 
   // 切换到下一个模式
   function switchModeNext() {
-    const modes = ['bookmarks', 'tabs', 'groups', 'history', 'downloads'];
+    const modes = getVisibleModes();
     const currentIndex = modes.indexOf(currentMode);
     const newIndex = currentIndex >= modes.length - 1 ? 0 : currentIndex + 1;
     switchMode(modes[newIndex]);
@@ -2541,6 +2549,85 @@
     currentResults = items;
     selectedIndex = items.length > 0 ? 0 : -1;
     displayResults(items);
+
+    // 非 history 模式且有搜索词时，补充最近访问记录
+    if (query && query.trim() && currentMode !== 'history') {
+      appendHistorySuggestions(query, items);
+    }
+  }
+
+  function appendHistorySuggestions(query, existingResults) {
+    const existingUrls = new Set(existingResults.map(r => r.url).filter(Boolean));
+
+    safeSendMessage({ type: 'SUGGEST_HISTORY', query: query, maxResults: 8 }, (response) => {
+      if (!response || !response.suggestions || response.suggestions.length === 0) return;
+      const searchInput = shadowRoot.getElementById('searchInput');
+      if (!searchInput || searchInput.value.trim() !== query.trim()) return;
+
+      const suggestions = response.suggestions
+        .filter(item => item.url && !existingUrls.has(item.url))
+        .slice(0, 5);
+      if (suggestions.length === 0) return;
+
+      const resultsList = shadowRoot.getElementById('resultsList');
+
+      const divider = document.createElement('div');
+      divider.className = 'suggestion-divider';
+      divider.style.cssText = 'display:flex;align-items:center;padding:6px 16px 2px;gap:8px;';
+      const line1 = document.createElement('span');
+      line1.style.cssText = 'flex:1;height:1px;background:rgba(128,128,128,0.2);';
+      const text = document.createElement('span');
+      text.style.cssText = 'font-size:11px;color:rgba(128,128,128,0.7);white-space:nowrap;user-select:none;';
+      text.textContent = '最近访问';
+      const line2 = document.createElement('span');
+      line2.style.cssText = 'flex:1;height:1px;background:rgba(128,128,128,0.2);';
+      divider.appendChild(line1);
+      divider.appendChild(text);
+      divider.appendChild(line2);
+      resultsList.appendChild(divider);
+
+      suggestions.forEach((item) => {
+        const el = document.createElement('div');
+        el.className = 'result-item suggestion-item';
+        el.style.opacity = '0.75';
+        el.dataset.url = item.url;
+
+        el.addEventListener('mouseenter', () => { el.style.opacity = '1'; });
+        el.addEventListener('mouseleave', () => { el.style.opacity = '0.75'; });
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'result-icon';
+        const icon = document.createElement('img');
+        icon.width = 16; icon.height = 16;
+        try {
+          const host = new URL(item.url).hostname;
+          icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
+        } catch { icon.src = ''; }
+        icon.onerror = () => { icon.style.display = 'none'; };
+        iconWrap.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'result-item-content';
+        const title = document.createElement('div');
+        title.className = 'result-title';
+        title.textContent = item.title || '无标题';
+        const url = document.createElement('div');
+        url.className = 'result-url';
+        url.textContent = item.url;
+        content.appendChild(title);
+        content.appendChild(url);
+
+        el.appendChild(iconWrap);
+        el.appendChild(content);
+
+        el.addEventListener('click', () => {
+          safeSendMessage({ type: 'OPEN_RESULT', mode: 'history', item: { url: item.url } });
+          hideOverlay();
+        });
+
+        resultsList.appendChild(el);
+      });
+    });
   }
 
   // 按使用状态筛选
@@ -2836,6 +2923,20 @@
         try { searchInput.focus({ preventScroll: true }); } catch (e) {}
       }
     });
+
+    // 根据设置显示/隐藏分组模式
+    try {
+      chrome.storage.sync.get(['optionsSettings', 'settings'], (result) => {
+        let showGroups = false;
+        if (result.optionsSettings && result.optionsSettings.showGroupsMode !== undefined) {
+          showGroups = result.optionsSettings.showGroupsMode;
+        } else if (result.settings && result.settings.showGroupsMode !== undefined) {
+          showGroups = result.settings.showGroupsMode;
+        }
+        const groupsBtn = shadowRoot.querySelector('.mode-tab[data-mode="groups"]');
+        if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
+      });
+    } catch (_) {}
 
     // 初始化筛选栏显示状态（书签模式下显示）
     const filterBar = shadowRoot.getElementById('filterBar');
@@ -3172,7 +3273,6 @@
     try {
       const result = await chrome.storage.sync.get('optionsSettings');
       const defaultLinks = [
-        { name: 'Codeium', url: 'https://www.codeium.com' },
         { name: 'DeepSeek', url: 'https://www.deepseek.com' },
         { name: '爱奇艺', url: 'https://www.iqiyi.com' },
         { name: '哔哩哔哩', url: 'https://www.bilibili.com' },

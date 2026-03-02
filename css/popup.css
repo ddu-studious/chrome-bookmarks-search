@@ -1685,3 +1685,43 @@ body {
   color: #e8d9a0;
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* 历史记录建议分隔线 */
+.suggestion-divider {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px 2px;
+  gap: 8px;
+}
+
+.suggestion-divider::before,
+.suggestion-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #e0e0e0);
+}
+
+.suggestion-divider-text {
+  font-size: 11px;
+  color: var(--color-text-secondary, #666);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.suggestion-item {
+  opacity: 0.75;
+}
+
+.suggestion-item:hover {
+  opacity: 1;
+}
+
+.dark-theme .suggestion-divider::before,
+.dark-theme .suggestion-divider::after {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dark-theme .suggestion-divider-text {
+  color: rgba(255, 255, 255, 0.5);
+}
