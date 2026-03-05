@@ -438,20 +438,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ ok: false, fallback: true, error: '智能搜索未启用' });
           return;
         }
+
         const bookmarks = await loadBookmarks();
-        const allItems = [...bookmarks];
+        const history = await loadHistory();
+        const tabs = await loadTabs();
 
-        if (request.includeHistory) {
-          const history = await loadHistory();
-          allItems.push(...history.map(h => ({ ...h, id: `history_${h.url}` })));
-        }
-        if (request.includeDownloads) {
-          const downloads = await loadDownloads();
-          allItems.push(...downloads.map(d => ({ ...d, id: `download_${d.id}` })));
-        }
-
-        const result = await IntelligentSearch.hybridSearch(
-          request.query, allItems, config,
+        const result = await IntelligentSearch.unifiedSemanticSearch(
+          request.query,
+          { bookmarks, history, tabs },
+          config,
           { limit: request.limit || 50, rerank: request.rerank }
         );
         sendResponse(result);
@@ -488,16 +483,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'BUILD_EMBEDDING_INDEX') {
     (async () => {
       try {
+        chrome.alarms.create('embeddingBuildResume', { periodInMinutes: 1 });
         const config = await getIntelligentSearchConfig();
         const bookmarks = await loadBookmarks();
-        const result = await IntelligentSearch.buildEmbeddingIndex(bookmarks, config, (progress) => {
-          chrome.runtime.sendMessage({ type: 'EMBEDDING_BUILD_PROGRESS', ...progress }).catch(() => {});
-          chrome.tabs.query({}, (tabs) => {
-            tabs.forEach(tab => {
-              chrome.tabs.sendMessage(tab.id, { type: 'EMBEDDING_BUILD_PROGRESS', ...progress }).catch(() => {});
-            });
-          });
-        });
+        const result = await IntelligentSearch.buildEmbeddingIndex(bookmarks, config, broadcastBuildProgress);
+        chrome.alarms.clear('embeddingBuildResume');
+        await setIntelligentSearchConfig({ lastBuildProgress: 100 });
+        sendResponse({ ok: true, ...result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'RESUME_EMBEDDING_BUILD') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        const result = await IntelligentSearch.resumeBuild(config, broadcastBuildProgress);
         sendResponse({ ok: true, ...result });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
@@ -509,6 +513,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'PAUSE_EMBEDDING_BUILD') {
     IntelligentSearch.pauseEmbeddingBuild();
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'CLEAR_EMBEDDING_INDEX') {
+    (async () => {
+      try {
+        await IntelligentSearch.clearBuildState();
+        const db = await new Promise((resolve, reject) => {
+          const req = indexedDB.open('IntelligentSearchIndex', 1);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const tx = db.transaction(['vectors', 'queryCache'], 'readwrite');
+        tx.objectStore('vectors').clear();
+        tx.objectStore('queryCache').clear();
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
     return true;
   }
 
@@ -537,12 +565,75 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === 'BATCH_EXTRACT_SUMMARIES') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        const bookmarks = await loadBookmarks();
+        const ids = bookmarks.map(b => b.id).filter(Boolean);
+        const result = await IntelligentSearch.batchExtractSummaries(ids, config, broadcastSummaryProgress);
+        sendResponse({ ok: true, ...result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'PAUSE_SUMMARY_BATCH') {
+    IntelligentSearch.pauseSummaryBatch();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'GET_SUMMARY_BATCH_STATUS') {
+    sendResponse({ ok: true, ...IntelligentSearch.getSummaryBatchStatus() });
+    return true;
+  }
+
+  if (request.type === 'GET_AI_RECOMMENDATIONS') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: '智能搜索未启用' });
+          return;
+        }
+        const bookmarks = await loadBookmarks();
+        const result = await IntelligentSearch.getRecommendations(
+          request.currentUrl,
+          request.currentTitle,
+          bookmarks,
+          config,
+          request.topK || 8
+        );
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_BOOKMARK_SUMMARY') {
+    (async () => {
+      try {
+        const result = await IntelligentSearch.getBookmarkSummary(request.bookmarkId);
+        sendResponse({ ok: true, data: result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
   if (request.type === 'GET_EMBEDDING_STATUS') {
     (async () => {
       try {
         const vectorCount = await IntelligentSearch.getVectorCount();
         const buildStatus = IntelligentSearch.getBuildStatus();
-        sendResponse({ ok: true, vectorCount, buildStatus });
+        const persistedState = await IntelligentSearch.loadBuildState();
+        sendResponse({ ok: true, vectorCount, buildStatus, persistedState });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
@@ -700,6 +791,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// ==================== 构建进度广播 ====================
+function broadcastBuildProgress(progress) {
+  const msg = { type: 'EMBEDDING_BUILD_PROGRESS', ...progress };
+  chrome.runtime.sendMessage(msg).catch(() => {});
+  chrome.tabs.query({}, (tabs) => {
+    (tabs || []).forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+    });
+  });
+}
+
+function broadcastSummaryProgress(progress) {
+  const msg = { type: 'SUMMARY_BATCH_PROGRESS', ...progress };
+  chrome.runtime.sendMessage(msg).catch(() => {});
+  chrome.tabs.query({}, (tabs) => {
+    (tabs || []).forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+    });
+  });
+}
+
 // ==================== 智能搜索配置管理 ====================
 
 async function getIntelligentSearchConfig() {
@@ -707,7 +819,7 @@ async function getIntelligentSearchConfig() {
   const source = result.optionsSettings || result.settings || {};
   return {
     enabled: false,
-    aiProvider: 'deepseek',
+    aiProvider: 'gemini',
     aiApiKey: '',
     aiBaseUrl: '',
     embeddingModel: '',
@@ -936,12 +1048,35 @@ chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
 chrome.bookmarks.onMoved.addListener(scheduleBroadcastBookmarkChanged);
 
 chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });
-chrome.alarms.onAlarm.addListener(alarm => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'syncTabGroups') syncAllGroups();
+  if (alarm.name === 'embeddingBuildResume') {
+    try {
+      const persistedState = await IntelligentSearch.loadBuildState();
+      if (persistedState && persistedState.status === 'running') {
+        console.log('[BookmarkSearch] Alarm: resuming embedding build');
+        const config = await getIntelligentSearchConfig();
+        if (config.enabled && config.aiApiKey) {
+          await IntelligentSearch.resumeBuild(config, broadcastBuildProgress);
+        }
+      }
+    } catch (e) {
+      console.warn('[BookmarkSearch] Alarm resume build failed:', e.message);
+    }
+  }
 });
 
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
   syncAllGroups().catch(e => console.warn('[BookmarkSearch] Startup sync failed:', e.message));
+  try {
+    const persistedState = await IntelligentSearch.loadBuildState();
+    if (persistedState && persistedState.status === 'running') {
+      console.log('[BookmarkSearch] Startup: found interrupted build, scheduling alarm to resume');
+      chrome.alarms.create('embeddingBuildResume', { delayInMinutes: 0.1 });
+    }
+  } catch (e) {
+    console.warn('[BookmarkSearch] Startup build check failed:', e.message);
+  }
 });
 
 // 注入并打开浮层的核心函数

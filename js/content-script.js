@@ -2294,6 +2294,7 @@
               allAiData = response.data || {};
               const aiCount = shadowRoot.getElementById('aiCount');
               if (aiCount) aiCount.textContent = (allAiData.bookmarks || []).length;
+              loadContentScriptRecommendations();
               break;
           }
         }
@@ -2701,22 +2702,22 @@
     const theResultsList = shadowRoot.getElementById('resultsList');
 
     if (!query || !query.trim()) {
-      if (theResultsList) theResultsList.innerHTML = '';
       currentResults = [];
-      if (searchStats) searchStats.textContent = '输入关键词开始 AI 搜索';
+      if (searchStats) searchStats.textContent = '输入需求描述或关键词，AI 语义搜索';
       selectedIndex = -1;
+      loadContentScriptRecommendations();
       return;
     }
 
     clearTimeout(aiSearchDebounceTimer);
-    if (searchStats) searchStats.textContent = '搜索中...';
+    if (searchStats) searchStats.textContent = '语义搜索中...';
 
     aiSearchDebounceTimer = setTimeout(() => {
       safeSendMessage({
         type: 'INTELLIGENT_SEARCH',
         query: query.trim(),
         limit: 50,
-        rerank: false
+        rerank: true
       }, (response) => {
         if (!response) {
           if (searchStats) searchStats.textContent = 'AI 搜索无响应';
@@ -2740,7 +2741,8 @@
           currentResults = response.results;
           selectedIndex = response.results.length > 0 ? 0 : -1;
           displayAiResults(response.results, query);
-          if (searchStats) searchStats.textContent = `找到 ${response.results.length} 个结果 (AI)`;
+          const semanticCount = response.results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid').length;
+          if (searchStats) searchStats.textContent = `找到 ${response.results.length} 个结果 (语义 ${semanticCount})`;
         }
       });
     }, 300);
@@ -2756,11 +2758,14 @@
       return;
     }
 
+    const isDark = document.body.classList.contains('dark-theme') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+
     items.forEach((item, index) => {
       const div = document.createElement('div');
       div.className = 'result-item' + (index === 0 ? ' active' : '');
       div.dataset.url = item.url || '';
       div.dataset.id = item.id || '';
+      div.dataset.source = item._source || 'bookmark';
 
       const favicon = document.createElement('img');
       favicon.className = 'result-favicon';
@@ -2782,24 +2787,60 @@
 
       content.appendChild(title);
       content.appendChild(url);
+
+      if (item._summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.style.cssText = 'font-size:11px;color:#5f6368;line-height:1.4;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
+        if (isDark) summaryDiv.style.color = '#9aa0a6';
+        summaryDiv.textContent = item._summary;
+        content.appendChild(summaryDiv);
+      }
+
       div.appendChild(favicon);
       div.appendChild(content);
 
-      if (item._matchType) {
-        const badge = document.createElement('span');
-        badge.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;font-weight:500;white-space:nowrap;margin-left:auto;';
-        const badgeStyles = {
-          keyword: 'background:#e8f0fe;color:#1967d2;',
-          semantic: 'background:#e6f4ea;color:#137333;',
-          hybrid: 'background:#fef7e0;color:#b06000;'
+      const metaWrap = document.createElement('div');
+      metaWrap.style.cssText = 'display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0;';
+
+      if (item._source) {
+        const sourceBadge = document.createElement('span');
+        sourceBadge.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;font-weight:500;white-space:nowrap;';
+        const sourceStyles = {
+          bookmark: isDark ? 'background:#1a3a5c;color:#8ab4f8;' : 'background:#e8f0fe;color:#1967d2;',
+          history: isDark ? 'background:#3a1a1a;color:#f28b82;' : 'background:#fce8e6;color:#c5221f;',
+          tab: isDark ? 'background:#1a3a2a;color:#81c995;' : 'background:#e6f4ea;color:#137333;'
         };
-        badge.style.cssText += badgeStyles[item._matchType] || '';
-        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
-        badge.textContent = labels[item._matchType] || item._matchType;
-        div.appendChild(badge);
+        sourceBadge.style.cssText += sourceStyles[item._source] || '';
+        const sourceLabels = { bookmark: '书签', history: '历史', tab: '标签页' };
+        sourceBadge.textContent = sourceLabels[item._source] || item._source;
+        metaWrap.appendChild(sourceBadge);
       }
 
+      if (item._matchType) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;font-weight:500;white-space:nowrap;';
+        const badgeStyles = {
+          keyword: isDark ? 'background:#1a3a5c;color:#8ab4f8;' : 'background:#e8f0fe;color:#1967d2;',
+          semantic: isDark ? 'background:#1a3a2a;color:#81c995;' : 'background:#e6f4ea;color:#137333;',
+          hybrid: isDark ? 'background:#3a3019;color:#fdd663;' : 'background:#fef7e0;color:#b06000;'
+        };
+        badge.style.cssText += badgeStyles[item._matchType] || '';
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '混合' };
+        badge.textContent = labels[item._matchType] || item._matchType;
+        metaWrap.appendChild(badge);
+      }
+
+      if (metaWrap.children.length > 0) div.appendChild(metaWrap);
+
       div.addEventListener('click', () => {
+        if (item._source === 'tab' && item.id) {
+          const tabId = parseInt(String(item.id).replace('tab_', ''));
+          if (!isNaN(tabId)) {
+            safeSendMessage({ type: 'OPEN_URL', url: item.url });
+            hideOverlay();
+            return;
+          }
+        }
         if (item.url) {
           safeSendMessage({ type: 'OPEN_URL', url: item.url });
           hideOverlay();
@@ -2807,6 +2848,72 @@
       });
 
       theResultsList.appendChild(div);
+    });
+  }
+
+  function loadContentScriptRecommendations() {
+    const theResultsList = shadowRoot.getElementById('resultsList');
+    if (!theResultsList) return;
+    const currentUrl = window.location.href;
+    const currentTitle = document.title;
+    if (!currentUrl || currentUrl.startsWith('chrome://')) return;
+
+    theResultsList.innerHTML = '<div style="text-align:center;padding:16px;font-size:12px;color:#5f6368;">正在加载推荐...</div>';
+
+    safeSendMessage({
+      type: 'GET_AI_RECOMMENDATIONS',
+      currentUrl, currentTitle, topK: 8
+    }, (response) => {
+      if (!response || !response.ok || !response.results || response.results.length === 0) {
+        theResultsList.innerHTML = '';
+        return;
+      }
+      const searchInput = shadowRoot.getElementById('searchInput');
+      if (searchInput && searchInput.value.trim()) return;
+
+      theResultsList.innerHTML = '';
+      currentResults = response.results;
+      const container = document.createElement('div');
+      container.style.cssText = 'padding:8px 0;';
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 12px 8px;font-size:12px;color:#5f6368;font-weight:500;';
+      header.innerHTML = '<span>✨</span><span>与当前页面相关</span><span style="font-size:9px;padding:1px 5px;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;">AI 推荐</span>';
+      container.appendChild(header);
+
+      response.results.forEach(item => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;padding:6px 12px;cursor:pointer;gap:8px;border-radius:4px;margin:0 4px;';
+        div.onmouseenter = () => { div.style.background = 'rgba(0,0,0,0.05)'; };
+        div.onmouseleave = () => { div.style.background = ''; };
+
+        const icon = document.createElement('img');
+        icon.width = 16; icon.height = 16; icon.style.flexShrink = '0';
+        try { icon.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`; } catch { /* empty */ }
+
+        const content = document.createElement('div');
+        content.style.cssText = 'flex:1;min-width:0;overflow:hidden;';
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        title.textContent = item.title || '无标题';
+        const url = document.createElement('div');
+        url.style.cssText = 'font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5f6368;';
+        url.textContent = item.url || '';
+        content.appendChild(title);
+        content.appendChild(url);
+
+        div.appendChild(icon);
+        div.appendChild(content);
+        if (item._relevance > 0) {
+          const score = document.createElement('span');
+          score.style.cssText = 'font-size:10px;color:#5f6368;white-space:nowrap;flex-shrink:0;';
+          score.textContent = item._relevance + '%';
+          div.appendChild(score);
+        }
+        div.addEventListener('click', () => { if (item.url) { safeSendMessage({ type: 'OPEN_URL', url: item.url }); hideOverlay(); } });
+        container.appendChild(div);
+      });
+      theResultsList.appendChild(container);
+      selectedIndex = -1;
     });
   }
 

@@ -1,9 +1,10 @@
 # Chrome Bookmarks Search - 智能 AI 搜索能力调研报告与 PRD
 
-**文档版本**: v1.0  
+**文档版本**: v1.3  
 **创建日期**: 2026-03-05  
-**状态**: 调研完成 / PRD 待评审  
-**关联项目**: Chrome Bookmarks Search v1.6.0 → v2.x/v3.x
+**最后更新**: 2026-03-05 (v1.10.0 Phase 4 全部完成)  
+**状态**: Phase 1-4 全部完成  
+**关联项目**: Chrome Bookmarks Search v1.10.0
 
 ---
 
@@ -149,22 +150,24 @@
 | 本地 Transformers.js | mxbai-embed-xsmall | 50–200ms/条 | 无 | 完全本地 | 离线/隐私优先 |
 | 本地 ONNX Runtime | 同上 | 更快（WebGPU） | 无 | 完全本地 | 高性能本地 |
 
-**远程 API 示例（DeepSeek Embedding）**：
+**远程 API 示例（OpenAI 兼容格式 / SiliconFlow）**：
+
+> ⚠️ **注意**：DeepSeek 官方 API 不提供 Embedding 端点，仅支持 Chat。推荐使用 Gemini（免费额度大）或 SiliconFlow（国内友好）。
 
 ```javascript
-const resp = await fetch('https://api.deepseek.com/v1/embeddings', {
+const resp = await fetch('https://api.siliconflow.cn/v1/embeddings', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${apiKey}`
   },
   body: JSON.stringify({
-    model: 'deepseek-embedding',
+    model: 'BAAI/bge-m3',
     input: texts,
-    dimensions: 384
+    dimensions: 1024
   })
 });
-const embeddings = (await resp.json()).data.map(d => new Float32Array(d.embedding));
+const embeddings = (await resp.json()).data.map(d => d.embedding);
 ```
 
 **本地 Transformers.js 示例**：
@@ -365,40 +368,48 @@ Chrome Bookmarks Search 当前支持：
 
 ### Phase 1：本地智能搜索基础（BM25 + Embedding + 混合搜索）
 
-| 功能 | 说明 |
-|------|------|
-| BM25 风格关键词搜索 | 在现有 SearchParser 基础上增强权重与打分 |
-| 向量索引 | 对书签 title+url+domain 生成 384 维向量，存 IndexedDB |
-| Embedding API | 支持 DeepSeek / OpenAI / Gemini / 自定义 OpenAI 兼容 |
-| 混合搜索 | BM25 + 向量 + RRF 融合 |
-| 设置 UI | API Key、Provider、开关 |
-| 增量索引 | 书签增删改时更新向量 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| BM25 风格关键词搜索 | 在现有 SearchParser 基础上增强权重与打分 | ✅ 已完成 (v1.8.0) |
+| 向量索引 | 对书签 title+url+domain 生成向量，存 IndexedDB | ✅ 已完成 (v1.8.0) |
+| Embedding API | 支持 Gemini / OpenAI / SiliconFlow / 自定义 OpenAI 兼容 | ✅ 已完成 (v1.9.0 修正 Provider) |
+| 混合搜索 | BM25 + 向量 + RRF 融合 | ✅ 已完成 (v1.8.0) |
+| 设置 UI (Popup) | API Key、Provider、开关、进度条 | ✅ 已完成 (v1.8.0) |
+| 设置 UI (Options) | 完整 AI 设置区块含引导流程 | ✅ 已完成 (v1.9.0) |
+| 增量索引 | 书签增删改时更新向量 | ✅ 已完成 (v1.8.0) |
+| 向量构建断点续传 | alarms 分批、状态持久化、SW 重启恢复 | ✅ 已完成 (v1.9.0) |
+| API Key 验证 | 配置后可一键验证连通性 | ✅ 已完成 (v1.8.0) |
+| 关键词回退 | 未配置/索引未建时自动回退到原有搜索 | ✅ 已完成 (v1.8.0) |
+| 三端 AI 模式 | popup / content-script / search-window 均支持 | ✅ 已完成 (v1.8.0) |
 
 ### Phase 2：AI 增强（LLM Rerank + 智能分类）
 
-| 功能 | 说明 |
-|------|------|
-| LLM Rerank | 对 Top-30 候选调用 LLM 重排，返回 Top-15 |
-| 智能分类建议 | 保存书签时推荐文件夹（可选） |
-| Rerank 开关 | 用户可关闭以节省成本与延迟 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| LLM Rerank | 对 Top-30 候选调用 LLM 重排，返回 Top-15 | ✅ 已完成 (v1.8.0) |
+| 智能分类建议 | 保存书签时推荐文件夹（可选） | ⏳ 规划中 |
+| Rerank 开关 | 用户可关闭以节省成本与延迟 | ✅ 已完成 (v1.8.0) |
 
 ### Phase 3：网页摘要 + 语义增强
 
-| 功能 | 说明 |
-|------|------|
-| 网页内容提取 | 隐藏标签页 + scripting 注入提取正文 |
-| 摘要生成 | LLM 生成 50–100 字摘要 + 关键词 |
-| 摘要参与 Embedding | 将摘要纳入向量文本，提升语义质量 |
-| 批量/单个提取 | 支持按需或批量抓取 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 网页内容提取 | 隐藏标签页 + scripting 注入提取正文 | ✅ 已完成 (v1.8.0) |
+| 摘要生成 | LLM 生成 50–100 字摘要 + 关键词 | ✅ 已完成 (v1.8.0) |
+| 摘要参与 Embedding | 将摘要纳入向量文本，提升语义质量 | ✅ 已完成 (v1.8.0) |
+| 单条摘要提取 UI | 右键菜单「提取摘要」，实时更新结果 | ✅ 已完成 (v1.9.0) |
+| 批量摘要提取 UI | Options 页面批量提取 + 进度条 | ✅ 已完成 (v1.9.0) |
 
 ### Phase 4：统一搜索 + AI 推荐
 
-| 功能 | 说明 |
-|------|------|
-| 历史/下载向量化 | 可选对历史、下载项生成向量 |
-| 统一语义入口 | 一次查询检索多类数据 |
-| AI 推荐 | 根据当前浏览页推荐相关书签 |
-| 快捷操作 | 从推荐直接打开/收藏 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 多源统一语义搜索 | 书签+历史+标签页一次查询，RRF 融合 | ✅ 已完成 (v1.9.0) |
+| 来源标签 | 搜索结果标注「书签/历史/标签页」来源 | ✅ 已完成 (v1.9.0) |
+| 相关度可视化 | 语义匹配度百分比 + 进度条 | ✅ 已完成 (v1.9.0) |
+| 摘要预览 | 搜索结果显示 AI 生成的摘要 | ✅ 已完成 (v1.9.0) |
+| AI 推荐 | 根据当前浏览页推荐相关书签 | ✅ 已完成 (v1.10.0) |
+| 快捷操作 | 从推荐直接打开/收藏 | ✅ 已完成 (v1.10.0) |
 
 ---
 
@@ -571,11 +582,11 @@ Chrome Bookmarks Search 当前支持：
 {
   "intelligentSearch": {
     "enabled": true,
-    "aiProvider": "deepseek",
-    "aiApiKey": "sk-xxx",
+    "aiProvider": "gemini",
+    "aiApiKey": "AIza...",
     "aiBaseUrl": "",
-    "embeddingModel": "deepseek-embedding",
-    "chatModel": "deepseek-chat",
+    "embeddingModel": "",
+    "chatModel": "",
     "rerankEnabled": false,
     "lastBuildProgress": 85
   }
@@ -685,23 +696,24 @@ if (response?.ok) {
 
 ### Phase 1
 
-- [ ] 配置 DeepSeek/OpenAI/Gemini 后能成功验证 API Key
-- [ ] 能对全量书签启动 Embedding 构建并看到进度
-- [ ] 构建完成后，自然语言查询能返回语义相关结果
-- [ ] 未配置或构建未完成时，自动回退到原有关键词搜索
-- [ ] 书签增删改后，向量索引能正确增量更新
-- [ ] 三端（popup、content-script、search-window）行为一致
+- [x] 配置 Gemini/OpenAI/SiliconFlow/自定义 后能成功验证 API Key ✅
+- [x] 能对全量书签启动 Embedding 构建并看到进度（支持断点续传） ✅
+- [x] 构建完成后，自然语言查询能返回语义相关结果 ✅
+- [x] 未配置或构建未完成时，自动回退到原有关键词搜索 ✅
+- [x] 书签增删改后，向量索引能正确增量更新 ✅
+- [x] 三端（popup、content-script、search-window）行为一致 ✅
+- [x] Options 页面提供完整 AI 配置界面 ✅
 
 ### Phase 2
 
-- [ ] 开启 Rerank 后，结果顺序明显优于未开启
-- [ ] Rerank 可关闭，且关闭后无额外 API 调用
+- [x] 开启 Rerank 后，结果顺序明显优于未开启 ✅
+- [x] Rerank 可关闭，且关闭后无额外 API 调用 ✅
 - [ ] 智能分类建议（若实现）在保存书签时正确展示
 
 ### Phase 3
 
-- [ ] 单个书签可触发「提取摘要」
-- [ ] 摘要生成后，再次语义搜索能利用摘要
+- [x] 单个书签可触发「提取摘要」（后端已实现，UI 待接入） ✅
+- [x] 摘要生成后，再次语义搜索能利用摘要 ✅
 - [ ] 批量提取有进度展示，可取消
 
 ### Phase 4

@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = {
   defaultMode: 'bookmarks', // 扩展打开时的默认搜索模式
   intelligentSearch: {
     enabled: false,
-    aiProvider: 'deepseek', // deepseek, openai, gemini, custom
+    aiProvider: 'gemini', // gemini, openai, siliconflow, custom
     aiApiKey: '',
     aiBaseUrl: '',
     embeddingModel: '',

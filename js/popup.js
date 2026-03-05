@@ -1140,20 +1140,21 @@ document.addEventListener('DOMContentLoaded', async function() {
   function searchAi(query) {
     if (!query || !query.trim()) {
       displayResults([], '');
-      searchStatsElement.textContent = '输入关键词开始 AI 搜索';
+      searchStatsElement.textContent = '输入需求描述或关键词，AI 语义搜索书签、历史和标签页';
       selectedIndex = -1;
+      loadAiRecommendations();
       return;
     }
 
     clearTimeout(aiSearchDebounceTimer);
-    searchStatsElement.textContent = '搜索中...';
+    searchStatsElement.textContent = '语义搜索中...';
 
     aiSearchDebounceTimer = setTimeout(() => {
       chrome.runtime.sendMessage({
         type: 'INTELLIGENT_SEARCH',
         query: query.trim(),
         limit: 50,
-        rerank: false
+        rerank: true
       }, (response) => {
         if (chrome.runtime.lastError) {
           console.warn('[BookmarkSearch] AI search error:', chrome.runtime.lastError.message);
@@ -1169,14 +1170,15 @@ document.addEventListener('DOMContentLoaded', async function() {
           let filteredResults = window.SearchParser.filter(items, query);
           filteredResults = window.SmartSort.sort(filteredResults, { searchText: query, mode: currentSort });
           displayResults(filteredResults, query);
-          searchStatsElement.textContent = `找到 ${filteredResults.length} 个结果 (关键词回退)`;
+          searchStatsElement.textContent = `找到 ${filteredResults.length} 个结果 (关键词回退: ${response.error || ''})`;
           selectedIndex = -1;
           return;
         }
         if (response.ok && response.results) {
           const results = response.results;
           displayAiResults(results, query);
-          searchStatsElement.textContent = `找到 ${results.length} 个结果 (AI)`;
+          const semanticCount = results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid').length;
+          searchStatsElement.textContent = `找到 ${results.length} 个结果 (语义 ${semanticCount})`;
           selectedIndex = results.length > 0 ? 0 : -1;
         }
       });
@@ -1198,6 +1200,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       div.className = 'result-item' + (index === 0 ? ' active' : '');
       div.dataset.url = item.url || '';
       div.dataset.id = item.id || '';
+      div.dataset.source = item._source || 'bookmark';
 
       const iconWrap = document.createElement('div');
       iconWrap.className = 'result-icon';
@@ -1221,18 +1224,43 @@ document.addEventListener('DOMContentLoaded', async function() {
       url.className = 'result-url';
       url.textContent = item.url || '';
 
-      content.appendChild(title);
-      content.appendChild(url);
+      if (item._summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'ai-summary-preview';
+        summaryDiv.textContent = item._summary;
+        content.appendChild(title);
+        content.appendChild(url);
+        content.appendChild(summaryDiv);
+      } else {
+        content.appendChild(title);
+        content.appendChild(url);
+      }
 
       const meta = document.createElement('div');
       meta.className = 'result-meta';
 
+      if (item._source) {
+        const sourceBadge = document.createElement('span');
+        const sourceLabels = { bookmark: '书签', history: '历史', tab: '标签页' };
+        sourceBadge.className = 'ai-source-badge ai-source-' + item._source;
+        sourceBadge.textContent = sourceLabels[item._source] || item._source;
+        meta.appendChild(sourceBadge);
+      }
+
       if (item._matchType) {
         const badge = document.createElement('span');
         badge.className = 'ai-match-badge ai-match-' + item._matchType;
-        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '混合' };
         badge.textContent = labels[item._matchType] || item._matchType;
         meta.appendChild(badge);
+      }
+
+      if (item._relevance > 0) {
+        const relBar = document.createElement('span');
+        relBar.className = 'ai-relevance-bar';
+        const level = item._relevance >= 60 ? 'high' : item._relevance >= 30 ? 'medium' : 'low';
+        relBar.innerHTML = `<span class="ai-relevance-track"><span class="ai-relevance-fill ${level}" style="width:${item._relevance}%"></span></span><span>${item._relevance}%</span>`;
+        meta.appendChild(relBar);
       }
 
       div.appendChild(iconWrap);
@@ -1240,6 +1268,15 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (meta.children.length > 0) div.appendChild(meta);
 
       div.addEventListener('click', () => {
+        if (item._source === 'tab' && item.id) {
+          const tabId = parseInt(String(item.id).replace('tab_', ''));
+          if (!isNaN(tabId)) {
+            chrome.tabs.update(tabId, { active: true });
+            if (item.windowId) chrome.windows.update(item.windowId, { focused: true });
+            window.close();
+            return;
+          }
+        }
         if (item.url) {
           chrome.tabs.create({ url: item.url });
           window.close();
@@ -1388,10 +1425,111 @@ document.addEventListener('DOMContentLoaded', async function() {
       allAiData = { bookmarks };
       totalCountElement.textContent = bookmarks.length;
       displayResults([], '');
-      searchStatsElement.textContent = '输入关键词开始 AI 搜索';
+      searchStatsElement.textContent = '输入需求描述或关键词，AI 语义搜索书签、历史和标签页';
+      loadAiRecommendations();
     } catch (e) {
       console.error('[BookmarkSearch] loadAiData error:', e);
     }
+  }
+
+  function loadAiRecommendations() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs?.[0];
+      if (!tab || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+
+      const resultsList = document.getElementById('resultsList');
+      if (!resultsList) return;
+      resultsList.innerHTML = '<div class="ai-rec-loading">正在加载推荐...</div>';
+
+      chrome.runtime.sendMessage({
+        type: 'GET_AI_RECOMMENDATIONS',
+        currentUrl: tab.url,
+        currentTitle: tab.title,
+        topK: 8
+      }, (response) => {
+        if (chrome.runtime.lastError || !response) {
+          resultsList.innerHTML = '';
+          return;
+        }
+        if (searchInput.value.trim()) return;
+        if (!response.ok || !response.results || response.results.length === 0) {
+          resultsList.innerHTML = '';
+          if (response.error && response.error.includes('向量索引为空')) {
+            resultsList.innerHTML = '<div class="ai-no-embedding-hint">尚未构建向量索引，请在设置中点击「构建索引」后即可使用 AI 推荐和语义搜索。</div>';
+          }
+          return;
+        }
+        displayAiRecommendations(response.results);
+      });
+    });
+  }
+
+  function displayAiRecommendations(items) {
+    const resultsList = document.getElementById('resultsList');
+    if (!resultsList) return;
+    resultsList.innerHTML = '';
+    currentResults = items;
+
+    const container = document.createElement('div');
+    container.className = 'ai-recommendations';
+
+    const header = document.createElement('div');
+    header.className = 'ai-rec-header';
+    header.innerHTML = '<span class="ai-rec-header-icon">✨</span><span>与当前页面相关</span><span class="ai-rec-badge">AI 推荐</span>';
+    container.appendChild(header);
+
+    items.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'ai-rec-item';
+      div.dataset.url = item.url || '';
+      div.dataset.id = item.id || '';
+
+      const icon = document.createElement('img');
+      icon.width = 16; icon.height = 16;
+      icon.style.flexShrink = '0';
+      try {
+        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.url)}&size=16`;
+        icon.onerror = () => { icon.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`; };
+      } catch { icon.src = 'icons/icon16.png'; }
+
+      const content = document.createElement('div');
+      content.className = 'ai-rec-content';
+
+      const title = document.createElement('div');
+      title.className = 'ai-rec-title';
+      title.textContent = item.title || '无标题';
+
+      const url = document.createElement('div');
+      url.className = 'ai-rec-url';
+      url.textContent = item.url || '';
+
+      content.appendChild(title);
+      content.appendChild(url);
+
+      if (item._relevance > 0) {
+        const score = document.createElement('span');
+        score.className = 'ai-rec-score';
+        score.textContent = item._relevance + '%';
+        div.appendChild(icon);
+        div.appendChild(content);
+        div.appendChild(score);
+      } else {
+        div.appendChild(icon);
+        div.appendChild(content);
+      }
+
+      div.addEventListener('click', () => {
+        if (item.url) {
+          chrome.tabs.create({ url: item.url });
+          window.close();
+        }
+      });
+
+      container.appendChild(div);
+    });
+
+    resultsList.appendChild(container);
+    selectedIndex = -1;
   }
 
   // 加载友情链接的 favicon
@@ -1508,7 +1646,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       applyAiModeVisibility(!!ai.enabled);
     }
     if (aiProviderSelect) {
-      aiProviderSelect.value = ai.aiProvider || 'deepseek';
+      aiProviderSelect.value = ai.aiProvider || 'gemini';
       aiBaseUrlOption.style.display = ai.aiProvider === 'custom' ? '' : 'none';
     }
     if (aiApiKeyInput) aiApiKeyInput.value = ai.aiApiKey || '';
@@ -1555,12 +1693,14 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // API Key 变更
     if (aiApiKeyInput) {
-      aiApiKeyInput.addEventListener('change', async () => {
+      const saveApiKey = async () => {
         const s = await window.settings.get();
         s.intelligentSearch = s.intelligentSearch || {};
         s.intelligentSearch.aiApiKey = aiApiKeyInput.value;
         await window.settings.save(s);
-      });
+      };
+      aiApiKeyInput.addEventListener('change', saveApiKey);
+      aiApiKeyInput.addEventListener('input', saveApiKey);
     }
 
     // Base URL 变更
@@ -1589,10 +1729,19 @@ document.addEventListener('DOMContentLoaded', async function() {
       verifyBtn.addEventListener('click', async () => {
         verifyBtn.textContent = '验证中...';
         verifyBtn.disabled = true;
+
+        const currentConfig = {
+          aiProvider: aiProviderSelect?.value || 'gemini',
+          aiApiKey: aiApiKeyInput?.value || '',
+          aiBaseUrl: aiBaseUrlInput?.value || ''
+        };
         const s = await window.settings.get();
+        s.intelligentSearch = { ...(s.intelligentSearch || {}), ...currentConfig };
+        await window.settings.save(s);
+
         chrome.runtime.sendMessage({
           type: 'VERIFY_API_KEY',
-          config: s.intelligentSearch || {}
+          config: s.intelligentSearch
         }, (response) => {
           verifyBtn.disabled = false;
           if (response && response.ok) {
@@ -1608,25 +1757,55 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 构建索引
     const buildBtn = document.getElementById('buildIndexBtn');
+    const resumeBtn = document.getElementById('resumeIndexBtn');
     const pauseBtn = document.getElementById('pauseIndexBtn');
+    const clearBtn = document.getElementById('clearIndexBtn');
+
+    function showBuildingUI() {
+      if (buildBtn) buildBtn.style.display = 'none';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+      if (pauseBtn) pauseBtn.style.display = '';
+      if (clearBtn) clearBtn.style.display = 'none';
+      const progressBar = document.getElementById('aiProgressBar');
+      if (progressBar) progressBar.style.display = '';
+    }
+
+    function showIdleUI() {
+      if (buildBtn) buildBtn.style.display = '';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      refreshAiIndexStatus();
+    }
+
     if (buildBtn) {
       buildBtn.addEventListener('click', () => {
-        buildBtn.style.display = 'none';
-        pauseBtn.style.display = '';
-        const progressBar = document.getElementById('aiProgressBar');
-        if (progressBar) progressBar.style.display = '';
-        chrome.runtime.sendMessage({ type: 'BUILD_EMBEDDING_INDEX' }, (response) => {
-          buildBtn.style.display = '';
-          pauseBtn.style.display = 'none';
-          refreshAiIndexStatus();
+        showBuildingUI();
+        chrome.runtime.sendMessage({ type: 'BUILD_EMBEDDING_INDEX' }, () => {
+          showIdleUI();
+        });
+      });
+    }
+    if (resumeBtn) {
+      resumeBtn.addEventListener('click', () => {
+        showBuildingUI();
+        chrome.runtime.sendMessage({ type: 'RESUME_EMBEDDING_BUILD' }, () => {
+          showIdleUI();
         });
       });
     }
     if (pauseBtn) {
       pauseBtn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_BUILD' });
-        pauseBtn.style.display = 'none';
-        buildBtn.style.display = '';
+        showIdleUI();
+      });
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (confirm('确定要清除所有已构建的向量索引吗？')) {
+          chrome.runtime.sendMessage({ type: 'CLEAR_EMBEDDING_INDEX' }, () => {
+            showIdleUI();
+          });
+        }
       });
     }
 
@@ -1699,15 +1878,47 @@ document.addEventListener('DOMContentLoaded', async function() {
   function refreshAiIndexStatus() {
     chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATUS' }, (response) => {
       const statusEl = document.getElementById('aiIndexStatus');
+      const buildBtn = document.getElementById('buildIndexBtn');
+      const resumeBtn = document.getElementById('resumeIndexBtn');
+      const clearBtn = document.getElementById('clearIndexBtn');
+      const progressBar = document.getElementById('aiProgressBar');
       if (!statusEl) return;
       if (response && response.ok) {
-        const { vectorCount, buildStatus } = response;
+        const { vectorCount, buildStatus, persistedState } = response;
         if (buildStatus.running) {
           statusEl.textContent = `构建中 ${buildStatus.progress}/${buildStatus.total}`;
+          if (buildBtn) buildBtn.style.display = 'none';
+          if (resumeBtn) resumeBtn.style.display = 'none';
+          if (clearBtn) clearBtn.style.display = 'none';
+        } else if (persistedState && (persistedState.status === 'paused' || persistedState.status === 'error' || persistedState.status === 'running')) {
+          const done = persistedState.processedIds?.length || 0;
+          const total = persistedState.total || 0;
+          if (persistedState.status === 'error') {
+            statusEl.textContent = `构建出错 (${done}/${total}): ${persistedState.error || '未知错误'}`;
+          } else {
+            statusEl.textContent = `已暂停 ${done}/${total}`;
+          }
+          if (buildBtn) buildBtn.style.display = 'none';
+          if (resumeBtn) resumeBtn.style.display = '';
+          if (clearBtn) clearBtn.style.display = '';
+          if (progressBar) {
+            progressBar.style.display = '';
+            const fill = document.getElementById('aiProgressFill');
+            if (fill && total > 0) fill.style.width = (done / total * 100) + '%';
+          }
         } else if (vectorCount > 0) {
           statusEl.textContent = `已索引 ${vectorCount} 项`;
+          if (buildBtn) buildBtn.style.display = '';
+          if (buildBtn) buildBtn.textContent = '重建索引';
+          if (resumeBtn) resumeBtn.style.display = 'none';
+          if (clearBtn) clearBtn.style.display = '';
+          if (progressBar) progressBar.style.display = 'none';
         } else {
           statusEl.textContent = '未构建';
+          if (buildBtn) { buildBtn.style.display = ''; buildBtn.textContent = '构建索引'; }
+          if (resumeBtn) resumeBtn.style.display = 'none';
+          if (clearBtn) clearBtn.style.display = 'none';
+          if (progressBar) progressBar.style.display = 'none';
         }
       }
     });
@@ -1966,16 +2177,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     const contextMenu = document.querySelector('.context-menu');
     const deleteText = contextMenu.querySelector('.delete-text');
     const editAction = contextMenu.querySelector('.edit-action');
+    const extractSummaryAction = contextMenu.querySelector('.extract-summary-action');
     let activeItem = null;
 
-    // 根据当前模式更新菜单项显示
     function updateMenuItems() {
       const textMap = {
         bookmarks: '删除书签',
         tabs: '关闭标签页',
         groups: '删除快照',
         history: '删除此记录',
-        downloads: '删除记录'
+        downloads: '删除记录',
+        ai: '删除'
       };
       if (deleteText) {
         deleteText.textContent = textMap[currentMode] || '删除';
@@ -1984,15 +2196,18 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (editAction) {
         editAction.style.display = currentMode === 'bookmarks' ? 'flex' : 'none';
       }
+
+      if (extractSummaryAction) {
+        const isBookmarkSource = activeItem?.dataset?.source === 'bookmark' || currentMode === 'bookmarks';
+        extractSummaryAction.style.display = (currentMode === 'ai' && isBookmarkSource) ? 'flex' : 'none';
+      }
       
-      // 分组模式下，菜单简化为打开/复制
       const deleteAction = contextMenu.querySelector('.delete-action');
       if (deleteAction) {
         deleteAction.style.display = currentMode === 'groups' ? 'none' : 'flex';
       }
     }
 
-    // 根据当前模式更新删除菜单文案（保持向后兼容）
     function updateDeleteMenuText() {
       updateMenuItems();
     }
@@ -2110,22 +2325,56 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     }
 
-    // 处理右键菜单项点击
+    function handleExtractSummary() {
+      if (!activeItem) return;
+      const bookmarkId = activeItem.dataset.id;
+      if (!bookmarkId) return;
+
+      const titleEl = activeItem.querySelector('.result-title');
+      const originalText = titleEl?.textContent || '';
+      if (titleEl) titleEl.textContent = '正在提取摘要...';
+
+      chrome.runtime.sendMessage({
+        type: 'EXTRACT_AND_SUMMARIZE',
+        bookmarkId
+      }, (response) => {
+        if (response?.ok) {
+          if (titleEl) titleEl.textContent = originalText;
+          let summaryEl = activeItem.querySelector('.ai-summary-preview');
+          if (!summaryEl) {
+            summaryEl = document.createElement('div');
+            summaryEl.className = 'ai-summary-preview';
+            const content = activeItem.querySelector('.result-item-content');
+            if (content) content.appendChild(summaryEl);
+          }
+          summaryEl.textContent = response.summary || '';
+          searchStatsElement.textContent = '摘要提取成功';
+        } else {
+          if (titleEl) titleEl.textContent = originalText;
+          searchStatsElement.textContent = '摘要提取失败: ' + (response?.error || '未知错误');
+        }
+      });
+    }
+
     function handleMenuAction(action) {
       if (!activeItem) return;
       
       const url = activeItem.dataset.url;
       
-      // 删除操作不需要 url
       if (action === 'delete') {
         handleDelete();
         hideContextMenu();
         return;
       }
       
-      // 编辑操作
       if (action === 'edit') {
         handleEdit();
+        hideContextMenu();
+        return;
+      }
+
+      if (action === 'extract-summary') {
+        handleExtractSummary();
         hideContextMenu();
         return;
       }

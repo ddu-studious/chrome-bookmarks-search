@@ -1234,6 +1234,72 @@ kbd {
   font-size: 14px;
 }
 
+/* ==================== AI 智能搜索 ==================== */
+.ai-opt-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.ai-opt-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.ai-help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-help-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ai-help-step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-help-step strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.ai-help-step p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ai-help-step a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-help-step a:hover {
+  text-decoration: underline;
+}
+
 /* ==================== 加载状态 ==================== */
 .loading {
   display: flex;

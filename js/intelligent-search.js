@@ -10,13 +10,15 @@ const IntelligentSearch = (() => {
 
   // ==================== AI Provider 配置 ====================
   const AI_PROVIDERS = {
-    deepseek: {
-      name: 'DeepSeek',
-      embeddingUrl: 'https://api.deepseek.com/v1/embeddings',
-      chatUrl: 'https://api.deepseek.com/v1/chat/completions',
-      embeddingModel: 'deepseek-embedding',
-      chatModel: 'deepseek-chat',
-      dimensions: 384
+    gemini: {
+      name: 'Gemini (推荐，免费额度大)',
+      embeddingUrl: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent',
+      chatUrl: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+      embeddingModel: 'text-embedding-004',
+      chatModel: 'gemini-2.0-flash',
+      dimensions: 768,
+      supportsEmbedding: true,
+      supportsChat: true
     },
     openai: {
       name: 'OpenAI',
@@ -24,15 +26,39 @@ const IntelligentSearch = (() => {
       chatUrl: 'https://api.openai.com/v1/chat/completions',
       embeddingModel: 'text-embedding-3-small',
       chatModel: 'gpt-4o-mini',
-      dimensions: 384
+      dimensions: 384,
+      supportsEmbedding: true,
+      supportsChat: true
     },
-    gemini: {
-      name: 'Gemini',
-      embeddingUrl: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent',
-      chatUrl: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-      embeddingModel: 'text-embedding-004',
-      chatModel: 'gemini-2.0-flash',
-      dimensions: 768
+    deepseek: {
+      name: 'DeepSeek',
+      embeddingUrl: 'https://api.deepseek.com/v1/embeddings',
+      chatUrl: 'https://api.deepseek.com/v1/chat/completions',
+      embeddingModel: 'deepseek-embedding',
+      chatModel: 'deepseek-chat',
+      dimensions: 1536,
+      supportsEmbedding: true,
+      supportsChat: true
+    },
+    qwen: {
+      name: '通义千问 (Qwen)',
+      embeddingUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings',
+      chatUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+      embeddingModel: 'text-embedding-v3',
+      chatModel: 'qwen-plus',
+      dimensions: 1024,
+      supportsEmbedding: true,
+      supportsChat: true
+    },
+    siliconflow: {
+      name: 'SiliconFlow',
+      embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
+      chatUrl: 'https://api.siliconflow.cn/v1/chat/completions',
+      embeddingModel: 'BAAI/bge-m3',
+      chatModel: 'deepseek-ai/DeepSeek-V3',
+      dimensions: 1024,
+      supportsEmbedding: true,
+      supportsChat: true
     },
     custom: {
       name: '自定义 (OpenAI 兼容)',
@@ -40,7 +66,9 @@ const IntelligentSearch = (() => {
       chatUrl: '',
       embeddingModel: '',
       chatModel: '',
-      dimensions: 384
+      dimensions: 384,
+      supportsEmbedding: true,
+      supportsChat: true
     }
   };
 
@@ -151,18 +179,48 @@ const IntelligentSearch = (() => {
     });
   }
 
+  function normalizeBaseUrl(rawBaseUrl) {
+    let base = rawBaseUrl.replace(/\/+$/, '');
+    if (/^https?:\/\/[^/]+$/.test(base)) {
+      base += '/v1';
+    }
+    return base;
+  }
+
+  function deriveEmbeddingUrl(config, provider) {
+    if (config.aiBaseUrl) {
+      const base = normalizeBaseUrl(config.aiBaseUrl);
+      if (base.endsWith('/embeddings')) return base;
+      return base.replace(/\/chat\/completions$/, '') + '/embeddings';
+    }
+    return provider.embeddingUrl;
+  }
+
+  function deriveChatUrl(config, provider) {
+    if (config.aiBaseUrl) {
+      const base = normalizeBaseUrl(config.aiBaseUrl);
+      if (base.endsWith('/chat/completions')) return base;
+      return base.replace(/\/embeddings$/, '') + '/chat/completions';
+    }
+    return provider.chatUrl;
+  }
+
   // ==================== Embedding API ====================
 
   async function callEmbeddingAPI(texts, config) {
     const provider = AI_PROVIDERS[config.aiProvider] || AI_PROVIDERS.custom;
     const apiKey = config.aiApiKey;
     if (!apiKey) throw new Error('未配置 API Key');
+    if (!provider.supportsEmbedding) {
+      throw new Error(`${provider.name} 不支持 Embedding，请切换到支持 Embedding 的服务商（如 Gemini、DeepSeek、Qwen、SiliconFlow）`);
+    }
+
 
     if (config.aiProvider === 'gemini') {
       return callGeminiEmbedding(texts, config, provider);
     }
 
-    const baseUrl = config.aiBaseUrl || provider.embeddingUrl;
+    const baseUrl = deriveEmbeddingUrl(config, provider);
     const model = config.embeddingModel || provider.embeddingModel;
 
     const resp = await fetch(baseUrl, {
@@ -348,7 +406,7 @@ ${candidateList}`;
       if (config.aiProvider === 'gemini') {
         rerankedIds = await callGeminiChat(prompt, config, provider);
       } else {
-        const chatUrl = config.aiChatUrl || config.aiBaseUrl?.replace('/embeddings', '/chat/completions') || provider.chatUrl;
+        const chatUrl = config.aiChatUrl || deriveChatUrl(config, provider);
         const chatModel = config.chatModel || provider.chatModel;
 
         const resp = await fetch(chatUrl, {
@@ -429,7 +487,7 @@ ${text.slice(0, 3000)}`;
         return parseSummaryResponse(result);
       }
 
-      const chatUrl = config.aiChatUrl || config.aiBaseUrl?.replace('/embeddings', '/chat/completions') || provider.chatUrl;
+      const chatUrl = config.aiChatUrl || deriveChatUrl(config, provider);
       const chatModel = config.chatModel || provider.chatModel;
 
       const resp = await fetch(chatUrl, {
@@ -467,53 +525,123 @@ ${text.slice(0, 3000)}`;
   }
 
   // ==================== Embedding 索引构建 ====================
+  // 设计要点：
+  // - Service Worker 可能在 30s 闲置后休眠，长任务会中断
+  // - 使用 chrome.storage.local 持久化构建状态，支持断点续传
+  // - 通过 chrome.alarms 定时唤醒 SW 继续未完成的构建
+  // - 每批处理少量（10条），处理完立即保存进度
 
-  let buildState = { running: false, paused: false, progress: 0, total: 0 };
+  const BUILD_STATE_KEY = 'embeddingBuildState';
+  const BUILD_ALARM_NAME = 'embeddingBuildAlarm';
+  const BATCH_SIZE = 10;
+
+  let buildState = { running: false, paused: false, progress: 0, total: 0, error: null };
+
+  async function loadBuildState() {
+    try {
+      const data = await chrome.storage.local.get(BUILD_STATE_KEY);
+      return data[BUILD_STATE_KEY] || null;
+    } catch { return null; }
+  }
+
+  async function saveBuildState(state) {
+    try {
+      await chrome.storage.local.set({ [BUILD_STATE_KEY]: state });
+    } catch (e) {
+      console.warn('[IntelligentSearch] Failed to save build state:', e.message);
+    }
+  }
+
+  async function clearBuildState() {
+    try {
+      await chrome.storage.local.remove(BUILD_STATE_KEY);
+    } catch {}
+  }
 
   async function buildEmbeddingIndex(items, config, onProgress) {
     if (buildState.running) {
       throw new Error('正在构建中，请等待或暂停后重试');
     }
 
-    buildState = { running: true, paused: false, progress: 0, total: items.length };
-    const BATCH_SIZE = 20;
+    const bookmarkIds = items.map(item => item.id).filter(Boolean);
+    buildState = { running: true, paused: false, progress: 0, total: items.length, error: null };
 
+    await saveBuildState({
+      status: 'running',
+      bookmarkIds,
+      processedIds: [],
+      total: items.length,
+      startedAt: Date.now()
+    });
+
+    return await processBuildBatch(items, config, onProgress);
+  }
+
+  async function processBuildBatch(items, config, onProgress) {
     try {
-      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const persistedState = await loadBuildState();
+      const processedSet = new Set(persistedState?.processedIds || []);
+      buildState.progress = processedSet.size;
+      buildState.total = items.length;
+
+      const pendingItems = items.filter(item => !processedSet.has(item.id));
+
+      for (let i = 0; i < pendingItems.length; i += BATCH_SIZE) {
         if (buildState.paused) {
           buildState.running = false;
+          await saveBuildState({
+            status: 'paused',
+            bookmarkIds: items.map(it => it.id).filter(Boolean),
+            processedIds: Array.from(processedSet),
+            total: items.length,
+            startedAt: persistedState?.startedAt || Date.now()
+          });
           if (onProgress) onProgress({ type: 'paused', progress: buildState.progress, total: buildState.total });
           return { ok: true, paused: true, progress: buildState.progress };
         }
 
-        const batch = items.slice(i, i + BATCH_SIZE);
+        const batch = pendingItems.slice(i, i + BATCH_SIZE);
         const textsToEmbed = [];
         const itemsToEmbed = [];
 
         for (const item of batch) {
-          const existingVec = await getVector(item.id || `bookmark_${item.id}`);
+          const existingVec = await getVector(item.id);
           if (existingVec) {
-            buildState.progress++;
+            processedSet.add(item.id);
+            buildState.progress = processedSet.size;
             continue;
           }
           const text = buildEmbeddingText(item);
-          textsToEmbed.push(text);
-          itemsToEmbed.push(item);
+          if (text.trim()) {
+            textsToEmbed.push(text);
+            itemsToEmbed.push(item);
+          } else {
+            processedSet.add(item.id);
+            buildState.progress = processedSet.size;
+          }
         }
 
         if (textsToEmbed.length > 0) {
           const embeddings = await callEmbeddingAPI(textsToEmbed, config);
           for (let j = 0; j < itemsToEmbed.length; j++) {
-            const id = itemsToEmbed[j].id || `bookmark_${itemsToEmbed[j].id}`;
             await putVector({
-              id,
+              id: itemsToEmbed[j].id,
               embedding: embeddings[j],
               text: textsToEmbed[j],
               ts: Date.now()
             });
-            buildState.progress++;
+            processedSet.add(itemsToEmbed[j].id);
+            buildState.progress = processedSet.size;
           }
         }
+
+        await saveBuildState({
+          status: 'running',
+          bookmarkIds: items.map(it => it.id).filter(Boolean),
+          processedIds: Array.from(processedSet),
+          total: items.length,
+          startedAt: persistedState?.startedAt || Date.now()
+        });
 
         if (onProgress) {
           onProgress({
@@ -523,19 +651,61 @@ ${text.slice(0, 3000)}`;
           });
         }
 
-        if (i + BATCH_SIZE < items.length) {
-          await new Promise(r => setTimeout(r, 100));
+        if (i + BATCH_SIZE < pendingItems.length) {
+          await new Promise(r => setTimeout(r, 200));
         }
       }
 
       buildState.running = false;
+      await clearBuildState();
       if (onProgress) onProgress({ type: 'complete', progress: buildState.total, total: buildState.total });
       return { ok: true, progress: buildState.total };
     } catch (e) {
       buildState.running = false;
+      buildState.error = e.message;
+
+      const persistedState = await loadBuildState();
+      if (persistedState) {
+        persistedState.status = 'error';
+        persistedState.error = e.message;
+        await saveBuildState(persistedState);
+      }
+
       if (onProgress) onProgress({ type: 'error', error: e.message, progress: buildState.progress, total: buildState.total });
       throw e;
     }
+  }
+
+  async function resumeBuild(config, onProgress) {
+    const persistedState = await loadBuildState();
+    if (!persistedState || persistedState.status === 'complete') {
+      return { ok: true, message: '没有需要恢复的构建任务' };
+    }
+
+    if (buildState.running) {
+      return { ok: false, message: '构建正在运行中' };
+    }
+
+    console.log('[IntelligentSearch] Resuming build:', persistedState.processedIds?.length, '/', persistedState.total, 'done');
+
+    const bookmarkTree = await chrome.bookmarks.getTree();
+    const allBookmarks = [];
+    function traverse(node) {
+      if (node.url) allBookmarks.push(node);
+      if (node.children) node.children.forEach(traverse);
+    }
+    bookmarkTree.forEach(traverse);
+
+    const targetIds = new Set(persistedState.bookmarkIds || []);
+    const items = allBookmarks.filter(b => targetIds.has(b.id));
+
+    if (items.length === 0) {
+      await clearBuildState();
+      return { ok: true, message: '书签数据已变更，已清除旧构建状态' };
+    }
+
+    buildState = { running: true, paused: false, progress: persistedState.processedIds?.length || 0, total: persistedState.total, error: null };
+    return await processBuildBatch(items, config, onProgress);
   }
 
   function pauseEmbeddingBuild() {
@@ -634,17 +804,25 @@ ${text.slice(0, 3000)}`;
         fusedResults = fusedResults.slice(0, limit);
       }
 
+      const allVectors = await getAllVectors();
+      const vectorSummaryMap = new Map(allVectors.map(v => [v.id, v.summary || '']));
+
       return {
         ok: true,
-        results: fusedResults.map(r => ({
-          ...r.item,
-          _matchType: r.keywordScore > 0 && r.semanticScore > 0 ? 'hybrid'
-            : r.keywordScore > 0 ? 'keyword'
-            : 'semantic',
-          _rrfScore: r.rrfScore,
-          _keywordScore: r.keywordScore,
-          _semanticScore: r.semanticScore
-        }))
+        results: fusedResults.map(r => {
+          const matchType = r.keywordScore > 0 && r.semanticScore > 0 ? 'hybrid'
+            : r.keywordScore > 0 ? 'keyword' : 'semantic';
+
+          return {
+            ...r.item,
+            _matchType: matchType,
+            _rrfScore: r.rrfScore,
+            _keywordScore: r.keywordScore,
+            _semanticScore: r.semanticScore,
+            _relevance: Math.round((r.semanticScore || 0) * 100),
+            _summary: vectorSummaryMap.get(r.item.id) || r.item.summary || ''
+          };
+        })
       };
     } catch (e) {
       console.error('[IntelligentSearch] Search error:', e);
@@ -652,15 +830,163 @@ ${text.slice(0, 3000)}`;
     }
   }
 
+  // ==================== 统一多源语义搜索 ====================
+
+  async function unifiedSemanticSearch(query, sources, config, options = {}) {
+    const { limit = 50, rerank = false } = options;
+
+    if (!config.enabled || !config.aiApiKey) {
+      return { ok: false, fallback: true, error: '智能搜索未启用' };
+    }
+
+    const vectorCount = await getVectorCount();
+    if (vectorCount === 0) {
+      return { ok: false, fallback: true, error: '向量索引为空，请先构建索引' };
+    }
+
+    try {
+      const allItems = [];
+      const { bookmarks = [], history = [], tabs = [] } = sources;
+
+      bookmarks.forEach(b => {
+        allItems.push({ ...b, _source: 'bookmark', id: b.id || `bm_${b.url}` });
+      });
+      history.forEach(h => {
+        allItems.push({
+          ...h,
+          _source: 'history',
+          id: h.id || `hist_${h.url}`,
+          summary: ''
+        });
+      });
+      tabs.forEach(t => {
+        allItems.push({
+          ...t,
+          _source: 'tab',
+          id: t.id ? `tab_${t.id}` : `tab_${t.url}`,
+          summary: ''
+        });
+      });
+
+      const seen = new Set();
+      const dedupItems = allItems.filter(item => {
+        const key = item.url || item.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const bm25Index = buildBM25Index(dedupItems);
+      const keywordResults = bm25Search(query, dedupItems, bm25Index)
+        .filter(r => r.score > 0)
+        .slice(0, limit);
+
+      let queryEmbedding = await getCachedQueryEmbedding(query);
+      if (!queryEmbedding) {
+        const embeddings = await callEmbeddingAPI([query], config);
+        queryEmbedding = embeddings[0];
+        await cacheQueryEmbedding(query, queryEmbedding);
+      }
+
+      const semanticResults = await vectorSearch(queryEmbedding, dedupItems, limit);
+
+      let fusedResults = rrfFusion(keywordResults, semanticResults);
+
+      if (rerank && config.rerankEnabled) {
+        fusedResults = await llmRerank(query, fusedResults, config, Math.min(limit, 15));
+      } else {
+        fusedResults = fusedResults.slice(0, limit);
+      }
+
+      const allVectors = await getAllVectors();
+      const vectorSummaryMap = new Map(allVectors.map(v => [v.id, v.summary || '']));
+
+      return {
+        ok: true,
+        results: fusedResults.map(r => {
+          const matchType = r.keywordScore > 0 && r.semanticScore > 0 ? 'hybrid'
+            : r.keywordScore > 0 ? 'keyword' : 'semantic';
+
+          return {
+            ...r.item,
+            _matchType: matchType,
+            _source: r.item._source || 'bookmark',
+            _rrfScore: r.rrfScore,
+            _keywordScore: r.keywordScore,
+            _semanticScore: r.semanticScore,
+            _relevance: Math.round((r.semanticScore || 0) * 100),
+            _summary: vectorSummaryMap.get(r.item.id) || r.item.summary || ''
+          };
+        })
+      };
+    } catch (e) {
+      console.error('[IntelligentSearch] Unified search error:', e);
+      return { ok: false, fallback: true, error: e.message };
+    }
+  }
+
   // ==================== API Key 验证 ====================
 
   async function verifyApiKey(config) {
-    try {
-      const embeddings = await callEmbeddingAPI(['test'], config);
-      return { ok: true, message: '验证成功' };
-    } catch (e) {
-      return { ok: false, message: e.message };
+    const provider = AI_PROVIDERS[config.aiProvider] || AI_PROVIDERS.custom;
+    let embeddingOk = false;
+    let chatOk = false;
+    let embeddingErr = '';
+    let chatErr = '';
+
+    if (provider.supportsEmbedding) {
+      try {
+        await callEmbeddingAPI(['test'], config);
+        embeddingOk = true;
+      } catch (e) {
+        embeddingErr = e.message;
+      }
     }
+
+    if (provider.supportsChat) {
+      try {
+        let resp;
+        if (config.aiProvider === 'gemini') {
+          const model = config.chatModel || provider.chatModel;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.aiApiKey}`;
+          resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'hi' }] }],
+              generationConfig: { temperature: 0, maxOutputTokens: 5 }
+            })
+          });
+        } else {
+          const chatUrl = deriveChatUrl(config, provider);
+          const chatModel = config.chatModel || provider.chatModel;
+          resp = await fetch(chatUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.aiApiKey}` },
+            body: JSON.stringify({ model: chatModel, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 })
+          });
+        }
+        if (resp.ok) {
+          chatOk = true;
+        } else {
+          const err = await resp.text().catch(() => '');
+          chatErr = `Chat API (${resp.status}): ${err.slice(0, 150)}`;
+        }
+      } catch (e) {
+        chatErr = e.message;
+      }
+    }
+
+    if (embeddingOk && chatOk) {
+      return { ok: true, message: '验证成功（Embedding + Chat 均可用）' };
+    }
+    if (embeddingOk) {
+      return { ok: true, message: '验证成功（Embedding 可用，Chat 不可用：' + chatErr + '）' };
+    }
+    if (chatOk) {
+      return { ok: true, message: '验证成功（Chat 可用，Embedding 不可用：' + embeddingErr + '）' };
+    }
+    return { ok: false, message: 'Embedding: ' + embeddingErr + '\nChat: ' + chatErr };
   }
 
   // ==================== 网页内容提取 ====================
@@ -700,7 +1026,6 @@ ${text.slice(0, 3000)}`;
       const summaryData = await generateSummary(content, config);
       if (!summaryData) throw new Error('摘要生成失败');
 
-      const existingVec = await getVector(bookmarkId);
       const newText = buildEmbeddingText({
         ...bookmark,
         summary: summaryData.summary,
@@ -712,6 +1037,8 @@ ${text.slice(0, 3000)}`;
         id: bookmarkId,
         embedding: embeddings[0],
         text: newText,
+        summary: summaryData.summary,
+        tags: summaryData.tags,
         ts: Date.now()
       });
 
@@ -721,18 +1048,176 @@ ${text.slice(0, 3000)}`;
     }
   }
 
+  // ==================== 批量摘要提取 ====================
+
+  const SUMMARY_BATCH_STATE_KEY = 'summaryBatchState';
+  let summaryBatchState = { running: false, paused: false, progress: 0, total: 0, errors: [] };
+
+  function getSummaryBatchStatus() {
+    return { ...summaryBatchState };
+  }
+
+  function pauseSummaryBatch() {
+    summaryBatchState.paused = true;
+  }
+
+  async function batchExtractSummaries(bookmarkIds, config, onProgress) {
+    if (summaryBatchState.running) {
+      throw new Error('批量摘要正在进行中');
+    }
+
+    summaryBatchState = { running: true, paused: false, progress: 0, total: bookmarkIds.length, errors: [] };
+
+    try {
+      for (let i = 0; i < bookmarkIds.length; i++) {
+        if (summaryBatchState.paused) {
+          summaryBatchState.running = false;
+          if (onProgress) onProgress({ type: 'paused', progress: i, total: bookmarkIds.length });
+          return { ok: true, paused: true, progress: i, total: bookmarkIds.length };
+        }
+
+        const existing = await getVector(bookmarkIds[i]);
+        if (existing?.summary) {
+          summaryBatchState.progress = i + 1;
+          if (onProgress) onProgress({ type: 'progress', progress: i + 1, total: bookmarkIds.length, skipped: true });
+          continue;
+        }
+
+        try {
+          const result = await extractAndSummarize(bookmarkIds[i], config);
+          if (!result.ok) {
+            summaryBatchState.errors.push({ id: bookmarkIds[i], error: result.error });
+          }
+        } catch (e) {
+          summaryBatchState.errors.push({ id: bookmarkIds[i], error: e.message });
+        }
+
+        summaryBatchState.progress = i + 1;
+        if (onProgress) {
+          onProgress({
+            type: 'progress',
+            progress: i + 1,
+            total: bookmarkIds.length,
+            errors: summaryBatchState.errors.length
+          });
+        }
+
+        if (i < bookmarkIds.length - 1) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+
+      summaryBatchState.running = false;
+      if (onProgress) onProgress({
+        type: 'complete',
+        progress: bookmarkIds.length,
+        total: bookmarkIds.length,
+        errors: summaryBatchState.errors.length
+      });
+
+      return { ok: true, progress: bookmarkIds.length, errors: summaryBatchState.errors };
+    } catch (e) {
+      summaryBatchState.running = false;
+      summaryBatchState.error = e.message;
+      throw e;
+    }
+  }
+
+  // ==================== 获取书签的摘要/标签 ====================
+
+  async function getBookmarkSummary(bookmarkId) {
+    const vec = await getVector(bookmarkId);
+    if (!vec) return null;
+    return { summary: vec.summary || '', tags: vec.tags || [] };
+  }
+
+  // ==================== AI 推荐 ====================
+
+  async function getRecommendations(currentUrl, currentTitle, bookmarks, config, topK = 8) {
+    if (!config.enabled || !config.aiApiKey) {
+      return { ok: false, error: '智能搜索未启用' };
+    }
+
+    const vectorCount = await getVectorCount();
+    if (vectorCount === 0) {
+      return { ok: false, error: '向量索引为空' };
+    }
+
+    if (!currentUrl && !currentTitle) {
+      return { ok: false, error: '无法获取当前页面信息' };
+    }
+
+    try {
+      let contextText = '';
+      if (currentTitle) contextText += currentTitle;
+      if (currentUrl) {
+        try {
+          const u = new URL(currentUrl);
+          contextText += ' ' + u.hostname.replace('www.', '');
+          const pathParts = u.pathname.split('/').filter(Boolean);
+          if (pathParts.length > 0) contextText += ' ' + pathParts.join(' ');
+        } catch (_) {
+          contextText += ' ' + currentUrl;
+        }
+      }
+
+      let queryEmbedding = await getCachedQueryEmbedding('_rec_' + contextText.slice(0, 100));
+      if (!queryEmbedding) {
+        const provider = AI_PROVIDERS[config.aiProvider] || AI_PROVIDERS.custom;
+        if (!provider.supportsEmbedding) {
+          return { ok: false, error: '当前服务商不支持 Embedding，无法生成推荐' };
+        }
+        const embeddings = await callEmbeddingAPI([contextText], config);
+        queryEmbedding = embeddings[0];
+        await cacheQueryEmbedding('_rec_' + contextText.slice(0, 100), queryEmbedding);
+      }
+
+      const bookmarksForSearch = bookmarks.filter(b => b.url !== currentUrl);
+      const semanticResults = await vectorSearch(queryEmbedding, bookmarksForSearch, topK);
+
+      const allVectors = await getAllVectors();
+      const vectorSummaryMap = new Map(allVectors.map(v => [v.id, v.summary || '']));
+
+      const results = semanticResults
+        .filter(r => r.score > 0.15)
+        .map(r => ({
+          ...r.item,
+          _source: 'bookmark',
+          _matchType: 'semantic',
+          _semanticScore: r.score,
+          _relevance: Math.round(r.score * 100),
+          _summary: vectorSummaryMap.get(r.item.id) || r.item.summary || '',
+          _isRecommendation: true
+        }));
+
+      return { ok: true, results };
+    } catch (e) {
+      console.warn('[IntelligentSearch] Recommendation failed:', e.message);
+      return { ok: false, error: e.message };
+    }
+  }
+
   // ==================== 导出 ====================
   return {
     AI_PROVIDERS,
     hybridSearch,
+    unifiedSemanticSearch,
+    getRecommendations,
     buildEmbeddingIndex,
+    resumeBuild,
     pauseEmbeddingBuild,
     getBuildStatus,
+    loadBuildState,
+    clearBuildState,
     handleBookmarkCreated,
     handleBookmarkRemoved,
     handleBookmarkChanged,
     verifyApiKey,
     extractAndSummarize,
+    batchExtractSummaries,
+    getSummaryBatchStatus,
+    pauseSummaryBatch,
+    getBookmarkSummary,
     generateSummary,
     getVectorCount,
     getAllVectors

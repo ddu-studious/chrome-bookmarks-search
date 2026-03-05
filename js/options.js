@@ -35,21 +35,30 @@ let editingItem = null;
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
-  await applyTheme(); // 应用主题设置
+  await applyTheme();
   await loadStats();
   bindNavigationEvents();
   bindSettingEvents();
   bindDataManagementEvents();
   bindModalEvents();
+  bindAiSearchEvents();
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
   
-  // 监听系统主题变化
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
     const result = await chrome.storage.sync.get('optionsSettings');
     const settings = result.optionsSettings || {};
     if (settings.theme === 'system' || !settings.theme) {
       await applyTheme();
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'EMBEDDING_BUILD_PROGRESS') {
+      updateOptBuildProgress(msg);
+    }
+    if (msg.type === 'SUMMARY_BATCH_PROGRESS') {
+      updateOptSummaryProgress(msg);
     }
   });
 });
@@ -77,11 +86,11 @@ function handleHashChange() {
   const hash = window.location.hash.slice(1) || 'general';
   showSection(hash);
   
-  // 加载对应数据
   if (hash === 'bookmarks') loadBookmarks();
   if (hash === 'history') loadHistory();
   if (hash === 'downloads') loadDownloads();
   if (hash === 'links') loadFriendLinks();
+  if (hash === 'ai-search') refreshOptAiIndexStatus();
 }
 
 function showSection(sectionId) {
@@ -966,4 +975,314 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ==================== AI 智能搜索设置 ====================
+
+async function getAiConfig() {
+  const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
+  const source = result.optionsSettings || result.settings || {};
+  return {
+    enabled: false,
+    aiProvider: 'gemini',
+    aiApiKey: '',
+    aiBaseUrl: '',
+    embeddingModel: '',
+    chatModel: '',
+    rerankEnabled: false,
+    lastBuildProgress: 0,
+    ...(source.intelligentSearch || {})
+  };
+}
+
+async function saveAiConfig(updates) {
+  const result = await chrome.storage.sync.get(['settings']);
+  const settings = result.settings || {};
+  settings.intelligentSearch = {
+    ...(settings.intelligentSearch || {}),
+    ...updates
+  };
+  await chrome.storage.sync.set({ settings });
+}
+
+function bindAiSearchEvents() {
+  const enabledToggle = document.getElementById('optAiEnabled');
+  const configCard = document.getElementById('optAiConfigCard');
+  const indexCard = document.getElementById('optAiIndexCard');
+  const advancedCard = document.getElementById('optAiAdvancedCard');
+  const providerSelect = document.getElementById('optAiProvider');
+  const apiKeyInput = document.getElementById('optAiApiKey');
+  const baseUrlInput = document.getElementById('optAiBaseUrl');
+  const baseUrlRow = document.getElementById('optAiBaseUrlRow');
+  const verifyBtn = document.getElementById('optVerifyApiKeyBtn');
+  const buildBtn = document.getElementById('optBuildIndexBtn');
+  const resumeBtn = document.getElementById('optResumeIndexBtn');
+  const pauseBtn = document.getElementById('optPauseIndexBtn');
+  const clearBtn = document.getElementById('optClearIndexBtn');
+  const rerankToggle = document.getElementById('optAiRerankEnabled');
+
+  if (!enabledToggle) return;
+
+  (async () => {
+    const ai = await getAiConfig();
+    enabledToggle.checked = ai.enabled;
+    const showConfig = ai.enabled;
+    if (configCard) configCard.style.display = showConfig ? '' : 'none';
+    if (indexCard) indexCard.style.display = showConfig ? '' : 'none';
+    if (advancedCard) advancedCard.style.display = showConfig ? '' : 'none';
+    const summaryCardInit = document.getElementById('optAiSummaryCard');
+    if (summaryCardInit) summaryCardInit.style.display = showConfig ? '' : 'none';
+    if (providerSelect) providerSelect.value = ai.aiProvider || 'gemini';
+    if (apiKeyInput) apiKeyInput.value = ai.aiApiKey || '';
+    if (baseUrlInput) baseUrlInput.value = ai.aiBaseUrl || '';
+    if (baseUrlRow) baseUrlRow.style.display = ai.aiProvider === 'custom' ? '' : 'none';
+    if (rerankToggle) rerankToggle.checked = ai.rerankEnabled;
+    refreshOptAiIndexStatus();
+  })();
+
+  const summaryCard = document.getElementById('optAiSummaryCard');
+
+  enabledToggle.addEventListener('change', async () => {
+    await saveAiConfig({ enabled: enabledToggle.checked });
+    const show = enabledToggle.checked;
+    if (configCard) configCard.style.display = show ? '' : 'none';
+    if (indexCard) indexCard.style.display = show ? '' : 'none';
+    if (advancedCard) advancedCard.style.display = show ? '' : 'none';
+    if (summaryCard) summaryCard.style.display = show ? '' : 'none';
+  });
+
+  if (providerSelect) {
+    providerSelect.addEventListener('change', async () => {
+      await saveAiConfig({ aiProvider: providerSelect.value });
+      if (baseUrlRow) baseUrlRow.style.display = providerSelect.value === 'custom' ? '' : 'none';
+    });
+  }
+
+  if (apiKeyInput) {
+    apiKeyInput.addEventListener('change', async () => {
+      await saveAiConfig({ aiApiKey: apiKeyInput.value });
+    });
+    apiKeyInput.addEventListener('input', async () => {
+      await saveAiConfig({ aiApiKey: apiKeyInput.value });
+    });
+  }
+
+  if (baseUrlInput) {
+    baseUrlInput.addEventListener('change', async () => {
+      await saveAiConfig({ aiBaseUrl: baseUrlInput.value });
+    });
+  }
+
+  if (rerankToggle) {
+    rerankToggle.addEventListener('change', async () => {
+      await saveAiConfig({ rerankEnabled: rerankToggle.checked });
+    });
+  }
+
+  if (verifyBtn) {
+    verifyBtn.addEventListener('click', async () => {
+      verifyBtn.textContent = '验证中...';
+      verifyBtn.disabled = true;
+
+      const currentConfig = {
+        enabled: enabledToggle?.checked || false,
+        aiProvider: providerSelect?.value || 'gemini',
+        aiApiKey: apiKeyInput?.value || '',
+        aiBaseUrl: baseUrlInput?.value || '',
+        rerankEnabled: rerankToggle?.checked || false
+      };
+      await saveAiConfig(currentConfig);
+
+      chrome.runtime.sendMessage({ type: 'VERIFY_API_KEY', config: currentConfig }, (response) => {
+        verifyBtn.disabled = false;
+        if (response && response.ok) {
+          verifyBtn.textContent = '验证成功';
+          verifyBtn.classList.add('btn-success');
+          showToast(response.message || 'API Key 验证成功');
+        } else {
+          verifyBtn.textContent = '验证失败';
+          showToast('验证失败: ' + (response?.message || '未知错误'));
+        }
+        setTimeout(() => { verifyBtn.textContent = '验证'; verifyBtn.classList.remove('btn-success'); }, 3000);
+      });
+    });
+  }
+
+  function showOptBuildingUI() {
+    if (buildBtn) buildBtn.style.display = 'none';
+    if (resumeBtn) resumeBtn.style.display = 'none';
+    if (pauseBtn) pauseBtn.style.display = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    const bar = document.getElementById('optAiProgressBar');
+    if (bar) bar.style.display = '';
+  }
+
+  function showOptIdleUI() {
+    if (pauseBtn) pauseBtn.style.display = 'none';
+    refreshOptAiIndexStatus();
+  }
+
+  if (buildBtn) {
+    buildBtn.addEventListener('click', () => {
+      showOptBuildingUI();
+      chrome.runtime.sendMessage({ type: 'BUILD_EMBEDDING_INDEX' }, () => {
+        showOptIdleUI();
+      });
+    });
+  }
+
+  if (resumeBtn) {
+    resumeBtn.addEventListener('click', () => {
+      showOptBuildingUI();
+      chrome.runtime.sendMessage({ type: 'RESUME_EMBEDDING_BUILD' }, () => {
+        showOptIdleUI();
+      });
+    });
+  }
+
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_BUILD' });
+      showOptIdleUI();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (confirm('确定要清除所有已构建的向量索引吗？')) {
+        chrome.runtime.sendMessage({ type: 'CLEAR_EMBEDDING_INDEX' }, () => {
+          showOptIdleUI();
+          showToast('向量索引已清除');
+        });
+      }
+    });
+  }
+
+  const batchSummaryBtn = document.getElementById('optBatchSummaryBtn');
+  const pauseSummaryBtn = document.getElementById('optPauseSummaryBtn');
+  const summaryStatusEl = document.getElementById('optSummaryStatus');
+  const summaryProgressBar = document.getElementById('optSummaryProgressBar');
+  const summaryProgressFill = document.getElementById('optSummaryProgressFill');
+
+  if (batchSummaryBtn) {
+    batchSummaryBtn.addEventListener('click', () => {
+      batchSummaryBtn.style.display = 'none';
+      if (pauseSummaryBtn) pauseSummaryBtn.style.display = '';
+      if (summaryProgressBar) summaryProgressBar.style.display = '';
+      if (summaryStatusEl) summaryStatusEl.textContent = '正在提取中...';
+      chrome.runtime.sendMessage({ type: 'BATCH_EXTRACT_SUMMARIES' }, (response) => {
+        if (pauseSummaryBtn) pauseSummaryBtn.style.display = 'none';
+        batchSummaryBtn.style.display = '';
+        if (response?.ok) {
+          const errCount = response.errors?.length || 0;
+          if (summaryStatusEl) summaryStatusEl.textContent = `提取完成 (${response.progress} 项${errCount > 0 ? '，' + errCount + ' 个错误' : ''})`;
+          showToast('批量摘要提取完成');
+        } else {
+          if (summaryStatusEl) summaryStatusEl.textContent = '提取出错: ' + (response?.error || '未知错误');
+        }
+        if (summaryProgressBar) summaryProgressBar.style.display = 'none';
+      });
+    });
+  }
+
+  if (pauseSummaryBtn) {
+    pauseSummaryBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'PAUSE_SUMMARY_BATCH' });
+      if (pauseSummaryBtn) pauseSummaryBtn.style.display = 'none';
+      if (batchSummaryBtn) batchSummaryBtn.style.display = '';
+      if (summaryStatusEl) summaryStatusEl.textContent = '已暂停';
+    });
+  }
+}
+
+function refreshOptAiIndexStatus() {
+  chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATUS' }, (response) => {
+    const statusEl = document.getElementById('optAiIndexStatus');
+    const buildBtn = document.getElementById('optBuildIndexBtn');
+    const resumeBtn = document.getElementById('optResumeIndexBtn');
+    const clearBtn = document.getElementById('optClearIndexBtn');
+    const progressBar = document.getElementById('optAiProgressBar');
+    const progressFill = document.getElementById('optAiProgressFill');
+    if (!statusEl) return;
+
+    if (response && response.ok) {
+      const { vectorCount, buildStatus, persistedState } = response;
+      if (buildStatus.running) {
+        statusEl.textContent = `构建中 ${buildStatus.progress}/${buildStatus.total}`;
+        if (buildBtn) buildBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+      } else if (persistedState && (persistedState.status === 'paused' || persistedState.status === 'error' || persistedState.status === 'running')) {
+        const done = persistedState.processedIds?.length || 0;
+        const total = persistedState.total || 0;
+        statusEl.textContent = persistedState.status === 'error'
+          ? `构建出错 (${done}/${total}): ${persistedState.error || '未知错误'}`
+          : `已暂停 ${done}/${total}`;
+        if (buildBtn) buildBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = '';
+        if (clearBtn) clearBtn.style.display = '';
+        if (progressBar) { progressBar.style.display = ''; }
+        if (progressFill && total > 0) progressFill.style.width = (done / total * 100) + '%';
+      } else if (vectorCount > 0) {
+        statusEl.textContent = `已索引 ${vectorCount} 项`;
+        if (buildBtn) { buildBtn.style.display = ''; buildBtn.textContent = '重建索引'; }
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = '';
+        if (progressBar) progressBar.style.display = 'none';
+      } else {
+        statusEl.textContent = '未构建';
+        if (buildBtn) { buildBtn.style.display = ''; buildBtn.textContent = '构建索引'; }
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (progressBar) progressBar.style.display = 'none';
+      }
+    }
+  });
+}
+
+function updateOptBuildProgress(msg) {
+  const progressBar = document.getElementById('optAiProgressBar');
+  const progressFill = document.getElementById('optAiProgressFill');
+  const statusEl = document.getElementById('optAiIndexStatus');
+
+  if (msg.type === 'progress' || msg.type === 'EMBEDDING_BUILD_PROGRESS') {
+    const pct = msg.total > 0 ? (msg.progress / msg.total * 100) : 0;
+    if (progressBar) progressBar.style.display = '';
+    if (progressFill) progressFill.style.width = pct + '%';
+    if (statusEl) statusEl.textContent = `构建中 ${msg.progress}/${msg.total}`;
+  }
+  if (msg.type === 'complete') {
+    if (progressBar) progressBar.style.display = 'none';
+    if (statusEl) statusEl.textContent = `已索引 ${msg.total} 项`;
+    showToast('向量索引构建完成');
+    refreshOptAiIndexStatus();
+  }
+  if (msg.type === 'error') {
+    if (progressBar) progressBar.style.display = 'none';
+    if (statusEl) statusEl.textContent = `构建出错: ${msg.error}`;
+    showToast('构建出错: ' + msg.error);
+  }
+  if (msg.type === 'paused') {
+    if (statusEl) statusEl.textContent = `已暂停 ${msg.progress}/${msg.total}`;
+  }
+}
+
+function updateOptSummaryProgress(msg) {
+  const progressBar = document.getElementById('optSummaryProgressBar');
+  const progressFill = document.getElementById('optSummaryProgressFill');
+  const statusEl = document.getElementById('optSummaryStatus');
+
+  if (msg.type === 'progress') {
+    const pct = msg.total > 0 ? (msg.progress / msg.total * 100) : 0;
+    if (progressBar) progressBar.style.display = '';
+    if (progressFill) progressFill.style.width = pct + '%';
+    if (statusEl) statusEl.textContent = `提取中 ${msg.progress}/${msg.total}${msg.errors > 0 ? ` (${msg.errors} 个错误)` : ''}`;
+  }
+  if (msg.type === 'complete') {
+    if (progressBar) progressBar.style.display = 'none';
+    if (statusEl) statusEl.textContent = `提取完成 ${msg.total} 项${msg.errors > 0 ? ` (${msg.errors} 个错误)` : ''}`;
+  }
+  if (msg.type === 'paused') {
+    if (statusEl) statusEl.textContent = `已暂停 ${msg.progress}/${msg.total}`;
+  }
 }

@@ -418,6 +418,7 @@
               allAiData = response.data || {};
               const aiCount = document.getElementById('aiCount');
               if (aiCount) aiCount.textContent = (allAiData.bookmarks || []).length;
+              loadSearchWindowRecommendations();
               break;
           }
         }
@@ -681,20 +682,21 @@
     if (!query || !query.trim()) {
       resultsList.innerHTML = '';
       currentResults = [];
-      searchStats.textContent = '输入关键词开始 AI 搜索';
+      searchStats.textContent = '输入需求描述或关键词，AI 语义搜索';
       selectedIndex = -1;
+      loadSearchWindowRecommendations();
       return;
     }
 
     clearTimeout(aiSearchDebounceTimer);
-    searchStats.textContent = '搜索中...';
+    searchStats.textContent = '语义搜索中...';
 
     aiSearchDebounceTimer = setTimeout(() => {
       safeSendMessage({
         type: 'INTELLIGENT_SEARCH',
         query: query.trim(),
         limit: 50,
-        rerank: false
+        rerank: true
       }, (response) => {
         if (!response) {
           searchStats.textContent = 'AI 搜索无响应';
@@ -718,7 +720,8 @@
           currentResults = response.results;
           selectedIndex = response.results.length > 0 ? 0 : -1;
           displayAiResults(response.results, query);
-          searchStats.textContent = `找到 ${response.results.length} 个结果 (AI)`;
+          const semanticCount = response.results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid').length;
+          searchStats.textContent = `找到 ${response.results.length} 个结果 (语义 ${semanticCount})`;
         }
       });
     }, 300);
@@ -737,6 +740,7 @@
       div.className = 'result-item' + (index === 0 ? ' active' : '');
       div.dataset.url = item.url || '';
       div.dataset.id = item.id || '';
+      div.dataset.source = item._source || 'bookmark';
 
       const favicon = document.createElement('img');
       favicon.className = 'result-favicon';
@@ -760,18 +764,54 @@
       content.appendChild(title);
       content.appendChild(url);
 
+      if (item._summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'ai-summary-preview';
+        summaryDiv.textContent = item._summary;
+        content.appendChild(summaryDiv);
+      }
+
       div.appendChild(favicon);
       div.appendChild(content);
+
+      const metaWrap = document.createElement('div');
+      metaWrap.className = 'result-meta';
+
+      if (item._source) {
+        const sourceBadge = document.createElement('span');
+        const sourceLabels = { bookmark: '书签', history: '历史', tab: '标签页' };
+        sourceBadge.className = 'ai-source-badge ai-source-' + item._source;
+        sourceBadge.textContent = sourceLabels[item._source] || item._source;
+        metaWrap.appendChild(sourceBadge);
+      }
 
       if (item._matchType) {
         const badge = document.createElement('span');
         badge.className = 'ai-match-badge ai-match-' + item._matchType;
-        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '混合' };
         badge.textContent = labels[item._matchType] || item._matchType;
-        div.appendChild(badge);
+        metaWrap.appendChild(badge);
       }
 
+      if (item._relevance > 0) {
+        const relBar = document.createElement('span');
+        relBar.className = 'ai-relevance-bar';
+        const level = item._relevance >= 60 ? 'high' : item._relevance >= 30 ? 'medium' : 'low';
+        relBar.innerHTML = `<span class="ai-relevance-track"><span class="ai-relevance-fill ${level}" style="width:${item._relevance}%"></span></span><span>${item._relevance}%</span>`;
+        metaWrap.appendChild(relBar);
+      }
+
+      if (metaWrap.children.length > 0) div.appendChild(metaWrap);
+
       div.addEventListener('click', () => {
+        if (item._source === 'tab' && item.id) {
+          const tabId = parseInt(String(item.id).replace('tab_', ''));
+          if (!isNaN(tabId)) {
+            safeSendMessage({ type: 'OPEN_URL', url: item.url });
+            window.close();
+            return;
+          }
+        }
         if (item.url) {
           safeSendMessage({ type: 'OPEN_URL', url: item.url });
           window.close();
@@ -779,6 +819,54 @@
       });
 
       resultsList.appendChild(div);
+    });
+  }
+
+  function loadSearchWindowRecommendations() {
+    safeSendMessage({ type: 'GET_AI_RECOMMENDATIONS', currentUrl: '', currentTitle: document.title || 'search', topK: 8 }, (response) => {
+      if (!response || !response.ok || !response.results || response.results.length === 0) return;
+      if (searchInput.value.trim()) return;
+
+      resultsList.innerHTML = '';
+      currentResults = response.results;
+      const container = document.createElement('div');
+      container.className = 'ai-recommendations';
+      const header = document.createElement('div');
+      header.className = 'ai-rec-header';
+      header.innerHTML = '<span>✨</span><span>为你推荐</span><span class="ai-rec-badge">AI 推荐</span>';
+      container.appendChild(header);
+
+      response.results.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'ai-rec-item';
+        div.dataset.url = item.url || '';
+        const icon = document.createElement('img');
+        icon.width = 16; icon.height = 16; icon.style.flexShrink = '0';
+        try { icon.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`; } catch { /* empty */ }
+
+        const content = document.createElement('div');
+        content.className = 'ai-rec-content';
+        const title = document.createElement('div');
+        title.className = 'ai-rec-title';
+        title.textContent = item.title || '无标题';
+        const url = document.createElement('div');
+        url.className = 'ai-rec-url';
+        url.textContent = item.url || '';
+        content.appendChild(title);
+        content.appendChild(url);
+        div.appendChild(icon);
+        div.appendChild(content);
+        if (item._relevance > 0) {
+          const score = document.createElement('span');
+          score.className = 'ai-rec-score';
+          score.textContent = item._relevance + '%';
+          div.appendChild(score);
+        }
+        div.addEventListener('click', () => { if (item.url) { safeSendMessage({ type: 'OPEN_URL', url: item.url }); window.close(); } });
+        container.appendChild(div);
+      });
+      resultsList.appendChild(container);
+      selectedIndex = -1;
     });
   }
 
