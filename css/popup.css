@@ -1752,3 +1752,155 @@ body {
 .dark-theme .suggestion-divider-text {
   color: rgba(255, 255, 255, 0.5);
 }
+
+/* ==================== AI 搜索设置样式 ==================== */
+
+.settings-select {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #333);
+  margin-top: 4px;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #333);
+  box-sizing: border-box;
+}
+
+.settings-input-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.settings-input-row .settings-input {
+  flex: 1;
+  margin-top: 0;
+}
+
+.settings-btn-small {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #333);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settings-btn-small:hover {
+  background: var(--color-hover, #f0f0f0);
+}
+
+.settings-label-inline {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.ai-index-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.ai-progress-bar {
+  height: 4px;
+  background: var(--color-border, #e0e0e0);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.ai-progress-fill {
+  height: 100%;
+  background: var(--color-primary, #1a73e8);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* AI 搜索结果匹配类型标签 */
+
+.ai-match-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ai-match-keyword {
+  background: #e8f0fe;
+  color: #1967d2;
+}
+
+.ai-match-semantic {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.ai-match-hybrid {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.dark-theme .settings-select,
+.dark-theme .settings-input {
+  background: var(--color-surface, #292a2d);
+  border-color: var(--color-border, #3c4043);
+  color: var(--color-text, #e8eaed);
+}
+
+.dark-theme .settings-btn-small {
+  background: var(--color-surface, #292a2d);
+  border-color: var(--color-border, #3c4043);
+  color: var(--color-text, #e8eaed);
+}
+
+.dark-theme .settings-btn-small:hover {
+  background: var(--color-hover, #35363a);
+}
+
+.dark-theme .ai-match-keyword {
+  background: #1a3a5c;
+  color: #8ab4f8;
+}
+
+.dark-theme .ai-match-semantic {
+  background: #1a3a2a;
+  color: #81c995;
+}
+
+.dark-theme .ai-match-hybrid {
+  background: #3a3019;
+  color: #fdd663;
+}
+
+.dark-theme .ai-progress-bar {
+  background: var(--color-border, #3c4043);
+}
+
+/* AI 模式标签特殊样式 */
+.tab-btn[data-mode="ai"] .tab-label {
+  font-weight: 600;
+}
+
+.tab-btn[data-mode="ai"].active {
+  color: var(--color-primary, #1a73e8);
+}

@@ -23,10 +23,12 @@
   let allGroups = [];
   let allHistory = [];
   let allDownloads = [];
+  let allAiData = {};
   let currentSort = 'smart';
   let currentFilter = 'all';
   let currentStyle = 'spotlight';
   let currentFont = 'system';
+  let aiSearchDebounceTimer = null;
 
   // 书签使用状态常量
   const BOOKMARK_STATUS = {
@@ -99,23 +101,36 @@
     // 绑定事件
     bindEvents();
 
-    // 根据设置显示/隐藏分组模式
     try {
       const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
+      const source = result.optionsSettings || result.settings || {};
+
       let showGroups = false;
-      if (result.optionsSettings && result.optionsSettings.showGroupsMode !== undefined) {
-        showGroups = result.optionsSettings.showGroupsMode;
-      } else if (result.settings && result.settings.showGroupsMode !== undefined) {
-        showGroups = result.settings.showGroupsMode;
+      if (source.showGroupsMode !== undefined) {
+        showGroups = source.showGroupsMode;
       }
       const groupsBtn = document.querySelector('.mode-tab[data-mode="groups"]');
       if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
+
+      const ai = source.intelligentSearch || {};
+      const aiBtn = document.querySelector('.mode-tab[data-mode="ai"]');
+      if (aiBtn) aiBtn.style.display = ai.enabled ? '' : 'none';
+
+      const defaultMode = source.defaultMode || 'bookmarks';
+      if (defaultMode !== 'bookmarks') {
+        if (defaultMode === 'ai' && !ai.enabled) { /* skip */ }
+        else if (defaultMode === 'groups' && !showGroups) { /* skip */ }
+        else {
+          currentMode = defaultMode;
+          document.querySelectorAll('.mode-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.mode === currentMode);
+          });
+        }
+      }
     } catch (_) {}
 
-    // 初始化筛选栏（书签模式下显示）
     filterBar.classList.toggle('show', currentMode === 'bookmarks');
 
-    // 加载初始数据
     await loadData();
     search('');
 
@@ -125,11 +140,16 @@
     console.log('[BookmarkSearch] Search window initialized');
   }
 
+  let searchDebounceTimer = null;
+
   // ==================== 事件绑定 ====================
   function bindEvents() {
-    // 搜索输入
+    // 搜索输入（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
-      search(e.target.value);
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        search(e.target.value);
+      }, 120);
     });
 
     // 键盘事件
@@ -319,25 +339,22 @@
     currentMode = mode;
     selectedIndex = -1;
 
-    // 更新标签样式
     document.querySelectorAll('.mode-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.mode === mode);
     });
 
-    // 更新搜索框占位符
     const placeholders = {
       bookmarks: '搜索书签...',
       tabs: '搜索标签页...',
       groups: '搜索分组或分组内标签页...',
       history: '搜索历史记录...',
-      downloads: '搜索下载文件...'
+      downloads: '搜索下载文件...',
+      ai: '输入自然语言搜索...'
     };
     searchInput.placeholder = placeholders[mode] || '搜索...';
 
-    // 显示/隐藏筛选器
     filterBar.classList.toggle('show', mode === 'bookmarks');
 
-    // 加载数据并搜索
     loadData().then(() => {
       if (mode === 'groups') {
         const filtered = searchGroups(searchInput.value, allGroups);
@@ -349,11 +366,13 @@
   }
 
   function getVisibleModes() {
+    const modes = ['bookmarks', 'tabs'];
     const groupsBtn = document.querySelector('.mode-tab[data-mode="groups"]');
-    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
-    return showGroups
-      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
-      : ['bookmarks', 'tabs', 'history', 'downloads'];
+    if (groupsBtn && groupsBtn.style.display !== 'none') modes.push('groups');
+    modes.push('history', 'downloads');
+    const aiBtn = document.querySelector('.mode-tab[data-mode="ai"]');
+    if (aiBtn && aiBtn.style.display !== 'none') modes.push('ai');
+    return modes;
   }
 
   function switchModePrev() {
@@ -394,6 +413,11 @@
             case 'downloads':
               allDownloads = response.data || [];
               document.getElementById('downloadsCount').textContent = allDownloads.length;
+              break;
+            case 'ai':
+              allAiData = response.data || {};
+              const aiCount = document.getElementById('aiCount');
+              if (aiCount) aiCount.textContent = (allAiData.bookmarks || []).length;
               break;
           }
         }
@@ -600,11 +624,15 @@
 
   // ==================== 搜索 ====================
   function search(query) {
-    // 分组模式使用独立的搜索逻辑
     if (currentMode === 'groups') {
       const filtered = searchGroups(query, allGroups);
       displayGroupResults(filtered);
       selectedIndex = -1;
+      return;
+    }
+
+    if (currentMode === 'ai') {
+      searchAi(query);
       return;
     }
 
@@ -617,7 +645,6 @@
       default: items = [];
     }
 
-    // 使用 SearchParser 进行高级搜索
     if (typeof SearchParser !== 'undefined' && SearchParser.filter) {
       items = SearchParser.filter(items, query || '');
     } else if (query && query.trim()) {
@@ -628,7 +655,6 @@
       });
     }
 
-    // 排序
     let effectiveSort = currentSort;
     if (currentSort === 'smart') {
       if ((currentMode === 'history' || currentMode === 'tabs' || currentMode === 'downloads') && !query?.trim()) {
@@ -646,10 +672,114 @@
     selectedIndex = items.length > 0 ? 0 : -1;
     displayResults(items, query);
 
-    // 非 history 模式且有搜索词时，补充最近访问记录
     if (query && query.trim() && currentMode !== 'history') {
       appendHistorySuggestions(query, items);
     }
+  }
+
+  function searchAi(query) {
+    if (!query || !query.trim()) {
+      resultsList.innerHTML = '';
+      currentResults = [];
+      searchStats.textContent = '输入关键词开始 AI 搜索';
+      selectedIndex = -1;
+      return;
+    }
+
+    clearTimeout(aiSearchDebounceTimer);
+    searchStats.textContent = '搜索中...';
+
+    aiSearchDebounceTimer = setTimeout(() => {
+      safeSendMessage({
+        type: 'INTELLIGENT_SEARCH',
+        query: query.trim(),
+        limit: 50,
+        rerank: false
+      }, (response) => {
+        if (!response) {
+          searchStats.textContent = 'AI 搜索无响应';
+          return;
+        }
+        if (response.fallback) {
+          const items = allAiData.bookmarks || [];
+          let filtered = (typeof SearchParser !== 'undefined' && SearchParser.filter)
+            ? SearchParser.filter(items, query)
+            : items;
+          if (typeof SmartSort !== 'undefined' && SmartSort.sort) {
+            filtered = SmartSort.sort(filtered, { searchText: query, mode: currentSort });
+          }
+          currentResults = filtered;
+          selectedIndex = filtered.length > 0 ? 0 : -1;
+          displayResults(filtered, query);
+          searchStats.textContent = `找到 ${filtered.length} 个结果 (关键词回退)`;
+          return;
+        }
+        if (response.ok && response.results) {
+          currentResults = response.results;
+          selectedIndex = response.results.length > 0 ? 0 : -1;
+          displayAiResults(response.results, query);
+          searchStats.textContent = `找到 ${response.results.length} 个结果 (AI)`;
+        }
+      });
+    }, 300);
+  }
+
+  function displayAiResults(items, query) {
+    resultsList.innerHTML = '';
+
+    if (items.length === 0) {
+      resultsList.innerHTML = '<div class="no-results">没有找到相关结果</div>';
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'result-item' + (index === 0 ? ' active' : '');
+      div.dataset.url = item.url || '';
+      div.dataset.id = item.id || '';
+
+      const favicon = document.createElement('img');
+      favicon.className = 'result-favicon';
+      favicon.width = 16; favicon.height = 16;
+      try {
+        favicon.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`;
+      } catch { favicon.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'; }
+      favicon.onerror = () => { favicon.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'; };
+
+      const content = document.createElement('div');
+      content.className = 'result-content';
+
+      const title = document.createElement('div');
+      title.className = 'result-title';
+      title.textContent = item.title || '无标题';
+
+      const url = document.createElement('div');
+      url.className = 'result-url';
+      url.textContent = item.url || '';
+
+      content.appendChild(title);
+      content.appendChild(url);
+
+      div.appendChild(favicon);
+      div.appendChild(content);
+
+      if (item._matchType) {
+        const badge = document.createElement('span');
+        badge.className = 'ai-match-badge ai-match-' + item._matchType;
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
+        badge.textContent = labels[item._matchType] || item._matchType;
+        div.appendChild(badge);
+      }
+
+      div.addEventListener('click', () => {
+        if (item.url) {
+          safeSendMessage({ type: 'OPEN_URL', url: item.url });
+          window.close();
+        }
+      });
+
+      resultsList.appendChild(div);
+    });
   }
 
   function appendHistorySuggestions(query, existingResults) {

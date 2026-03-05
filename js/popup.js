@@ -14,7 +14,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   let allGroups = [];
   let allHistory = [];
   let allDownloads = [];
+  let allAiData = {};
   let visitCounts = new Map();
+  let searchDebounceTimer = null;
+  let aiSearchDebounceTimer = null;
   
   // 书签使用状态常量
   const BOOKMARK_STATUS = {
@@ -897,16 +900,16 @@ document.addEventListener('DOMContentLoaded', async function() {
       .replace(/'/g, "&#039;");
   }
 
-  // 获取当前可见的模式列表（根据 groups 按钮是否显示）
   function getVisibleModes() {
+    const modes = ['bookmarks', 'tabs'];
     const groupsBtn = document.querySelector('.tab-btn[data-mode="groups"]');
-    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
-    return showGroups
-      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
-      : ['bookmarks', 'tabs', 'history', 'downloads'];
+    if (groupsBtn && groupsBtn.style.display !== 'none') modes.push('groups');
+    modes.push('history', 'downloads');
+    const aiBtn = document.querySelector('.tab-btn[data-mode="ai"]');
+    if (aiBtn && aiBtn.style.display !== 'none') modes.push('ai');
+    return modes;
   }
 
-  // 根据设置显示/隐藏分组模式
   function applyGroupsModeVisibility(show) {
     const groupsBtn = document.querySelector('.tab-btn[data-mode="groups"]');
     if (groupsBtn) {
@@ -916,8 +919,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (childOption) {
       childOption.style.display = show ? '' : 'none';
     }
-    // 如果当前在 groups 模式但被隐藏了，切换回 bookmarks
     if (!show && currentMode === 'groups') {
+      switchMode('bookmarks');
+    }
+  }
+
+  function applyAiModeVisibility(show) {
+    const aiBtn = document.querySelector('.tab-btn[data-mode="ai"]');
+    if (aiBtn) {
+      aiBtn.style.display = show ? '' : 'none';
+    }
+    if (!show && currentMode === 'ai') {
       switchMode('bookmarks');
     }
   }
@@ -1002,6 +1014,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           if (item) {
             switch (currentMode) {
               case 'bookmarks':
+              case 'ai':
                 chrome.tabs.create({ url: item.url });
                 break;
               case 'tabs':
@@ -1074,9 +1087,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   // 当前排序方式
   let currentSort = 'smart';
 
-  // 搜索函数
   function search(query) {
-    // 分组模式使用独立的搜索逻辑
     if (currentMode === 'groups') {
       const filtered = searchGroups(query, allGroups);
       displayGroupResults(filtered);
@@ -1084,9 +1095,13 @@ document.addEventListener('DOMContentLoaded', async function() {
       return;
     }
 
+    if (currentMode === 'ai') {
+      searchAi(query);
+      return;
+    }
+
     let items;
     
-    // 根据当前模式获取数据
     switch (currentMode) {
       case 'bookmarks':
         items = filterByUsageStatus(allBookmarks, currentFilter);
@@ -1104,28 +1119,135 @@ document.addEventListener('DOMContentLoaded', async function() {
         items = [];
     }
     
-    // 使用搜索解析器过滤结果
     let filteredResults = window.SearchParser.filter(items, query);
     
-    // 应用智能排序
     filteredResults = window.SmartSort.sort(filteredResults, {
       searchText: query,
       mode: currentSort
     });
     
-    // 更新结果显示
     displayResults(filteredResults, query);
     
-    // 更新计数
     searchStatsElement.textContent = query ? `找到 ${filteredResults.length} 个结果` : '';
     
-    // 非 history 模式且有搜索词时，补充展示匹配的最近访问记录
     if (query.trim() && currentMode !== 'history') {
       appendHistorySuggestions(query, filteredResults);
     }
     
-    // 重置选中状态
     selectedIndex = -1;
+  }
+
+  function searchAi(query) {
+    if (!query || !query.trim()) {
+      displayResults([], '');
+      searchStatsElement.textContent = '输入关键词开始 AI 搜索';
+      selectedIndex = -1;
+      return;
+    }
+
+    clearTimeout(aiSearchDebounceTimer);
+    searchStatsElement.textContent = '搜索中...';
+
+    aiSearchDebounceTimer = setTimeout(() => {
+      chrome.runtime.sendMessage({
+        type: 'INTELLIGENT_SEARCH',
+        query: query.trim(),
+        limit: 50,
+        rerank: false
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[BookmarkSearch] AI search error:', chrome.runtime.lastError.message);
+          searchStatsElement.textContent = 'AI 搜索出错';
+          return;
+        }
+        if (!response) {
+          searchStatsElement.textContent = 'AI 搜索无响应';
+          return;
+        }
+        if (response.fallback) {
+          const items = allAiData.bookmarks || [];
+          let filteredResults = window.SearchParser.filter(items, query);
+          filteredResults = window.SmartSort.sort(filteredResults, { searchText: query, mode: currentSort });
+          displayResults(filteredResults, query);
+          searchStatsElement.textContent = `找到 ${filteredResults.length} 个结果 (关键词回退)`;
+          selectedIndex = -1;
+          return;
+        }
+        if (response.ok && response.results) {
+          const results = response.results;
+          displayAiResults(results, query);
+          searchStatsElement.textContent = `找到 ${results.length} 个结果 (AI)`;
+          selectedIndex = results.length > 0 ? 0 : -1;
+        }
+      });
+    }, 300);
+  }
+
+  function displayAiResults(items, query) {
+    const resultsList = document.getElementById('resultsList');
+    resultsList.innerHTML = '';
+    currentResults = items;
+
+    if (items.length === 0) {
+      resultsList.innerHTML = '<div class="no-results">没有找到相关结果</div>';
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'result-item' + (index === 0 ? ' active' : '');
+      div.dataset.url = item.url || '';
+      div.dataset.id = item.id || '';
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'result-icon';
+      const icon = document.createElement('img');
+      icon.width = 16; icon.height = 16;
+      try {
+        const host = new URL(item.url).hostname;
+        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.url)}&size=16`;
+        icon.onerror = () => { icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`; };
+      } catch { icon.src = 'icons/icon16.png'; }
+      iconWrap.appendChild(icon);
+
+      const content = document.createElement('div');
+      content.className = 'result-item-content';
+
+      const title = document.createElement('div');
+      title.className = 'result-title';
+      title.textContent = item.title || '无标题';
+
+      const url = document.createElement('div');
+      url.className = 'result-url';
+      url.textContent = item.url || '';
+
+      content.appendChild(title);
+      content.appendChild(url);
+
+      const meta = document.createElement('div');
+      meta.className = 'result-meta';
+
+      if (item._matchType) {
+        const badge = document.createElement('span');
+        badge.className = 'ai-match-badge ai-match-' + item._matchType;
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
+        badge.textContent = labels[item._matchType] || item._matchType;
+        meta.appendChild(badge);
+      }
+
+      div.appendChild(iconWrap);
+      div.appendChild(content);
+      if (meta.children.length > 0) div.appendChild(meta);
+
+      div.addEventListener('click', () => {
+        if (item.url) {
+          chrome.tabs.create({ url: item.url });
+          window.close();
+        }
+      });
+
+      resultsList.appendChild(div);
+    });
   }
 
   // 追加历史记录建议到搜索结果底部
@@ -1195,12 +1317,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
-  // 切换搜索模式
   function switchMode(mode) {
     currentMode = mode;
     const searchInput = document.getElementById('searchInput');
     
-    // 更新标签按钮样式
     document.querySelectorAll('.tab-btn').forEach(btn => {
       if (btn.getAttribute('data-mode') === mode) {
         btn.classList.add('active');
@@ -1209,34 +1329,30 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     });
     
-    // 更新placeholder和模式标签
     const placeholders = {
       bookmarks: '搜索书签...',
       tabs: '搜索标签页...',
       groups: '搜索分组或分组内标签页...',
       history: '搜索历史记录...',
-      downloads: '搜索下载记录...'
+      downloads: '搜索下载记录...',
+      ai: '输入自然语言搜索...'
     };
     searchInput.placeholder = placeholders[mode] || '搜索...';
 
     const modeLabels = {
       bookmarks: '书签', tabs: '标签页', groups: '分组',
-      history: '历史记录', downloads: '下载'
+      history: '历史记录', downloads: '下载', ai: 'AI 搜索'
     };
     if (modeLabel) modeLabel.textContent = modeLabels[mode] || mode;
     
-    // 重置搜索和选中状态
     searchInput.value = '';
     selectedIndex = -1;
     
-    // 更新筛选器显示状态
     updateFiltersVisibility();
     
-    // 加载对应数据
     loadData();
   }
 
-  // 加载数据
   function loadData() {
     switch (currentMode) {
       case 'bookmarks':
@@ -1254,6 +1370,27 @@ document.addEventListener('DOMContentLoaded', async function() {
       case 'downloads':
         loadDownloads();
         break;
+      case 'ai':
+        loadAiData();
+        break;
+    }
+  }
+
+  async function loadAiData() {
+    try {
+      const bookmarkTree = await chrome.bookmarks.getTree();
+      const bookmarks = [];
+      function traverse(node) {
+        if (node.url) bookmarks.push(node);
+        if (node.children) node.children.forEach(traverse);
+      }
+      bookmarkTree.forEach(traverse);
+      allAiData = { bookmarks };
+      totalCountElement.textContent = bookmarks.length;
+      displayResults([], '');
+      searchStatsElement.textContent = '输入关键词开始 AI 搜索';
+    } catch (e) {
+      console.error('[BookmarkSearch] loadAiData error:', e);
     }
   }
 
@@ -1333,16 +1470,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   });
 
-  // 初始化设置面板
   async function initSettingsPanel() {
     const settingsBtn = document.getElementById('settingsBtn');
     const settingsPanel = document.getElementById('settingsPanel');
     const settingsClose = document.getElementById('settingsClose');
     
-    // 获取当前设置
     const settings = await window.settings.get();
     
-    // 设置当前值
     document.querySelector(`input[name="theme"][value="${settings.theme}"]`).checked = true;
     document.querySelector(`input[name="fontSize"][value="${settings.fontSize}"]`).checked = true;
     document.querySelector(`input[name="lineHeight"][value="${settings.lineHeight}"]`).checked = true;
@@ -1351,20 +1485,170 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('showGroupsMode').checked = !!settings.showGroupsMode;
     document.getElementById('groupChildClickRestoreAll').checked = settings.groupChildClickRestoreAll !== false;
     applyGroupsModeVisibility(!!settings.showGroupsMode);
+
+    // 默认模式
+    const defaultModeSelect = document.getElementById('defaultMode');
+    if (defaultModeSelect) {
+      defaultModeSelect.value = settings.defaultMode || 'bookmarks';
+    }
+
+    // AI 设置
+    const ai = settings.intelligentSearch || {};
+    const aiEnabledCheckbox = document.getElementById('aiEnabled');
+    const aiSettingsDetail = document.getElementById('aiSettingsDetail');
+    const aiProviderSelect = document.getElementById('aiProvider');
+    const aiApiKeyInput = document.getElementById('aiApiKey');
+    const aiBaseUrlInput = document.getElementById('aiBaseUrl');
+    const aiBaseUrlOption = document.getElementById('aiBaseUrlOption');
+    const aiRerankCheckbox = document.getElementById('aiRerankEnabled');
+
+    if (aiEnabledCheckbox) {
+      aiEnabledCheckbox.checked = !!ai.enabled;
+      aiSettingsDetail.style.display = ai.enabled ? '' : 'none';
+      applyAiModeVisibility(!!ai.enabled);
+    }
+    if (aiProviderSelect) {
+      aiProviderSelect.value = ai.aiProvider || 'deepseek';
+      aiBaseUrlOption.style.display = ai.aiProvider === 'custom' ? '' : 'none';
+    }
+    if (aiApiKeyInput) aiApiKeyInput.value = ai.aiApiKey || '';
+    if (aiBaseUrlInput) aiBaseUrlInput.value = ai.aiBaseUrl || '';
+    if (aiRerankCheckbox) aiRerankCheckbox.checked = !!ai.rerankEnabled;
+
+    // 刷新索引状态
+    refreshAiIndexStatus();
+
+    // 应用默认模式
+    if (settings.defaultMode && settings.defaultMode !== 'bookmarks') {
+      const mode = settings.defaultMode;
+      if (mode === 'ai' && !ai.enabled) {
+        // AI 未启用则不切换
+      } else if (mode === 'groups' && !settings.showGroupsMode) {
+        // 分组未启用则不切换
+      } else {
+        switchMode(mode);
+      }
+    }
+
+    // AI 启用切换
+    if (aiEnabledCheckbox) {
+      aiEnabledCheckbox.addEventListener('change', async () => {
+        const s = await window.settings.get();
+        s.intelligentSearch = s.intelligentSearch || {};
+        s.intelligentSearch.enabled = aiEnabledCheckbox.checked;
+        aiSettingsDetail.style.display = aiEnabledCheckbox.checked ? '' : 'none';
+        applyAiModeVisibility(aiEnabledCheckbox.checked);
+        await window.settings.save(s);
+      });
+    }
+
+    // AI Provider 切换
+    if (aiProviderSelect) {
+      aiProviderSelect.addEventListener('change', async () => {
+        const s = await window.settings.get();
+        s.intelligentSearch = s.intelligentSearch || {};
+        s.intelligentSearch.aiProvider = aiProviderSelect.value;
+        aiBaseUrlOption.style.display = aiProviderSelect.value === 'custom' ? '' : 'none';
+        await window.settings.save(s);
+      });
+    }
+
+    // API Key 变更
+    if (aiApiKeyInput) {
+      aiApiKeyInput.addEventListener('change', async () => {
+        const s = await window.settings.get();
+        s.intelligentSearch = s.intelligentSearch || {};
+        s.intelligentSearch.aiApiKey = aiApiKeyInput.value;
+        await window.settings.save(s);
+      });
+    }
+
+    // Base URL 变更
+    if (aiBaseUrlInput) {
+      aiBaseUrlInput.addEventListener('change', async () => {
+        const s = await window.settings.get();
+        s.intelligentSearch = s.intelligentSearch || {};
+        s.intelligentSearch.aiBaseUrl = aiBaseUrlInput.value;
+        await window.settings.save(s);
+      });
+    }
+
+    // Rerank 切换
+    if (aiRerankCheckbox) {
+      aiRerankCheckbox.addEventListener('change', async () => {
+        const s = await window.settings.get();
+        s.intelligentSearch = s.intelligentSearch || {};
+        s.intelligentSearch.rerankEnabled = aiRerankCheckbox.checked;
+        await window.settings.save(s);
+      });
+    }
+
+    // 验证 API Key
+    const verifyBtn = document.getElementById('verifyApiKeyBtn');
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', async () => {
+        verifyBtn.textContent = '验证中...';
+        verifyBtn.disabled = true;
+        const s = await window.settings.get();
+        chrome.runtime.sendMessage({
+          type: 'VERIFY_API_KEY',
+          config: s.intelligentSearch || {}
+        }, (response) => {
+          verifyBtn.disabled = false;
+          if (response && response.ok) {
+            verifyBtn.textContent = '✓ 成功';
+            setTimeout(() => { verifyBtn.textContent = '验证'; }, 2000);
+          } else {
+            verifyBtn.textContent = '✗ 失败';
+            setTimeout(() => { verifyBtn.textContent = '验证'; }, 2000);
+          }
+        });
+      });
+    }
+
+    // 构建索引
+    const buildBtn = document.getElementById('buildIndexBtn');
+    const pauseBtn = document.getElementById('pauseIndexBtn');
+    if (buildBtn) {
+      buildBtn.addEventListener('click', () => {
+        buildBtn.style.display = 'none';
+        pauseBtn.style.display = '';
+        const progressBar = document.getElementById('aiProgressBar');
+        if (progressBar) progressBar.style.display = '';
+        chrome.runtime.sendMessage({ type: 'BUILD_EMBEDDING_INDEX' }, (response) => {
+          buildBtn.style.display = '';
+          pauseBtn.style.display = 'none';
+          refreshAiIndexStatus();
+        });
+      });
+    }
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_BUILD' });
+        pauseBtn.style.display = 'none';
+        buildBtn.style.display = '';
+      });
+    }
+
+    // 监听构建进度
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === 'EMBEDDING_BUILD_PROGRESS') {
+        updateBuildProgress(msg);
+      }
+    });
     
-    // 打开设置面板
     settingsBtn.addEventListener('click', () => {
       settingsPanel.classList.add('show');
     });
     
-    // 关闭设置面板
     settingsClose.addEventListener('click', () => {
       settingsPanel.classList.remove('show');
     });
     
-    // 监听设置变化
     settingsPanel.addEventListener('change', async (e) => {
       const target = e.target;
+      if (['aiEnabled', 'aiProvider', 'aiApiKey', 'aiBaseUrl', 'aiRerankEnabled'].includes(target.name || target.id)) return;
+      
       const settings = await window.settings.get();
       
       switch(target.name) {
@@ -1390,25 +1674,67 @@ document.addEventListener('DOMContentLoaded', async function() {
         case 'groupChildClickRestoreAll':
           settings.groupChildClickRestoreAll = target.checked;
           break;
+        case 'defaultMode':
+          settings.defaultMode = target.value;
+          break;
       }
       
       await window.settings.save(settings);
     });
     
-    // 点击外部关闭设置面板
     document.addEventListener('click', (e) => {
       if (!settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) {
         settingsPanel.classList.remove('show');
       }
     });
     
-    // ESC 键关闭设置面板
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && settingsPanel.classList.contains('show')) {
-        e.stopPropagation(); // 防止触发窗口关闭
+        e.stopPropagation();
         settingsPanel.classList.remove('show');
       }
     });
+  }
+
+  function refreshAiIndexStatus() {
+    chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATUS' }, (response) => {
+      const statusEl = document.getElementById('aiIndexStatus');
+      if (!statusEl) return;
+      if (response && response.ok) {
+        const { vectorCount, buildStatus } = response;
+        if (buildStatus.running) {
+          statusEl.textContent = `构建中 ${buildStatus.progress}/${buildStatus.total}`;
+        } else if (vectorCount > 0) {
+          statusEl.textContent = `已索引 ${vectorCount} 项`;
+        } else {
+          statusEl.textContent = '未构建';
+        }
+      }
+    });
+  }
+
+  function updateBuildProgress(msg) {
+    const progressBar = document.getElementById('aiProgressBar');
+    const progressFill = document.getElementById('aiProgressFill');
+    const statusEl = document.getElementById('aiIndexStatus');
+
+    if (msg.type === 'progress' || msg.type === 'EMBEDDING_BUILD_PROGRESS') {
+      const pct = msg.total > 0 ? (msg.progress / msg.total * 100) : 0;
+      if (progressBar) progressBar.style.display = '';
+      if (progressFill) progressFill.style.width = pct + '%';
+      if (statusEl) statusEl.textContent = `构建中 ${msg.progress}/${msg.total}`;
+    }
+    if (msg.type === 'complete') {
+      if (progressBar) progressBar.style.display = 'none';
+      if (statusEl) statusEl.textContent = `已索引 ${msg.total} 项`;
+    }
+    if (msg.type === 'error') {
+      if (progressBar) progressBar.style.display = 'none';
+      if (statusEl) statusEl.textContent = `构建出错: ${msg.error}`;
+    }
+    if (msg.type === 'paused') {
+      if (statusEl) statusEl.textContent = `已暂停 ${msg.progress}/${msg.total}`;
+    }
   }
 
   // 初始化搜索语法帮助
@@ -2020,9 +2346,12 @@ document.addEventListener('DOMContentLoaded', async function() {
       });
     });
 
-    // 添加搜索事件监听
+    // 添加搜索事件监听（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
-      search(e.target.value);
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        search(e.target.value);
+      }, 120);
     });
     
     // 只在文档级别添加键盘事件监听，避免重复

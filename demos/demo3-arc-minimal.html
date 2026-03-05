@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo 3 - Arc 极简风格</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #fafafa;
+      --bg-input: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --border: #e8e8e8;
+      --accent: #a8d5ba;
+      --accent-hover: #8bc9a3;
+      --accent-pastel: #e8f5e9;
+      --shadow: 0 2px 12px rgba(0,0,0,0.06);
+      --radius: 16px;
+      --radius-pill: 999px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 40px;
+    }
+
+    .container {
+      width: 480px;
+      max-height: 560px;
+      background: var(--bg-input);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+    }
+
+    .search-area {
+      padding: 24px 24px 16px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 16px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 16px;
+      color: var(--text);
+      outline: none;
+      background: var(--bg);
+      transition: all 0.2s ease;
+    }
+
+    .search-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-pastel);
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px 20px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--radius-pill);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: var(--bg);
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .chip:hover {
+      background: var(--accent-pastel);
+      color: var(--text);
+    }
+
+    .chip.active {
+      background: var(--accent);
+      color: #2d5a3d;
+    }
+
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 16px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      margin-bottom: 4px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .result-item:hover {
+      background: var(--accent-pastel);
+    }
+
+    .result-item.selected {
+      background: var(--accent-pastel);
+      outline: 1px solid var(--accent);
+    }
+
+    .result-icon {
+      font-size: 18px;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .result-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 14px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-url {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer kbd {
+      padding: 2px 6px;
+      background: var(--bg);
+      border-radius: 4px;
+      font-size: 11px;
+      margin: 0 2px;
+    }
+
+    .results::-webkit-scrollbar { width: 6px; }
+    .results::-webkit-scrollbar-track { background: transparent; }
+    .results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="search-area">
+      <input type="text" class="search-input" id="searchInput" placeholder="搜索书签、标签、历史、下载..." autocomplete="off">
+    </div>
+
+    <div class="filter-chips">
+      <button class="chip active" data-filter="all">全部</button>
+      <button class="chip" data-filter="bookmark">书签</button>
+      <button class="chip" data-filter="tab">标签</button>
+      <button class="chip" data-filter="history">历史</button>
+      <button class="chip" data-filter="download">下载</button>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <div class="footer">
+      <span id="count">0 个结果</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>↵</kbd> 打开 · <kbd>Esc</kbd> 关闭</span>
+    </div>
+  </div>
+
+  <script>
+    const SOURCE_ICONS = { bookmark: '📚', tab: '🗂', history: '🕐', download: '⬇️' };
+    const SOURCE_LABELS = { bookmark: '书签', tab: '标签', history: '历史', download: '下载' };
+
+    const MOCK_DATA = [
+      { id: 1, title: 'React 官方文档 - 中文', url: 'https://zh-hans.react.dev', source: 'bookmark', visitCount: 89 },
+      { id: 2, title: 'Vue.js 官方文档', url: 'https://cn.vuejs.org', source: 'bookmark', visitCount: 156 },
+      { id: 3, title: 'TypeScript 入门教程', url: 'https://ts.xcatliu.com', source: 'bookmark', visitCount: 42 },
+      { id: 4, title: 'MDN Web 文档', url: 'https://developer.mozilla.org/zh-CN', source: 'bookmark', visitCount: 203 },
+      { id: 5, title: 'GitHub - 代码托管', url: 'https://github.com', source: 'tab', visitCount: 0 },
+      { id: 6, title: '掘金 - 技术社区', url: 'https://juejin.cn', source: 'tab', visitCount: 0 },
+      { id: 7, title: 'Stack Overflow 中文', url: 'https://stackoverflow.blog/zh', source: 'history', visitCount: 67 },
+      { id: 8, title: '阮一峰的网络日志', url: 'https://www.ruanyifeng.com/blog', source: 'bookmark', visitCount: 34 },
+      { id: 9, title: 'React Hooks 完全指南', url: 'https://react.dev/learn/hooks', source: 'history', visitCount: 28 },
+      { id: 10, title: 'Chrome 扩展开发文档', url: 'https://developer.chrome.com/docs/extensions', source: 'bookmark', visitCount: 15 },
+      { id: 11, title: '设计模式 - 菜鸟教程', url: 'https://www.runoob.com/design-pattern', source: 'history', visitCount: 12 },
+      { id: 12, title: 'Vue3 组合式 API 文档', url: 'https://cn.vuejs.org/guide', source: 'tab', visitCount: 0 },
+      { id: 13, title: '前端性能优化指南.pdf', url: 'file:///Downloads/前端性能优化指南.pdf', source: 'download', visitCount: 0 },
+      { id: 14, title: 'JavaScript 高级程序设计笔记', url: 'https://github.com/xxx/notes', source: 'bookmark', visitCount: 8 },
+      { id: 15, title: 'CSS Tricks 中文', url: 'https://css-tricks.com', source: 'history', visitCount: 45 },
+    ];
+
+    let selectedIndex = 0;
+    let filteredData = [];
+    let currentFilter = 'all';
+
+    function getFilteredAndSorted(query, filter) {
+      let items = MOCK_DATA.filter(item => {
+        if (filter !== 'all' && item.source !== filter) return false;
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        const titleMatch = item.title.toLowerCase().includes(q);
+        const urlMatch = item.url.toLowerCase().includes(q);
+        return titleMatch || urlMatch;
+      });
+
+      if (!query.trim()) return items;
+
+      const q = query.toLowerCase();
+      items.sort((a, b) => {
+        const aTitle = a.title.toLowerCase();
+        const bTitle = b.title.toLowerCase();
+        const aUrl = a.url.toLowerCase();
+        const bUrl = b.url.toLowerCase();
+
+        const aExactTitle = aTitle === q || aTitle.startsWith(q);
+        const bExactTitle = bTitle === q || bTitle.startsWith(q);
+        if (aExactTitle && !bExactTitle) return -1;
+        if (!aExactTitle && bExactTitle) return 1;
+
+        const aUrlMatch = aUrl.includes(q);
+        const bUrlMatch = bUrl.includes(q);
+        if (aUrlMatch && !bUrlMatch) return -1;
+        if (!aUrlMatch && bUrlMatch) return 1;
+
+        const aTitleMatch = aTitle.includes(q);
+        const bTitleMatch = bTitle.includes(q);
+        if (aTitleMatch && !bTitleMatch) return -1;
+        if (!aTitleMatch && bTitleMatch) return 1;
+
+        return (b.visitCount || 0) - (a.visitCount || 0);
+      });
+
+      return items;
+    }
+
+    function render() {
+      const query = document.getElementById('searchInput').value;
+      filteredData = getFilteredAndSorted(query, currentFilter);
+      selectedIndex = Math.min(selectedIndex, Math.max(0, filteredData.length - 1));
+
+      const container = document.getElementById('results');
+      container.innerHTML = filteredData.map((item, i) => `
+        <div class="result-item ${i === selectedIndex ? 'selected' : ''}" data-id="${item.id}" data-index="${i}">
+          <span class="result-icon">${SOURCE_ICONS[item.source]}</span>
+          <div class="result-content">
+            <div class="result-title">${escapeHtml(item.title)}</div>
+            <div class="result-url">${escapeHtml(item.url)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('count').textContent = `${filteredData.length} 个结果`;
+
+      container.querySelectorAll('.result-item').forEach(el => {
+        el.addEventListener('click', () => {
+          selectedIndex = parseInt(el.dataset.index);
+          render();
+          console.log('打开:', filteredData[selectedIndex]?.url);
+        });
+        el.addEventListener('mouseenter', () => {
+          selectedIndex = parseInt(el.dataset.index);
+          render();
+        });
+      });
+
+      const selectedEl = container.querySelector('.result-item.selected');
+      if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => { selectedIndex = 0; render(); });
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectedIndex = Math.min(selectedIndex + 1, filteredData.length - 1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIndex = Math.max(selectedIndex - 1, 0); render(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (filteredData[selectedIndex]) console.log('打开:', filteredData[selectedIndex].url); }
+    });
+
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        currentFilter = chip.dataset.filter;
+        selectedIndex = 0;
+        render();
+      });
+    });
+
+    document.getElementById('searchInput').value = 'React';
+    render();
+  </script>
+</body>
+</html>

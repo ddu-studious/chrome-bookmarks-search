@@ -24,6 +24,9 @@
         <button class="tab-btn" data-mode="downloads">
           <span class="tab-label">下载</span>
         </button>
+        <button class="tab-btn" data-mode="ai" style="display:none">
+          <span class="tab-label">AI</span>
+        </button>
       </div>
       <button id="settingsBtn" class="settings-btn" title="设置">
         <svg viewBox="0 0 24 24" width="16" height="16">
@@ -271,6 +274,64 @@
         </div>
       </div>
       
+      <div class="settings-section">
+        <div class="settings-section-title">默认模式</div>
+        <div class="settings-option">
+          <select id="defaultMode" name="defaultMode" class="settings-select">
+            <option value="bookmarks">书签</option>
+            <option value="tabs">标签页</option>
+            <option value="history">历史</option>
+            <option value="downloads">下载</option>
+            <option value="ai">AI 搜索</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">AI 智能搜索</div>
+        <div class="settings-option">
+          <input type="checkbox" id="aiEnabled" name="aiEnabled">
+          <label class="settings-option-label" for="aiEnabled">启用 AI 搜索模式（语义理解）</label>
+        </div>
+        <div id="aiSettingsDetail" style="display:none">
+          <div class="settings-option">
+            <label class="settings-option-label settings-label-inline">AI 服务商</label>
+            <select id="aiProvider" name="aiProvider" class="settings-select">
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
+              <option value="custom">自定义 (OpenAI 兼容)</option>
+            </select>
+          </div>
+          <div class="settings-option">
+            <label class="settings-option-label settings-label-inline">API Key</label>
+            <div class="settings-input-row">
+              <input type="password" id="aiApiKey" name="aiApiKey" class="settings-input" placeholder="输入 API Key...">
+              <button id="verifyApiKeyBtn" class="settings-btn-small">验证</button>
+            </div>
+          </div>
+          <div class="settings-option" id="aiBaseUrlOption" style="display:none">
+            <label class="settings-option-label settings-label-inline">API 地址</label>
+            <input type="text" id="aiBaseUrl" name="aiBaseUrl" class="settings-input" placeholder="https://api.example.com/v1/embeddings">
+          </div>
+          <div class="settings-option">
+            <div class="settings-option-label settings-label-inline">索引状态</div>
+            <div class="ai-index-status">
+              <span id="aiIndexStatus">未构建</span>
+              <button id="buildIndexBtn" class="settings-btn-small">构建索引</button>
+              <button id="pauseIndexBtn" class="settings-btn-small" style="display:none">暂停</button>
+            </div>
+          </div>
+          <div class="ai-progress-bar" id="aiProgressBar" style="display:none">
+            <div class="ai-progress-fill" id="aiProgressFill"></div>
+          </div>
+          <div class="settings-option">
+            <input type="checkbox" id="aiRerankEnabled" name="aiRerankEnabled">
+            <label class="settings-option-label" for="aiRerankEnabled">启用 AI 重排序（消耗更多 Token）</label>
+          </div>
+        </div>
+      </div>
+
       <div class="settings-section">
         <div class="settings-section-title">其他</div>
         <div class="settings-option">

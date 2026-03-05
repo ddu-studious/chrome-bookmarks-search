@@ -29,9 +29,11 @@
   let allGroups = [];
   let allHistory = [];
   let allDownloads = [];
+  let allAiData = {};
   let currentSort = 'smart';
   let currentFilter = 'all';
   let currentStyle = 'spotlight'; // spotlight, raycast, fluent
+  let aiSearchDebounceTimer = null;
 
   // IME（中文输入法）组合输入状态
   // 如果在 composition 期间反复 focus/selection，会导致输入法被打断，只落拼音
@@ -40,6 +42,9 @@
     editTitleComposing: false,
     editUrlComposing: false
   };
+
+  // 搜索防抖定时器
+  let searchDebounceTimer = null;
 
   // 用户意图（主动交互）与自动抢焦点节流
   // 目的：避免与宿主页面 focus trap 打乒乓导致光标闪烁/IME 被打断
@@ -570,6 +575,11 @@
             <span>下载</span>
             <span class="tab-count" id="downloadsCount">0</span>
           </button>
+          <button class="mode-tab" data-mode="ai" style="display:none">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span>AI</span>
+            <span class="tab-count" id="aiCount">0</span>
+          </button>
         </div>
 
         <div class="filter-bar" id="filterBar">
@@ -862,9 +872,9 @@
 
       .overlay-container {
         position: fixed;
-        top: 50%;
+        top: 15%;
         left: 50%;
-        transform: translate(-50%, -50%) scale(0.95);
+        transform: translateX(-50%) translateY(-10px);
         width: var(--overlay-width);
         min-width: var(--overlay-min-width);
         max-width: var(--overlay-max-width);
@@ -881,14 +891,14 @@
         font-family: var(--font-family);
         opacity: 0;
         visibility: hidden;
-        transition: all var(--transition-duration) ease;
+        transition: opacity var(--transition-duration) ease, visibility var(--transition-duration) ease, transform var(--transition-duration) ease;
         z-index: 2147483647;
       }
 
       .overlay-container.show {
         opacity: 1;
         visibility: visible;
-        transform: translate(-50%, -50%) scale(1);
+        transform: translateX(-50%) translateY(0);
       }
 
       /* ==================== 搜索区域 ==================== */
@@ -1072,6 +1082,7 @@
         overflow-y: auto;
         min-height: 180px;
         max-height: 320px;
+        contain: layout style;
       }
 
       .results-list {
@@ -1914,9 +1925,12 @@
       }
     });
 
-    // 搜索输入
+    // 搜索输入（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
-      search(e.target.value);
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        search(e.target.value);
+      }, 120);
     });
 
     // IME 组合输入状态跟踪（解决中文输入法只落拼音问题）
@@ -2175,11 +2189,13 @@
   }
 
   function getVisibleModes() {
+    const modes = ['bookmarks', 'tabs'];
     const groupsBtn = shadowRoot.querySelector('.mode-tab[data-mode="groups"]');
-    const showGroups = groupsBtn && groupsBtn.style.display !== 'none';
-    return showGroups
-      ? ['bookmarks', 'tabs', 'groups', 'history', 'downloads']
-      : ['bookmarks', 'tabs', 'history', 'downloads'];
+    if (groupsBtn && groupsBtn.style.display !== 'none') modes.push('groups');
+    modes.push('history', 'downloads');
+    const aiBtn = shadowRoot.querySelector('.mode-tab[data-mode="ai"]');
+    if (aiBtn && aiBtn.style.display !== 'none') modes.push('ai');
+    return modes;
   }
 
   // 切换到上一个模式
@@ -2198,32 +2214,28 @@
     switchMode(modes[newIndex]);
   }
 
-  // 切换搜索模式
   function switchMode(mode) {
     currentMode = mode;
     selectedIndex = -1;
 
-    // 更新标签样式
     shadowRoot.querySelectorAll('.mode-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.mode === mode);
     });
 
-    // 更新搜索框占位符
     const searchInput = shadowRoot.getElementById('searchInput');
     const placeholders = {
       bookmarks: '搜索书签...',
       tabs: '搜索标签页...',
       groups: '搜索分组或分组内标签页...',
       history: '搜索历史记录...',
-      downloads: '搜索下载文件...'
+      downloads: '搜索下载文件...',
+      ai: '输入自然语言搜索...'
     };
     searchInput.placeholder = placeholders[mode] || '搜索...';
 
-    // 显示/隐藏筛选器
     const filterBar = shadowRoot.getElementById('filterBar');
     filterBar.classList.toggle('show', mode === 'bookmarks');
 
-    // 加载数据并搜索
     loadData().then(() => {
       if (mode === 'groups') {
         const query = searchInput.value;
@@ -2252,7 +2264,6 @@
     }
   }
 
-  // 加载数据
   async function loadData() {
     return new Promise((resolve) => {
       safeSendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
@@ -2278,6 +2289,11 @@
             case 'downloads':
               allDownloads = response.data || [];
               shadowRoot.getElementById('downloadsCount').textContent = allDownloads.length;
+              break;
+            case 'ai':
+              allAiData = response.data || {};
+              const aiCount = shadowRoot.getElementById('aiCount');
+              if (aiCount) aiCount.textContent = (allAiData.bookmarks || []).length;
               break;
           }
         }
@@ -2532,6 +2548,11 @@
       return;
     }
 
+    if (currentMode === 'ai') {
+      searchAi(query);
+      return;
+    }
+
     let items;
 
     switch (currentMode) {
@@ -2675,7 +2696,120 @@
     return bookmarks.filter(b => b.usageStatus === filter);
   }
 
-  // 排序
+  function searchAi(query) {
+    const searchStats = shadowRoot.querySelector('.result-count') || shadowRoot.getElementById('searchStats');
+    const theResultsList = shadowRoot.getElementById('resultsList');
+
+    if (!query || !query.trim()) {
+      if (theResultsList) theResultsList.innerHTML = '';
+      currentResults = [];
+      if (searchStats) searchStats.textContent = '输入关键词开始 AI 搜索';
+      selectedIndex = -1;
+      return;
+    }
+
+    clearTimeout(aiSearchDebounceTimer);
+    if (searchStats) searchStats.textContent = '搜索中...';
+
+    aiSearchDebounceTimer = setTimeout(() => {
+      safeSendMessage({
+        type: 'INTELLIGENT_SEARCH',
+        query: query.trim(),
+        limit: 50,
+        rerank: false
+      }, (response) => {
+        if (!response) {
+          if (searchStats) searchStats.textContent = 'AI 搜索无响应';
+          return;
+        }
+        if (response.fallback) {
+          const items = allAiData.bookmarks || [];
+          let filtered = (typeof SearchParser !== 'undefined' && SearchParser.filter)
+            ? SearchParser.filter(items, query)
+            : items;
+          if (typeof SmartSort !== 'undefined' && SmartSort.sort) {
+            filtered = SmartSort.sort(filtered, { searchText: query, mode: currentSort });
+          }
+          currentResults = filtered;
+          selectedIndex = filtered.length > 0 ? 0 : -1;
+          displayResults(filtered, query);
+          if (searchStats) searchStats.textContent = `找到 ${filtered.length} 个结果 (关键词回退)`;
+          return;
+        }
+        if (response.ok && response.results) {
+          currentResults = response.results;
+          selectedIndex = response.results.length > 0 ? 0 : -1;
+          displayAiResults(response.results, query);
+          if (searchStats) searchStats.textContent = `找到 ${response.results.length} 个结果 (AI)`;
+        }
+      });
+    }, 300);
+  }
+
+  function displayAiResults(items, query) {
+    const theResultsList = shadowRoot.getElementById('resultsList');
+    if (!theResultsList) return;
+    theResultsList.innerHTML = '';
+
+    if (items.length === 0) {
+      theResultsList.innerHTML = '<div class="no-results">没有找到相关结果</div>';
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'result-item' + (index === 0 ? ' active' : '');
+      div.dataset.url = item.url || '';
+      div.dataset.id = item.id || '';
+
+      const favicon = document.createElement('img');
+      favicon.className = 'result-favicon';
+      favicon.width = 16; favicon.height = 16;
+      try {
+        favicon.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`;
+      } catch { favicon.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>'; }
+
+      const content = document.createElement('div');
+      content.className = 'result-content';
+
+      const title = document.createElement('div');
+      title.className = 'result-title';
+      title.textContent = item.title || '无标题';
+
+      const url = document.createElement('div');
+      url.className = 'result-url';
+      url.textContent = item.url || '';
+
+      content.appendChild(title);
+      content.appendChild(url);
+      div.appendChild(favicon);
+      div.appendChild(content);
+
+      if (item._matchType) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;font-weight:500;white-space:nowrap;margin-left:auto;';
+        const badgeStyles = {
+          keyword: 'background:#e8f0fe;color:#1967d2;',
+          semantic: 'background:#e6f4ea;color:#137333;',
+          hybrid: 'background:#fef7e0;color:#b06000;'
+        };
+        badge.style.cssText += badgeStyles[item._matchType] || '';
+        const labels = { keyword: '关键词', semantic: '语义', hybrid: '关键词+语义' };
+        badge.textContent = labels[item._matchType] || item._matchType;
+        div.appendChild(badge);
+      }
+
+      div.addEventListener('click', () => {
+        if (item.url) {
+          safeSendMessage({ type: 'OPEN_URL', url: item.url });
+          hideOverlay();
+        }
+      });
+
+      theResultsList.appendChild(div);
+    });
+  }
+
   function sortItems(items, searchText, sortMode) {
     const sorted = [...items];
     const mode = sortMode || currentSort;
@@ -3049,17 +3183,29 @@
       }
     });
 
-    // 根据设置显示/隐藏分组模式
     try {
       chrome.storage.sync.get(['optionsSettings', 'settings'], (result) => {
+        const source = result.optionsSettings || result.settings || {};
+
         let showGroups = false;
-        if (result.optionsSettings && result.optionsSettings.showGroupsMode !== undefined) {
-          showGroups = result.optionsSettings.showGroupsMode;
-        } else if (result.settings && result.settings.showGroupsMode !== undefined) {
-          showGroups = result.settings.showGroupsMode;
+        if (source.showGroupsMode !== undefined) {
+          showGroups = source.showGroupsMode;
         }
         const groupsBtn = shadowRoot.querySelector('.mode-tab[data-mode="groups"]');
         if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
+
+        const ai = source.intelligentSearch || {};
+        const aiBtn = shadowRoot.querySelector('.mode-tab[data-mode="ai"]');
+        if (aiBtn) aiBtn.style.display = ai.enabled ? '' : 'none';
+
+        const defaultMode = source.defaultMode || 'bookmarks';
+        if (defaultMode !== 'bookmarks' && defaultMode !== currentMode) {
+          if (defaultMode === 'ai' && !ai.enabled) { /* skip */ }
+          else if (defaultMode === 'groups' && !showGroups) { /* skip */ }
+          else {
+            switchMode(defaultMode);
+          }
+        }
       });
     } catch (_) {}
 

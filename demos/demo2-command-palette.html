@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>命令面板风格统一搜索 - Demo</title>
+  <style>
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d30;
+      --bg-hover: #2a2d2e;
+      --bg-selected: #094771;
+      --text-primary: #cccccc;
+      --text-secondary: #858585;
+      --accent: #0e639c;
+      --accent-hover: #1177bb;
+      --border: #3c3c3c;
+      --font-mono: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --badge-bookmark: #4ec9b0;
+      --badge-tabs: #569cd6;
+      --badge-history: #dcdcaa;
+      --badge-downloads: #ce9178;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      justify-content: center;
+      padding-top: 15vh;
+    }
+
+    .palette-container {
+      width: 580px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .search-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-primary);
+      letter-spacing: 0.02em;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .prefix-hints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      min-height: 44px;
+    }
+
+    .prefix-hints.hidden {
+      display: none;
+    }
+
+    .prefix-hint {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 4px 10px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .prefix-hint:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--accent);
+    }
+
+    .prefix-hint kbd {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .results-list {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+
+    .results-list::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .results-list::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+
+    .results-list::-webkit-scrollbar-thumb {
+      background: var(--bg-tertiary);
+      border-radius: 5px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: background 0.1s;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .result-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .result-item.selected {
+      background: var(--bg-selected);
+    }
+
+    .result-item .badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .result-item .badge.bookmark { background: rgba(78, 201, 176, 0.25); color: var(--badge-bookmark); }
+    .result-item .badge.tabs { background: rgba(86, 156, 214, 0.25); color: var(--badge-tabs); }
+    .result-item .badge.history { background: rgba(220, 220, 170, 0.2); color: var(--badge-history); }
+    .result-item .badge.downloads { background: rgba(206, 145, 120, 0.25); color: var(--badge-downloads); }
+
+    .result-item .content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-item .title {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-item .url {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .result-item .favicon {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .empty-state {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .keyboard-hint {
+      padding: 8px 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+<body>
+  <div class="palette-container">
+    <div class="search-header">
+      <input type="text" class="search-input" id="searchInput" placeholder="输入搜索内容或使用前缀过滤..." autocomplete="off">
+    </div>
+
+    <div class="prefix-hints" id="prefixHints">
+      <span class="prefix-hint" data-prefix="@tabs"><kbd>@tabs</kbd> 标签页</span>
+      <span class="prefix-hint" data-prefix="@书签"><kbd>@书签</kbd> 书签</span>
+      <span class="prefix-hint" data-prefix="@history"><kbd>@history</kbd> 历史</span>
+      <span class="prefix-hint" data-prefix="@downloads"><kbd>@downloads</kbd> 下载</span>
+    </div>
+
+    <div class="results-list" id="resultsList">
+      <!-- Results populated by JS -->
+    </div>
+
+    <div class="keyboard-hint">
+      ↑↓ 选择 · Enter 打开 · Esc 关闭
+    </div>
+  </div>
+
+  <script>
+    const MOCK_DATA = {
+      bookmarks: [
+        { id: 'b1', title: 'GitHub - 代码托管平台', url: 'https://github.com', type: 'bookmark' },
+        { id: 'b2', title: '掘金 - 中文技术社区', url: 'https://juejin.cn', type: 'bookmark' },
+        { id: 'b3', title: 'Vue.js 官方文档', url: 'https://vuejs.org', type: 'bookmark' },
+        { id: 'b4', title: 'MDN Web 文档', url: 'https://developer.mozilla.org', type: 'bookmark' },
+        { id: 'b5', title: 'Stack Overflow 编程问答', url: 'https://stackoverflow.com', type: 'bookmark' },
+        { id: 'b6', title: '知乎 - 发现更大的世界', url: 'https://zhihu.com', type: 'bookmark' },
+      ],
+      tabs: [
+        { id: 't1', title: 'Chrome 书签搜索 - Cursor', url: 'https://cursor.com', type: 'tab' },
+        { id: 't2', title: 'Gmail - 邮箱', url: 'https://mail.google.com', type: 'tab' },
+        { id: 't3', title: 'Notion - 笔记工具', url: 'https://notion.so', type: 'tab' },
+        { id: 't4', title: 'Figma 设计协作', url: 'https://figma.com', type: 'tab' },
+        { id: 't5', title: 'ChatGPT', url: 'https://chat.openai.com', type: 'tab' },
+        { id: 't6', title: 'VSCode 文档', url: 'https://code.visualstudio.com', type: 'tab' },
+      ],
+      history: [
+        { id: 'h1', title: 'React 官方文档 - 学习 React', url: 'https://react.dev', type: 'history' },
+        { id: 'h2', title: 'TypeScript 中文网', url: 'https://ts.nodejs.cn', type: 'history' },
+        { id: 'h3', title: 'Tailwind CSS 文档', url: 'https://tailwindcss.com', type: 'history' },
+        { id: 'h4', title: 'Vite 构建工具', url: 'https://vitejs.dev', type: 'history' },
+        { id: 'h5', title: 'npm 包管理', url: 'https://npmjs.com', type: 'history' },
+        { id: 'h6', title: 'Node.js 文档', url: 'https://nodejs.org', type: 'history' },
+      ],
+      downloads: [
+        { id: 'd1', title: '项目需求文档.pdf', url: 'file:///Users/Downloads/需求文档.pdf', type: 'download' },
+        { id: 'd2', title: '设计稿-首页.fig', url: 'file:///Users/Downloads/设计稿.fig', type: 'download' },
+        { id: 'd3', title: '数据报表.xlsx', url: 'file:///Users/Downloads/报表.xlsx', type: 'download' },
+        { id: 'd4', title: '产品演示视频.mp4', url: 'file:///Users/Downloads/演示.mp4', type: 'download' },
+        { id: 'd5', title: '项目源码.zip', url: 'file:///Users/Downloads/源码.zip', type: 'download' },
+      ],
+    };
+
+    const PREFIX_MAP = {
+      '@tabs': 'tabs',
+      '@书签': 'bookmarks',
+      '@bookmarks': 'bookmarks',
+      '@history': 'history',
+      '@历史': 'history',
+      '@downloads': 'downloads',
+      '@下载': 'downloads',
+    };
+
+    const BADGE_MAP = {
+      bookmark: { label: '书签', class: 'bookmark' },
+      tab: { label: '标签', class: 'tabs' },
+      history: { label: '历史', class: 'history' },
+      download: { label: '下载', class: 'downloads' },
+    };
+
+    const FAVICON_BASE = 'https://www.google.com/s2/favicons?domain=';
+
+    function getFaviconUrl(url) {
+      try {
+        if (url.startsWith('file://')) return null;
+        const host = new URL(url).hostname;
+        return `${FAVICON_BASE}${host}&sz=32`;
+      } catch {
+        return null;
+      }
+    }
+
+    function parseInput(input) {
+      const trimmed = input.trim();
+      const lower = trimmed.toLowerCase();
+      let filterType = null;
+      let searchQuery = trimmed;
+
+      for (const [prefix, type] of Object.entries(PREFIX_MAP)) {
+        if (lower.startsWith(prefix.toLowerCase())) {
+          filterType = type;
+          searchQuery = trimmed.slice(prefix.length).trim();
+          break;
+        }
+      }
+
+      return { filterType, searchQuery };
+    }
+
+    function getAllItems() {
+      const items = [];
+      ['bookmarks', 'tabs', 'history', 'downloads'].forEach(source => {
+        MOCK_DATA[source].forEach(item => {
+          items.push({
+            ...item,
+            _source: source,
+            _badge: BADGE_MAP[source === 'bookmarks' ? 'bookmark' : source === 'tabs' ? 'tab' : source === 'history' ? 'history' : 'download'],
+          });
+        });
+      });
+      return items;
+    }
+
+    function filterAndSort(items, filterType, query) {
+      let filtered = items;
+
+      if (filterType) {
+        filtered = filtered.filter(i => i._source === filterType);
+      }
+
+      if (query) {
+        const q = query.toLowerCase();
+        filtered = filtered.filter(item =>
+          item.title.toLowerCase().includes(q) ||
+          (item.url && item.url.toLowerCase().includes(q))
+        );
+        filtered.sort((a, b) => {
+          const aTitle = a.title.toLowerCase();
+          const bTitle = b.title.toLowerCase();
+          const aStarts = aTitle.startsWith(q);
+          const bStarts = bTitle.startsWith(q);
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          const aIdx = aTitle.indexOf(q);
+          const bIdx = bTitle.indexOf(q);
+          return aIdx - bIdx;
+        });
+      }
+
+      return filtered;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function render(input) {
+      const { filterType, searchQuery } = parseInput(input);
+      const prefixHints = document.getElementById('prefixHints');
+      const resultsList = document.getElementById('resultsList');
+
+      prefixHints.classList.toggle('hidden', input.trim().length > 0);
+
+      let items = getAllItems();
+      items = filterAndSort(items, filterType, searchQuery);
+
+      if (items.length === 0) {
+        resultsList.innerHTML = '<div class="empty-state">未找到匹配结果</div>';
+        window.__flatItems = [];
+        return;
+      }
+
+      resultsList.innerHTML = items.map((item, i) => {
+        const favicon = getFaviconUrl(item.url);
+        const faviconHtml = favicon
+          ? `<img class="favicon" src="${favicon}" alt="">`
+          : '<span class="favicon" style="font-size:12px;opacity:0.6">📄</span>';
+        const badge = item._badge;
+        return `
+          <a class="result-item" href="#" data-index="${i}" data-url="${(item.url || '').replace(/"/g, '&quot;')}">
+            <span class="badge ${badge.class}">${badge.label}</span>
+            ${faviconHtml}
+            <div class="content">
+              <div class="title">${escapeHtml(item.title)}</div>
+              <div class="url">${escapeHtml(item.url || '')}</div>
+            </div>
+          </a>
+        `;
+      }).join('');
+
+      window.__flatItems = resultsList.querySelectorAll('.result-item');
+      window.__selectedIndex = 0;
+      updateSelection();
+    }
+
+    function updateSelection() {
+      const items = window.__flatItems || [];
+      items.forEach((el, i) => {
+        el.classList.toggle('selected', i === window.__selectedIndex);
+      });
+      if (items[window.__selectedIndex]) {
+        items[window.__selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+
+    function selectNext() {
+      const items = window.__flatItems || [];
+      if (items.length === 0) return;
+      window.__selectedIndex = (window.__selectedIndex + 1) % items.length;
+      updateSelection();
+    }
+
+    function selectPrev() {
+      const items = window.__flatItems || [];
+      if (items.length === 0) return;
+      window.__selectedIndex = window.__selectedIndex <= 0 ? items.length - 1 : window.__selectedIndex - 1;
+      updateSelection();
+    }
+
+    function openSelected() {
+      const items = window.__flatItems || [];
+      if (window.__selectedIndex >= 0 && items[window.__selectedIndex]) {
+        const url = items[window.__selectedIndex].dataset.url;
+        if (url && !url.startsWith('file://')) {
+          window.open(url, '_blank');
+        }
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      render(e.target.value);
+    });
+
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectNext();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectPrev();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        openSelected();
+      }
+    });
+
+    document.getElementById('prefixHints').addEventListener('click', (e) => {
+      const hint = e.target.closest('.prefix-hint');
+      if (hint) {
+        const prefix = hint.dataset.prefix;
+        const input = document.getElementById('searchInput');
+        input.value = prefix + ' ';
+        input.focus();
+        render(input.value);
+      }
+    });
+
+    document.getElementById('resultsList').addEventListener('click', (e) => {
+      const item = e.target.closest('.result-item');
+      if (item && item.dataset.url) {
+        e.preventDefault();
+        const url = item.dataset.url;
+        if (url && !url.startsWith('file://')) window.open(url, '_blank');
+      }
+    });
+
+    document.getElementById('resultsList').addEventListener('mouseover', (e) => {
+      const item = e.target.closest('.result-item[data-index]');
+      if (item) {
+        window.__selectedIndex = parseInt(item.dataset.index, 10);
+        updateSelection();
+      }
+    });
+
+    render('');
+  </script>
+</body>
+</html>

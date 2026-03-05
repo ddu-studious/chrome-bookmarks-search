@@ -1285,3 +1285,44 @@ body.style-fluent .menu-item.edit-action svg {
 .suggestion-item:hover {
   opacity: 1;
 }
+
+/* AI 搜索匹配类型标签 */
+.ai-match-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.ai-match-keyword {
+  background: #e8f0fe;
+  color: #1967d2;
+}
+
+.ai-match-semantic {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.ai-match-hybrid {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.dark-theme .ai-match-keyword {
+  background: #1a3a5c;
+  color: #8ab4f8;
+}
+
+.dark-theme .ai-match-semantic {
+  background: #1a3a2a;
+  color: #81c995;
+}
+
+.dark-theme .ai-match-hybrid {
+  background: #3a3019;
+  color: #fdd663;
+}

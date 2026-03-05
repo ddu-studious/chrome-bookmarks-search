@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo 4 - 智能 AI 分组</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f0f14;
+      --bg-card: #1a1a22;
+      --bg-hover: #252532;
+      --text: #f0f0f5;
+      --text-muted: #8b8b9a;
+      --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #4c6ef5 100%);
+      --accent: #8b7cf7;
+      --accent-soft: rgba(139, 124, 247, 0.15);
+      --border: rgba(255,255,255,0.08);
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0f0f14 0%, #1a1a2e 50%, #16213e 100%);
+      padding: 40px;
+    }
+
+    .container {
+      width: 560px;
+      max-height: 620px;
+      background: var(--bg-card);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+    }
+
+    .header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 14px 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      background: var(--bg);
+      transition: all 0.2s ease;
+    }
+
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: var(--gradient);
+      border-radius: 8px;
+      font-size: 11px;
+      color: white;
+      font-weight: 600;
+    }
+
+    .results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .group {
+      margin-bottom: 16px;
+      background: var(--bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+
+    .group-header:hover { background: var(--bg-hover); }
+
+    .group-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .group-chevron {
+      font-size: 12px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .group.collapsed .group-chevron { transform: rotate(-90deg); }
+    .group.collapsed .group-items { display: none; }
+
+    .group-items {
+      padding: 0 8px 8px;
+    }
+
+    .result-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      margin: 4px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .result-card:hover {
+      background: var(--bg-hover);
+    }
+
+    .result-card.selected {
+      background: var(--accent-soft);
+      outline: 1px solid var(--accent);
+    }
+
+    .result-favicon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .result-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .result-url {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .source-badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .source-badge.bookmark { background: rgba(102, 126, 234, 0.3); color: #a5b4fc; }
+    .source-badge.tab { background: rgba(118, 75, 162, 0.3); color: #c4b5fd; }
+    .source-badge.history { background: rgba(76, 110, 245, 0.3); color: #93c5fd; }
+    .source-badge.download { background: rgba(34, 197, 94, 0.3); color: #86efac; }
+
+    .footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer kbd {
+      padding: 2px 6px;
+      background: var(--bg);
+      border-radius: 4px;
+      font-size: 11px;
+      margin: 0 2px;
+    }
+
+    .results::-webkit-scrollbar { width: 6px; }
+    .results::-webkit-scrollbar-track { background: transparent; }
+    .results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <input type="text" class="search-input" id="searchInput" placeholder="搜索任何内容，AI 将智能分组..." autocomplete="off">
+      <span class="ai-badge">✨ AI 智能分组</span>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <div class="footer">
+      <span id="count">0 个结果</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>↵</kbd> 打开 · <kbd>Esc</kbd> 关闭</span>
+    </div>
+  </div>
+
+  <script>
+    const SOURCE_LABELS = { bookmark: '书签', tab: '标签', history: '历史', download: '下载' };
+
+    const MOCK_ITEMS = [
+      { id: 1, title: 'React 官方文档 - 中文', url: 'zh-hans.react.dev', source: 'bookmark', category: 'doc' },
+      { id: 2, title: 'React Hooks 完全指南', url: 'react.dev/learn/hooks', source: 'history', category: 'doc' },
+      { id: 3, title: 'React 技术博客 - 掘金', url: 'juejin.cn/tag/React', source: 'bookmark', category: 'blog' },
+      { id: 4, title: 'React 源码解析', url: 'github.com/xxx/react-source', source: 'bookmark', category: 'tool' },
+      { id: 5, title: 'Create React App', url: 'create-react-app.dev', source: 'history', category: 'tool' },
+      { id: 6, title: 'React 视频教程 - B站', url: 'bilibili.com/video/react', source: 'history', category: 'video' },
+      { id: 7, title: 'React 设计模式', url: 'patterns.dev/react', source: 'bookmark', category: 'doc' },
+      { id: 8, title: 'React 状态管理对比', url: 'zhuanlan.zhihu.com/react-state', source: 'history', category: 'blog' },
+      { id: 9, title: 'React DevTools 扩展', url: 'chrome.google.com/react-devtools', source: 'bookmark', category: 'tool' },
+      { id: 10, title: 'React 入门到实战课程', url: 'edu.xxx.com/react', source: 'history', category: 'video' },
+    ];
+
+    const CATEGORIES = {
+      doc: { icon: '📖', label: '学习文档' },
+      tool: { icon: '🔧', label: '开发工具' },
+      blog: { icon: '📰', label: '技术博客' },
+      video: { icon: '🎥', label: '视频教程' },
+    };
+
+    let selectedGroup = 0;
+    let selectedIndex = 0;
+    let groupedData = [];
+
+    function getFilteredAndGrouped(query) {
+      let items = MOCK_ITEMS.filter(item => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return item.title.toLowerCase().includes(q) || item.url.toLowerCase().includes(q);
+      });
+
+      const groups = {};
+      items.forEach(item => {
+        const cat = item.category || 'doc';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(item);
+      });
+
+      return Object.entries(groups).map(([key, list]) => ({
+        key,
+        ...CATEGORIES[key] || { icon: '📁', label: '其他' },
+        items: list,
+      }));
+    }
+
+    function render() {
+      const query = document.getElementById('searchInput').value;
+      groupedData = getFilteredAndGrouped(query);
+
+      let flatIndex = 0;
+      const container = document.getElementById('results');
+      container.innerHTML = groupedData.map((group, gi) => `
+        <div class="group" data-group="${gi}">
+          <div class="group-header">
+            <span class="group-title">${group.icon} ${group.label}</span>
+            <span class="group-chevron">▼</span>
+          </div>
+          <div class="group-items">
+            ${group.items.map((item, ii) => {
+              const idx = flatIndex++;
+              return `
+                <div class="result-card ${selectedGroup === gi && selectedIndex === ii ? 'selected' : ''}"
+                     data-g="${gi}" data-i="${ii}" data-flat="${idx}">
+                  <div class="result-favicon">${['📘','⚛️','📝','🔧','🎬'][gi % 5]}</div>
+                  <div class="result-body">
+                    <div class="result-title">${escapeHtml(item.title)}</div>
+                    <div class="result-meta">
+                      <span class="result-url">${escapeHtml(item.url)}</span>
+                      <span class="source-badge ${item.source}">${SOURCE_LABELS[item.source]}</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      const total = groupedData.reduce((s, g) => s + g.items.length, 0);
+      document.getElementById('count').textContent = `${total} 个结果 · ${groupedData.length} 个分组`;
+
+      container.querySelectorAll('.group-header').forEach(el => {
+        el.addEventListener('click', () => {
+          el.closest('.group').classList.toggle('collapsed');
+        });
+      });
+
+      container.querySelectorAll('.result-card').forEach(el => {
+        el.addEventListener('click', () => {
+          selectedGroup = parseInt(el.dataset.g);
+          selectedIndex = parseInt(el.dataset.i);
+          render();
+          const item = groupedData[selectedGroup]?.items[selectedIndex];
+          if (item) console.log('打开:', item.url);
+        });
+        el.addEventListener('mouseenter', () => {
+          selectedGroup = parseInt(el.dataset.g);
+          selectedIndex = parseInt(el.dataset.i);
+          render();
+        });
+      });
+
+      const selectedCard = container.querySelector('.result-card.selected');
+      if (selectedCard) selectedCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function getFlatIndex() {
+      let idx = 0;
+      for (let g = 0; g < groupedData.length; g++) {
+        if (g === selectedGroup) return idx + selectedIndex;
+        idx += groupedData[g].items.length;
+      }
+      return idx;
+    }
+
+    function moveSelection(delta) {
+      if (!groupedData.length) return;
+      const items = groupedData[selectedGroup]?.items || [];
+      selectedIndex += delta;
+      if (selectedIndex < 0) {
+        if (selectedGroup > 0) {
+          selectedGroup--;
+          selectedIndex = groupedData[selectedGroup].items.length - 1;
+        } else selectedIndex = 0;
+      } else if (selectedIndex >= items.length) {
+        if (selectedGroup < groupedData.length - 1) {
+          selectedGroup++;
+          selectedIndex = 0;
+        } else selectedIndex = items.length - 1;
+      }
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => { selectedGroup = 0; selectedIndex = 0; render(); });
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-1); render(); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        const item = groupedData[selectedGroup]?.items[selectedIndex];
+        if (item) console.log('打开:', item.url);
+      }
+    });
+
+    document.getElementById('searchInput').value = 'React';
+    render();
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 // Background script for handling extension events
+importScripts('js/intelligent-search.js');
 console.log('[BookmarkSearch] Background script loaded');
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -250,8 +251,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           case 'downloads':
             data = await loadDownloads();
             break;
+          case 'ai': {
+            const bookmarks = await loadBookmarks();
+            const tabs = await loadTabs();
+            const history = await loadHistory();
+            const downloads = await loadDownloads();
+            data = { bookmarks, tabs, history, downloads };
+            break;
+          }
         }
-        console.log('[BookmarkSearch] Loaded data:', request.mode, data.length);
+        console.log('[BookmarkSearch] Loaded data:', request.mode, request.mode === 'ai' ? 'multi-source' : data.length);
       } catch (error) {
         console.error('[BookmarkSearch] Error loading data:', error);
       }
@@ -286,6 +295,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (mode) {
       case 'bookmarks':
       case 'history':
+      case 'ai':
         if (item.url) {
           chrome.tabs.create({ url: item.url });
         }
@@ -415,6 +425,128 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });
+    return true;
+  }
+
+  // ==================== 智能搜索相关消息 ====================
+
+  if (request.type === 'INTELLIGENT_SEARCH') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, fallback: true, error: '智能搜索未启用' });
+          return;
+        }
+        const bookmarks = await loadBookmarks();
+        const allItems = [...bookmarks];
+
+        if (request.includeHistory) {
+          const history = await loadHistory();
+          allItems.push(...history.map(h => ({ ...h, id: `history_${h.url}` })));
+        }
+        if (request.includeDownloads) {
+          const downloads = await loadDownloads();
+          allItems.push(...downloads.map(d => ({ ...d, id: `download_${d.id}` })));
+        }
+
+        const result = await IntelligentSearch.hybridSearch(
+          request.query, allItems, config,
+          { limit: request.limit || 50, rerank: request.rerank }
+        );
+        sendResponse(result);
+      } catch (e) {
+        console.error('[BookmarkSearch] Intelligent search error:', e);
+        sendResponse({ ok: false, fallback: true, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_INTELLIGENT_SEARCH_CONFIG') {
+    (async () => {
+      const config = await getIntelligentSearchConfig();
+      const vectorCount = await IntelligentSearch.getVectorCount().catch(() => 0);
+      const buildStatus = IntelligentSearch.getBuildStatus();
+      sendResponse({ ok: true, data: { ...config, vectorCount, buildStatus } });
+    })();
+    return true;
+  }
+
+  if (request.type === 'SET_INTELLIGENT_SEARCH_CONFIG') {
+    (async () => {
+      try {
+        await setIntelligentSearchConfig(request.config);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'BUILD_EMBEDDING_INDEX') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        const bookmarks = await loadBookmarks();
+        const result = await IntelligentSearch.buildEmbeddingIndex(bookmarks, config, (progress) => {
+          chrome.runtime.sendMessage({ type: 'EMBEDDING_BUILD_PROGRESS', ...progress }).catch(() => {});
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+              chrome.tabs.sendMessage(tab.id, { type: 'EMBEDDING_BUILD_PROGRESS', ...progress }).catch(() => {});
+            });
+          });
+        });
+        sendResponse({ ok: true, ...result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'PAUSE_EMBEDDING_BUILD') {
+    IntelligentSearch.pauseEmbeddingBuild();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'VERIFY_API_KEY') {
+    (async () => {
+      try {
+        const result = await IntelligentSearch.verifyApiKey(request.config);
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ ok: false, message: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'EXTRACT_AND_SUMMARIZE') {
+    (async () => {
+      try {
+        const config = await getIntelligentSearchConfig();
+        const result = await IntelligentSearch.extractAndSummarize(request.bookmarkId, config);
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_EMBEDDING_STATUS') {
+    (async () => {
+      try {
+        const vectorCount = await IntelligentSearch.getVectorCount();
+        const buildStatus = IntelligentSearch.getBuildStatus();
+        sendResponse({ ok: true, vectorCount, buildStatus });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
     return true;
   }
 
@@ -567,6 +699,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+// ==================== 智能搜索配置管理 ====================
+
+async function getIntelligentSearchConfig() {
+  const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
+  const source = result.optionsSettings || result.settings || {};
+  return {
+    enabled: false,
+    aiProvider: 'deepseek',
+    aiApiKey: '',
+    aiBaseUrl: '',
+    embeddingModel: '',
+    chatModel: '',
+    rerankEnabled: false,
+    lastBuildProgress: 0,
+    ...(source.intelligentSearch || {})
+  };
+}
+
+async function setIntelligentSearchConfig(newConfig) {
+  const result = await chrome.storage.sync.get(['settings']);
+  const settings = result.settings || {};
+  settings.intelligentSearch = {
+    ...(settings.intelligentSearch || {}),
+    ...newConfig
+  };
+  await chrome.storage.sync.set({ settings });
+}
 
 // ==================== 标签页分组快照服务 ====================
 const TAB_GROUP_STORAGE_KEY = 'tabGroupSnapshots';
@@ -746,9 +906,33 @@ function scheduleBroadcastBookmarkChanged() {
   bookmarkBroadcastTimer = setTimeout(broadcastBookmarkChanged, 300);
 }
 
-chrome.bookmarks.onCreated.addListener(scheduleBroadcastBookmarkChanged);
-chrome.bookmarks.onRemoved.addListener(scheduleBroadcastBookmarkChanged);
-chrome.bookmarks.onChanged.addListener(scheduleBroadcastBookmarkChanged);
+chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+  scheduleBroadcastBookmarkChanged();
+  getIntelligentSearchConfig().then(config => {
+    if (config.enabled && config.aiApiKey && bookmark.url) {
+      IntelligentSearch.handleBookmarkCreated(bookmark, config);
+    }
+  }).catch(() => {});
+});
+
+chrome.bookmarks.onRemoved.addListener((id) => {
+  scheduleBroadcastBookmarkChanged();
+  IntelligentSearch.handleBookmarkRemoved(id).catch(() => {});
+});
+
+chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
+  scheduleBroadcastBookmarkChanged();
+  chrome.bookmarks.get(id).then(([bookmark]) => {
+    if (bookmark) {
+      getIntelligentSearchConfig().then(config => {
+        if (config.enabled && config.aiApiKey) {
+          IntelligentSearch.handleBookmarkChanged(bookmark, config);
+        }
+      });
+    }
+  }).catch(() => {});
+});
+
 chrome.bookmarks.onMoved.addListener(scheduleBroadcastBookmarkChanged);
 
 chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });

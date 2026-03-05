@@ -29,36 +29,39 @@ const DEFAULT_SETTINGS = {
   highContrast: false, // true, false
   showGroupsMode: false, // 是否显示分组搜索模式（官方 API 能力有限，默认关闭）
   groupChildClickRestoreAll: true, // 点击分组内子标签时是否整组恢复
-  defaultSearchEngine: null // null = 自动检测(中文环境百度/其他Google), 或 google/baidu/bing/duckduckgo
+  defaultSearchEngine: null, // null = 自动检测(中文环境百度/其他Google), 或 google/baidu/bing/duckduckgo
+  defaultMode: 'bookmarks', // 扩展打开时的默认搜索模式
+  intelligentSearch: {
+    enabled: false,
+    aiProvider: 'deepseek', // deepseek, openai, gemini, custom
+    aiApiKey: '',
+    aiBaseUrl: '',
+    embeddingModel: '',
+    chatModel: '',
+    rerankEnabled: false,
+    lastBuildProgress: 0
+  }
 };
 
 // 获取当前设置
 async function getSettings() {
-  // 尝试从两个位置读取设置（兼容 options 页面和旧设置）
   const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
   
-  // 优先使用 optionsSettings（来自 options 页面）
-  if (result.optionsSettings) {
-    return {
-      ...DEFAULT_SETTINGS,
-      theme: result.optionsSettings.theme || DEFAULT_SETTINGS.theme,
-      fontSize: result.optionsSettings.fontSize || DEFAULT_SETTINGS.fontSize,
-      animation: result.optionsSettings.animation !== undefined ? result.optionsSettings.animation : DEFAULT_SETTINGS.animation,
-      highContrast: result.optionsSettings.highContrast !== undefined ? result.optionsSettings.highContrast : DEFAULT_SETTINGS.highContrast,
-      lineHeight: DEFAULT_SETTINGS.lineHeight,
-      showGroupsMode: result.optionsSettings.showGroupsMode !== undefined
-        ? result.optionsSettings.showGroupsMode
-        : DEFAULT_SETTINGS.showGroupsMode,
-      groupChildClickRestoreAll: result.optionsSettings.groupChildClickRestoreAll !== undefined
-        ? result.optionsSettings.groupChildClickRestoreAll
-        : DEFAULT_SETTINGS.groupChildClickRestoreAll,
-      defaultSearchEngine: result.optionsSettings.defaultSearchEngine !== undefined
-        ? result.optionsSettings.defaultSearchEngine
-        : DEFAULT_SETTINGS.defaultSearchEngine
-    };
+  const source = result.optionsSettings || result.settings || {};
+  const merged = { ...DEFAULT_SETTINGS };
+
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    if (key === 'intelligentSearch') {
+      merged.intelligentSearch = {
+        ...DEFAULT_SETTINGS.intelligentSearch,
+        ...(source.intelligentSearch || {})
+      };
+    } else if (source[key] !== undefined) {
+      merged[key] = source[key];
+    }
   }
-  
-  return { ...DEFAULT_SETTINGS, ...result.settings };
+
+  return merged;
 }
 
 // 保存设置
