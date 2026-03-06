@@ -52,9 +52,12 @@ async function getSettings() {
 
   for (const key of Object.keys(DEFAULT_SETTINGS)) {
     if (key === 'intelligentSearch') {
+      const fromSettings = result.settings?.intelligentSearch || {};
+      const fromOptions = result.optionsSettings?.intelligentSearch || {};
       merged.intelligentSearch = {
         ...DEFAULT_SETTINGS.intelligentSearch,
-        ...(source.intelligentSearch || {})
+        ...fromSettings,
+        ...fromOptions
       };
     } else if (source[key] !== undefined) {
       merged[key] = source[key];

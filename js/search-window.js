@@ -29,6 +29,7 @@
   let currentStyle = 'spotlight';
   let currentFont = 'system';
   let aiSearchDebounceTimer = null;
+  let dataLoadPromise = null;
 
   // 书签使用状态常量
   const BOOKMARK_STATUS = {
@@ -104,6 +105,9 @@
     try {
       const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
       const source = result.optionsSettings || result.settings || {};
+      const fromSettings = result.settings?.intelligentSearch || {};
+      const fromOptions = result.optionsSettings?.intelligentSearch || {};
+      const ai = { ...fromSettings, ...fromOptions };
 
       let showGroups = false;
       if (source.showGroupsMode !== undefined) {
@@ -112,7 +116,6 @@
       const groupsBtn = document.querySelector('.mode-tab[data-mode="groups"]');
       if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
 
-      const ai = source.intelligentSearch || {};
       const aiBtn = document.querySelector('.mode-tab[data-mode="ai"]');
       if (aiBtn) aiBtn.style.display = ai.enabled ? '' : 'none';
 
@@ -147,7 +150,10 @@
     // 搜索输入（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => {
+      searchDebounceTimer = setTimeout(async () => {
+        if (dataLoadPromise) {
+          await dataLoadPromise;
+        }
         search(e.target.value);
       }, 120);
     });
@@ -328,7 +334,13 @@
             window.close();
             break;
           }
-          openResult(selectedIndex);
+          const targetItem = currentResults[selectedIndex];
+          if (targetItem) {
+            openResult(selectedIndex);
+          } else if (selectedEl?.dataset?.url) {
+            safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
+            window.close();
+          }
         }
         break;
     }
@@ -389,7 +401,7 @@
 
   // ==================== 数据加载 ====================
   async function loadData() {
-    return new Promise((resolve) => {
+    const p = new Promise((resolve) => {
       safeSendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
         if (response) {
           switch (currentMode) {
@@ -425,6 +437,8 @@
         resolve();
       });
     });
+    dataLoadPromise = p;
+    return p;
   }
 
   function updateFilterCounts() {

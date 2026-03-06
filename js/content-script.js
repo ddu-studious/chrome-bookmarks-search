@@ -45,6 +45,10 @@
 
   // 搜索防抖定时器
   let searchDebounceTimer = null;
+  // 搜索版本号：每次用户主动输入时递增，防止异步 loadData 回调覆盖最新搜索结果
+  let searchNonce = 0;
+  // 当前数据加载 Promise，用于搜索时等待数据就绪
+  let dataLoadPromise = null;
 
   // 用户意图（主动交互）与自动抢焦点节流
   // 目的：避免与宿主页面 focus trap 打乒乓导致光标闪烁/IME 被打断
@@ -1928,7 +1932,11 @@
     // 搜索输入（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => {
+      searchNonce++;
+      searchDebounceTimer = setTimeout(async () => {
+        if (dataLoadPromise) {
+          await dataLoadPromise;
+        }
         search(e.target.value);
       }, 120);
     });
@@ -2169,7 +2177,13 @@
             hideOverlay();
             break;
           }
-          openResult(selectedIndex);
+          const targetItem = currentResults[selectedIndex];
+          if (targetItem) {
+            openResult(selectedIndex);
+          } else if (selectedEl?.dataset?.url) {
+            safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
+            hideOverlay();
+          }
         }
         break;
     }
@@ -2236,7 +2250,9 @@
     const filterBar = shadowRoot.getElementById('filterBar');
     filterBar.classList.toggle('show', mode === 'bookmarks');
 
+    const modeNonce = searchNonce;
     loadData().then(() => {
+      if (searchNonce !== modeNonce) return;
       if (mode === 'groups') {
         const query = searchInput.value;
         const filtered = searchGroups(query, allGroups);
@@ -2264,8 +2280,8 @@
     }
   }
 
-  async function loadData() {
-    return new Promise((resolve) => {
+  async function loadData(retries = 1) {
+    const p = new Promise((resolve) => {
       safeSendMessage({ type: 'GET_DATA', mode: currentMode }, (response) => {
         if (response) {
           switch (currentMode) {
@@ -2297,10 +2313,18 @@
               loadContentScriptRecommendations();
               break;
           }
+          resolve();
+        } else if (retries > 0) {
+          console.warn('[BookmarkSearch] loadData: no response, retrying...');
+          setTimeout(() => loadData(retries - 1).then(resolve), 300);
+        } else {
+          console.error('[BookmarkSearch] loadData: failed after retries');
+          resolve();
         }
-        resolve();
       });
     });
+    dataLoadPromise = p;
+    return p;
   }
 
   // 更新筛选器计数
@@ -2541,6 +2565,9 @@
 
   // 搜索函数
   function search(query) {
+    console.log('[BookmarkSearch] search() called, query:', JSON.stringify(query),
+      ', SearchParser available:', typeof window.SearchParser !== 'undefined',
+      ', mode:', currentMode);
     // 分组模式使用独立的搜索逻辑
     if (currentMode === 'groups') {
       const filtered = searchGroups(query, allGroups);
@@ -2575,8 +2602,8 @@
 
     // 恢复原有“多关键字 + 高级语法”能力：复用 SearchParser + SmartSort
     // SearchParser 支持：空格分隔多关键字 AND、引号精确匹配、site/type/in/after/before 等
-    if (typeof SearchParser !== 'undefined' && SearchParser.filter) {
-      items = SearchParser.filter(items, query || '');
+    if (typeof window.SearchParser !== 'undefined' && window.SearchParser.filter) {
+      items = window.SearchParser.filter(items, query || '');
     } else if (query && query.trim()) {
       // 兜底：至少支持“空格分词 AND”
       const tokens = query.trim().split(/\s+/).filter(Boolean).map(t => t.toLowerCase());
@@ -2600,8 +2627,8 @@
       }
     }
 
-    if (typeof SmartSort !== 'undefined' && SmartSort.sort) {
-      items = SmartSort.sort(items, { searchText: query || '', mode: effectiveSort });
+    if (typeof window.SmartSort !== 'undefined' && window.SmartSort.sort) {
+      items = window.SmartSort.sort(items, { searchText: query || '', mode: effectiveSort });
     } else {
       // 兜底排序（保持行为可用）
       items = sortItems(items, query || '', effectiveSort);
@@ -3293,6 +3320,9 @@
     try {
       chrome.storage.sync.get(['optionsSettings', 'settings'], (result) => {
         const source = result.optionsSettings || result.settings || {};
+        const fromSettings = result.settings?.intelligentSearch || {};
+        const fromOptions = result.optionsSettings?.intelligentSearch || {};
+        const ai = { ...fromSettings, ...fromOptions };
 
         let showGroups = false;
         if (source.showGroupsMode !== undefined) {
@@ -3301,7 +3331,6 @@
         const groupsBtn = shadowRoot.querySelector('.mode-tab[data-mode="groups"]');
         if (groupsBtn) groupsBtn.style.display = showGroups ? '' : 'none';
 
-        const ai = source.intelligentSearch || {};
         const aiBtn = shadowRoot.querySelector('.mode-tab[data-mode="ai"]');
         if (aiBtn) aiBtn.style.display = ai.enabled ? '' : 'none';
 
@@ -3322,9 +3351,10 @@
       filterBar.classList.toggle('show', currentMode === 'bookmarks');
     }
 
-    // 加载初始数据
+    // 加载初始数据并搜索（不再使用 nonce 守卫，确保数据加载后始终搜索）
     loadData().then(() => {
-      search('');
+      const searchInput = shadowRoot.getElementById('searchInput');
+      search(searchInput ? searchInput.value : '');
     });
   }
 

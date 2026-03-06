@@ -1009,17 +1009,60 @@ ${text.slice(0, 3000)}`;
     }
   }
 
-  async function extractAndSummarize(bookmarkId, config) {
-    try {
-      const tab = await chrome.tabs.create({ url: '', active: false });
-      const bookmark = (await chrome.bookmarks.get(bookmarkId))?.[0];
-      if (!bookmark?.url) throw new Error('书签不存在或无 URL');
+  function isUrlExtractable(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.trim().toLowerCase();
+    const skipPrefixes = [
+      'chrome://', 'chrome-extension://', 'edge://', 'about:',
+      'moz-extension://', 'file://', 'data:', 'blob:', 'javascript:',
+      'chrome-error://', 'devtools://'
+    ];
+    return !skipPrefixes.some(prefix => u.startsWith(prefix));
+  }
 
-      await chrome.tabs.update(tab.id, { url: bookmark.url });
-      await new Promise(r => setTimeout(r, 3000));
+  async function waitForTabLoad(tabId, timeoutMs = 15000) {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) { resolved = true; chrome.tabs.onUpdated.removeListener(listener); resolve(false); }
+      }, timeoutMs);
+
+      function listener(updatedTabId, changeInfo, tab) {
+        if (updatedTabId !== tabId) return;
+        if (changeInfo.status === 'complete') {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            chrome.tabs.onUpdated.removeListener(listener);
+            const tabUrl = (tab?.url || '').toLowerCase();
+            resolve(!tabUrl.startsWith('chrome-error://'));
+          }
+        }
+      }
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  }
+
+  async function extractAndSummarize(bookmarkId, config) {
+    const bookmark = (await chrome.bookmarks.get(bookmarkId))?.[0];
+    if (!bookmark?.url) return { ok: false, error: '书签不存在或无 URL' };
+
+    if (!isUrlExtractable(bookmark.url)) {
+      return { ok: false, error: '该 URL 类型不支持提取' };
+    }
+
+    let tab = null;
+    try {
+      tab = await chrome.tabs.create({ url: bookmark.url, active: false });
+
+      const loaded = await waitForTabLoad(tab.id, 15000);
+      if (!loaded) {
+        throw new Error('页面加载失败或超时');
+      }
 
       const content = await extractWebContent(tab.id);
       await chrome.tabs.remove(tab.id);
+      tab = null;
 
       if (!content) throw new Error('无法提取页面内容');
 
@@ -1045,6 +1088,10 @@ ${text.slice(0, 3000)}`;
       return { ok: true, summary: summaryData.summary, tags: summaryData.tags };
     } catch (e) {
       return { ok: false, error: e.message };
+    } finally {
+      if (tab) {
+        try { await chrome.tabs.remove(tab.id); } catch (_) {}
+      }
     }
   }
 

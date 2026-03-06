@@ -1029,6 +1029,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                 break;
             }
             window.close();
+          } else if (selectedEl?.dataset?.url) {
+            chrome.tabs.create({ url: selectedEl.dataset.url });
+            window.close();
           }
         }
         break;

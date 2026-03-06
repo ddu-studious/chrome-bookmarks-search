@@ -816,7 +816,8 @@ function broadcastSummaryProgress(progress) {
 
 async function getIntelligentSearchConfig() {
   const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
-  const source = result.optionsSettings || result.settings || {};
+  const fromSettings = result.settings?.intelligentSearch || {};
+  const fromOptions = result.optionsSettings?.intelligentSearch || {};
   return {
     enabled: false,
     aiProvider: 'gemini',
@@ -826,7 +827,8 @@ async function getIntelligentSearchConfig() {
     chatModel: '',
     rerankEnabled: false,
     lastBuildProgress: 0,
-    ...(source.intelligentSearch || {})
+    ...fromSettings,
+    ...fromOptions
   };
 }
 
@@ -1001,25 +1003,8 @@ if (chrome.tabGroups) {
   chrome.tabGroups.onRemoved.addListener(handleGroupRemoved);
 }
 
-// 监听书签变化，广播给 content-script 和 search-window
-function broadcastBookmarkChanged() {
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, { type: 'BOOKMARK_CHANGED' }).catch(() => {});
-    });
-  });
-  // 通知所有 search-window（runtime 广播）
-  chrome.runtime.sendMessage({ type: 'BOOKMARK_CHANGED' }).catch(() => {});
-}
-
-let bookmarkBroadcastTimer = null;
-function scheduleBroadcastBookmarkChanged() {
-  clearTimeout(bookmarkBroadcastTimer);
-  bookmarkBroadcastTimer = setTimeout(broadcastBookmarkChanged, 300);
-}
-
+// 监听书签变化，更新 AI 索引
 chrome.bookmarks.onCreated.addListener((id, bookmark) => {
-  scheduleBroadcastBookmarkChanged();
   getIntelligentSearchConfig().then(config => {
     if (config.enabled && config.aiApiKey && bookmark.url) {
       IntelligentSearch.handleBookmarkCreated(bookmark, config);
@@ -1028,12 +1013,10 @@ chrome.bookmarks.onCreated.addListener((id, bookmark) => {
 });
 
 chrome.bookmarks.onRemoved.addListener((id) => {
-  scheduleBroadcastBookmarkChanged();
   IntelligentSearch.handleBookmarkRemoved(id).catch(() => {});
 });
 
 chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
-  scheduleBroadcastBookmarkChanged();
   chrome.bookmarks.get(id).then(([bookmark]) => {
     if (bookmark) {
       getIntelligentSearchConfig().then(config => {
@@ -1044,8 +1027,6 @@ chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
     }
   }).catch(() => {});
 });
-
-chrome.bookmarks.onMoved.addListener(scheduleBroadcastBookmarkChanged);
 
 chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -1079,84 +1060,14 @@ chrome.runtime.onStartup.addListener(async () => {
   }
 });
 
-// 注入并打开浮层的核心函数
-// 返回 true 表示成功，false 表示注入失败（需要降级到独立搜索窗口）
-async function injectAndToggleOverlay(tabId) {
-  console.log('[BookmarkSearch] Attempting to toggle overlay in tab:', tabId);
-  
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
-    console.log('[BookmarkSearch] Message sent successfully, response:', response);
-    return true;
-  } catch (error) {
-    console.log('[BookmarkSearch] Content script not ready, injecting...', error.message);
-    
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['js/search-parser.js', 'js/smart-sort.js', 'js/content-script.js']
-      });
-      console.log('[BookmarkSearch] Content script injected');
-      
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      try {
-        const response = await chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' });
-        console.log('[BookmarkSearch] Message sent after injection, response:', response);
-        return true;
-      } catch (msgError) {
-        console.error('[BookmarkSearch] Failed to send message after injection:', msgError);
-        return false;
-      }
-    } catch (injectError) {
-      const msg = injectError?.message || '';
-      if (msg.includes('error page') || msg.includes('Cannot access') || msg.includes('missing host permission')) {
-        console.log('[BookmarkSearch] Tab is showing error page or inaccessible, falling back to search window');
-      } else {
-        console.warn('[BookmarkSearch] Failed to inject content script:', msg);
-      }
-      return false;
-    }
-  }
-}
-
-// 检查是否可以注入的页面
-function canInjectIntoTab(tab) {
-  if (!tab || !tab.url) return false;
-  
-  const url = tab.url;
-  if (url.startsWith('chrome://') ||
-      url.startsWith('chrome-extension://') ||
-      url.startsWith('edge://') ||
-      url.startsWith('about:') ||
-      url.startsWith('moz-extension://') ||
-      url.startsWith('file://') ||
-      url === 'about:blank') {
-    return false;
-  }
-
-  if (tab.status === 'loading' && !tab.title) {
-    return false;
-  }
-
-  return true;
-}
-
-// ==================== 独立搜索窗口管理 ====================
-// 用于在 chrome:// 等不可注入页面上提供搜索功能
+// ==================== 独立搜索窗口（统一入口） ====================
 let searchWindowId = null;
 
-/**
- * 打开独立搜索窗口（居中显示于当前窗口）
- * 窗口类型为 popup（无地址栏、无标签栏），接近 Spotlight 体验
- */
 async function openSearchWindow() {
   const currentWindow = await chrome.windows.getCurrent();
   const w = 640, h = 540;
   const left = Math.round(currentWindow.left + (currentWindow.width - w) / 2);
   const top = Math.round(currentWindow.top + (currentWindow.height - h) / 2);
-
-  console.log('[BookmarkSearch] Opening search window (centered)');
 
   const win = await chrome.windows.create({
     url: 'search-window.html',
@@ -1171,76 +1082,36 @@ async function openSearchWindow() {
   searchWindowId = win.id;
 }
 
-// 监听窗口关闭，清理搜索窗口引用
 chrome.windows.onRemoved.addListener((windowId) => {
   if (windowId === searchWindowId) {
     searchWindowId = null;
-    console.log('[BookmarkSearch] Search window closed');
   }
 });
 
-/**
- * 统一入口：判断当前页面环境，路由到最佳搜索体验
- * 
- * 路由逻辑：
- * 1. 如果独立搜索窗口已存在且聚焦中 → 关闭它（toggle off）
- * 2. 如果独立搜索窗口已存在但沉底 → 聚焦回来（不关闭）
- * 3. 当前标签页可注入 → 注入 Content Script 浮层（最佳 Spotlight 体验）
- * 4. 当前标签页不可注入 → 打开独立搜索窗口（优雅降级）
- */
-async function ensureOverlayVisibleFromAnyPage(tab) {
-  // 如果独立搜索窗口已存在
+async function toggleSearchWindow() {
   if (searchWindowId) {
     try {
       const win = await chrome.windows.get(searchWindowId);
-
       if (win.focused) {
-        // 窗口在前台 → 关闭（toggle off）
         await chrome.windows.remove(searchWindowId);
         searchWindowId = null;
-        console.log('[BookmarkSearch] Closed focused search window (toggle off)');
-        return;
       } else {
-        // 窗口在后台（沉底） → 聚焦回来
         await chrome.windows.update(searchWindowId, { focused: true });
-        console.log('[BookmarkSearch] Re-focused search window');
-        return;
       }
+      return;
     } catch (e) {
-      // 窗口已不存在
       searchWindowId = null;
     }
   }
-
-  // 可注入页面 → Content Script 浮层（最佳体验）
-  // 注入可能因页面加载失败（ERR_CONNECTION_REFUSED 等）而失败，此时降级到独立搜索窗口
-  if (tab && canInjectIntoTab(tab)) {
-    const success = await injectAndToggleOverlay(tab.id);
-    if (success) return;
-    console.log('[BookmarkSearch] Injection failed (page may not be loaded), falling back to search window');
-  } else {
-    console.log('[BookmarkSearch] Cannot inject into this page:', tab?.url);
-  }
-
-  // 不可注入页面或注入失败 → 独立搜索窗口（优雅降级）
   await openSearchWindow();
 }
 
-// 点击扩展图标
-chrome.action.onClicked.addListener(async (tab) => {
-  console.log('[BookmarkSearch] Action clicked, tab:', tab.id, tab.url);
-  await ensureOverlayVisibleFromAnyPage(tab);
-});
+// 点击扩展图标 → 打开/切换搜索窗口
+chrome.action.onClicked.addListener(() => toggleSearchWindow());
 
-// 监听快捷键
-chrome.commands.onCommand.addListener(async (command) => {
-  console.log('[BookmarkSearch] Command received:', command);
-  
-  // 只处理 _execute_action 命令
+// Alt+B 快捷键 → 打开/切换搜索窗口
+chrome.commands.onCommand.addListener((command) => {
   if (command === '_execute_action') {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    console.log('[BookmarkSearch] Current tab:', tab?.id, tab?.url);
-
-    await ensureOverlayVisibleFromAnyPage(tab);
+    toggleSearchWindow();
   }
 });

@@ -981,7 +981,8 @@ function showToast(message) {
 
 async function getAiConfig() {
   const result = await chrome.storage.sync.get(['settings', 'optionsSettings']);
-  const source = result.optionsSettings || result.settings || {};
+  const fromSettings = result.settings?.intelligentSearch || {};
+  const fromOptions = result.optionsSettings?.intelligentSearch || {};
   return {
     enabled: false,
     aiProvider: 'gemini',
@@ -991,7 +992,8 @@ async function getAiConfig() {
     chatModel: '',
     rerankEnabled: false,
     lastBuildProgress: 0,
-    ...(source.intelligentSearch || {})
+    ...fromSettings,
+    ...fromOptions
   };
 }
 
