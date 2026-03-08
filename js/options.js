@@ -21,7 +21,8 @@ const DEFAULT_SETTINGS = {
     { name: '哔哩哔哩', url: 'https://www.bilibili.com' },
     { name: 'YouTube', url: 'https://www.youtube.com' }
   ],
-  defaultSearchEngine: null
+  defaultSearchEngine: null,
+  searchWindowMode: 'window'
 };
 
 // 分页配置
@@ -42,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindDataManagementEvents();
   bindModalEvents();
   bindAiSearchEvents();
+  bindHealthCheckEvents();
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
   
@@ -59,6 +61,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (msg.type === 'SUMMARY_BATCH_PROGRESS') {
       updateOptSummaryProgress(msg);
+    }
+    if (msg.type === 'BOOKMARK_HEALTH_PROGRESS') {
+      updateHealthProgress(msg);
     }
   });
 });
@@ -141,6 +146,13 @@ async function loadSettings() {
     engineSelect.value = settings.defaultSearchEngine || 'auto';
   }
   
+  // 搜索窗口模式
+  const modeSelect = document.getElementById('searchWindowMode');
+  if (modeSelect) {
+    modeSelect.value = settings.searchWindowMode || 'window';
+    updateSearchWindowModeHint(settings.searchWindowMode || 'window');
+  }
+  
   // 加载快捷键
   loadCurrentShortcut();
 }
@@ -172,23 +184,30 @@ async function saveSettings() {
     historyRange: parseInt(document.getElementById('historyRange').value),
     showStats: document.getElementById('showStats').checked,
     showGroupsMode: document.getElementById('showGroupsMode').checked,
-    defaultSearchEngine: document.getElementById('defaultSearchEngine')?.value === 'auto' ? null : document.getElementById('defaultSearchEngine')?.value || null
+    defaultSearchEngine: document.getElementById('defaultSearchEngine')?.value === 'auto' ? null : document.getElementById('defaultSearchEngine')?.value || null,
+    searchWindowMode: document.getElementById('searchWindowMode')?.value || 'window'
   };
   
-  // 保存友情链接
-  const result = await chrome.storage.sync.get('optionsSettings');
-  settings.friendLinks = result.optionsSettings?.friendLinks || DEFAULT_SETTINGS.friendLinks;
+  // 保留已有的友情链接和 AI 配置
+  const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
+  const prevOptions = result.optionsSettings || {};
+  settings.friendLinks = prevOptions.friendLinks || DEFAULT_SETTINGS.friendLinks;
+  if (prevOptions.intelligentSearch) {
+    settings.intelligentSearch = prevOptions.intelligentSearch;
+  }
   
   await chrome.storage.sync.set({ optionsSettings: settings });
   
-  // 同步到旧格式（包括字体设置）
+  // 同步到旧格式时保留 intelligentSearch
+  const prevLegacy = result.settings || {};
   await chrome.storage.sync.set({
     settings: {
       theme: settings.theme,
       fontSize: settings.fontSize,
       lineHeight: 'normal',
       animation: settings.animation,
-      highContrast: settings.highContrast
+      highContrast: settings.highContrast,
+      ...(prevLegacy.intelligentSearch ? { intelligentSearch: prevLegacy.intelligentSearch } : {})
     },
     overlayStyle: settings.uiStyle,
     overlayFont: fontFamily
@@ -200,13 +219,25 @@ async function saveSettings() {
   showToast('设置已保存');
 }
 
+function updateSearchWindowModeHint(mode) {
+  const hintWindow = document.getElementById('hintWindow');
+  const hintPopup = document.getElementById('hintPopup');
+  if (hintWindow) hintWindow.style.display = mode === 'window' ? '' : 'none';
+  if (hintPopup) hintPopup.style.display = mode === 'popup' ? '' : 'none';
+}
+
 function bindSettingEvents() {
-  // 设置变更自动保存
   document.querySelectorAll('.form-select, input[type="checkbox"]').forEach(el => {
     el.addEventListener('change', saveSettings);
   });
   
-  // 修改快捷键
+  const modeSelect = document.getElementById('searchWindowMode');
+  if (modeSelect) {
+    modeSelect.addEventListener('change', () => {
+      updateSearchWindowModeHint(modeSelect.value);
+    });
+  }
+  
   document.getElementById('editShortcutBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
@@ -1286,5 +1317,379 @@ function updateOptSummaryProgress(msg) {
   }
   if (msg.type === 'paused') {
     if (statusEl) statusEl.textContent = `已暂停 ${msg.progress}/${msg.total}`;
+  }
+}
+
+// ==================== 书签健康检测 ====================
+
+let healthStartTime = null;
+let healthTimerInterval = null;
+let healthResults = [];
+
+function bindHealthCheckEvents() {
+  const startBtn = document.getElementById('healthStartBtn');
+  const pauseBtn = document.getElementById('healthPauseBtn');
+  const stopBtn = document.getElementById('healthStopBtn');
+  const filterSelect = document.getElementById('healthFilterSelect');
+  const selectAllBtn = document.getElementById('healthSelectAllBtn');
+  const deleteSelectedBtn = document.getElementById('healthDeleteSelectedBtn');
+
+  if (startBtn) startBtn.addEventListener('click', startHealthCheck);
+  if (pauseBtn) pauseBtn.addEventListener('click', toggleHealthPause);
+  if (stopBtn) stopBtn.addEventListener('click', stopHealthCheck);
+  if (filterSelect) filterSelect.addEventListener('change', () => renderHealthResults());
+  if (selectAllBtn) selectAllBtn.addEventListener('click', toggleSelectAllHealth);
+  if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelectedHealthBookmarks);
+}
+
+async function startHealthCheck() {
+  const startBtn = document.getElementById('healthStartBtn');
+  const pauseBtn = document.getElementById('healthPauseBtn');
+  const stopBtn = document.getElementById('healthStopBtn');
+  const progressCard = document.getElementById('healthProgressCard');
+
+  startBtn.disabled = true;
+  startBtn.textContent = '检测中...';
+  pauseBtn.disabled = false;
+  pauseBtn.textContent = '暂停';
+  stopBtn.disabled = false;
+  progressCard.style.display = '';
+
+  healthStartTime = Date.now();
+  healthTimerInterval = setInterval(updateHealthTimer, 1000);
+  updateHealthTimer();
+
+  const concurrency = parseInt(document.getElementById('healthConcurrency').value) || 5;
+  const timeout = parseInt(document.getElementById('healthTimeout').value) || 8000;
+
+  try {
+    const resp = await chrome.runtime.sendMessage({
+      type: 'BOOKMARK_HEALTH_CHECK',
+      options: { concurrency, timeout }
+    });
+
+    if (resp?.ok) {
+      healthResults = resp.results || [];
+      renderHealthSummary(resp.summary);
+      renderHealthResults();
+    } else {
+      showToast('检测失败: ' + (resp?.error || '未知错误'));
+    }
+  } catch (e) {
+    showToast('检测出错: ' + e.message);
+  } finally {
+    clearInterval(healthTimerInterval);
+    startBtn.disabled = false;
+    startBtn.textContent = '开始检测';
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+  }
+}
+
+function updateHealthProgress(msg) {
+  const bar = document.getElementById('healthProgressBar');
+  const badge = document.getElementById('healthProgressBadge');
+  const currentUrl = document.getElementById('healthCurrentUrl');
+  const progressCard = document.getElementById('healthProgressCard');
+  const phaseLabel = document.getElementById('healthPhaseLabel');
+
+  if (progressCard) progressCard.style.display = '';
+
+  if (msg.type === 'phase_change') {
+    if (bar) bar.style.width = '0%';
+    if (badge) badge.textContent = `0/${msg.total}`;
+    if (phaseLabel) {
+      phaseLabel.textContent = msg.phase === 'tab_verify' ? '阶段 2/2：浏览器验证' : '阶段 1/2：快速预筛';
+      phaseLabel.className = 'health-phase-label' + (msg.phase === 'tab_verify' ? ' phase-verify' : '');
+    }
+    if (currentUrl) currentUrl.innerHTML = escapeHtml(msg.message || '');
+    return;
+  }
+
+  if (msg.type === 'progress' || msg.type === 'complete') {
+    const pct = msg.total > 0 ? (msg.progress / msg.total * 100) : 0;
+    if (bar) bar.style.width = pct + '%';
+    if (badge) badge.textContent = `${msg.progress}/${msg.total}`;
+    if (phaseLabel) {
+      if (msg.phase === 'tab_verify') {
+        phaseLabel.textContent = '阶段 2/2：浏览器验证';
+        phaseLabel.className = 'health-phase-label phase-verify';
+      } else {
+        phaseLabel.textContent = '阶段 1/2：快速预筛';
+        phaseLabel.className = 'health-phase-label';
+      }
+    }
+    if (currentUrl && msg.current) {
+      const statusIcon = getStatusIcon(msg.current.status);
+      currentUrl.innerHTML = `${statusIcon} ${escapeHtml(msg.current.title || msg.current.url)}`;
+    }
+  }
+
+  if (msg.type === 'complete' && msg.phase === 'done') {
+    if (currentUrl) currentUrl.textContent = '检测完成';
+    if (phaseLabel) { phaseLabel.textContent = '完成'; phaseLabel.className = 'health-phase-label phase-done'; }
+  }
+}
+
+function updateHealthTimer() {
+  const el = document.getElementById('healthTimeElapsed');
+  if (!el || !healthStartTime) return;
+  const elapsed = Math.floor((Date.now() - healthStartTime) / 1000);
+  const min = Math.floor(elapsed / 60);
+  const sec = elapsed % 60;
+  el.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+async function toggleHealthPause() {
+  const pauseBtn = document.getElementById('healthPauseBtn');
+  if (pauseBtn.textContent === '暂停') {
+    await chrome.runtime.sendMessage({ type: 'BOOKMARK_HEALTH_PAUSE' });
+    pauseBtn.textContent = '继续';
+  } else {
+    await chrome.runtime.sendMessage({ type: 'BOOKMARK_HEALTH_RESUME' });
+    pauseBtn.textContent = '暂停';
+  }
+}
+
+async function stopHealthCheck() {
+  await chrome.runtime.sendMessage({ type: 'BOOKMARK_HEALTH_STOP' });
+  clearInterval(healthTimerInterval);
+  document.getElementById('healthStartBtn').disabled = false;
+  document.getElementById('healthStartBtn').textContent = '开始检测';
+  document.getElementById('healthPauseBtn').disabled = true;
+  document.getElementById('healthStopBtn').disabled = true;
+
+  const resp = await chrome.runtime.sendMessage({ type: 'BOOKMARK_HEALTH_RESULTS' });
+  if (resp?.ok) {
+    healthResults = resp.results || [];
+    renderHealthSummary(resp.summary);
+    renderHealthResults();
+  }
+}
+
+function getStatusIcon(status) {
+  const map = {
+    ok: '<span class="health-icon health-ok" title="正常">&#10004;</span>',
+    redirect: '<span class="health-icon health-redirect" title="重定向">&#8594;</span>',
+    not_found: '<span class="health-icon health-error" title="404 未找到">&#10008;</span>',
+    server_error: '<span class="health-icon health-error" title="服务器错误">&#9888;</span>',
+    timeout: '<span class="health-icon health-warn" title="超时">&#9201;</span>',
+    network_error: '<span class="health-icon health-error" title="网络错误">&#9889;</span>',
+    ssl_error: '<span class="health-icon health-error" title="SSL 错误">&#128274;</span>',
+    skipped: '<span class="health-icon health-skip" title="已跳过">&#8212;</span>'
+  };
+  return map[status] || '';
+}
+
+function renderHealthSummary(summary) {
+  const card = document.getElementById('healthSummaryCard');
+  const grid = document.getElementById('healthSummaryGrid');
+  if (!card || !grid || !summary) return;
+  card.style.display = '';
+
+  const items = [
+    { label: '正常', value: summary.ok, cls: 'health-stat-ok' },
+    { label: '重定向', value: summary.redirect, cls: 'health-stat-redirect' },
+    { label: '404 未找到', value: summary.not_found, cls: 'health-stat-error' },
+    { label: '服务器错误', value: summary.server_error, cls: 'health-stat-error' },
+    { label: '超时', value: summary.timeout, cls: 'health-stat-warn' },
+    { label: '网络错误', value: summary.network_error, cls: 'health-stat-error' },
+    { label: 'SSL 错误', value: summary.ssl_error, cls: 'health-stat-error' },
+    { label: '已跳过', value: summary.skipped, cls: 'health-stat-skip' }
+  ];
+
+  grid.innerHTML = items.map(item => `
+    <div class="health-stat-item ${item.cls}">
+      <div class="health-stat-value">${item.value}</div>
+      <div class="health-stat-label">${item.label}</div>
+    </div>
+  `).join('');
+}
+
+const SEVERITY_GROUPS = [
+  {
+    key: 'dead',
+    label: '确定失效',
+    desc: '经浏览器验证，页面确实不存在，建议删除',
+    icon: '&#10008;',
+    cls: 'health-group-dead',
+    statuses: ['not_found']
+  },
+  {
+    key: 'server',
+    label: '服务器问题',
+    desc: '服务端返回错误，可能是临时故障',
+    icon: '&#9888;',
+    cls: 'health-group-server',
+    statuses: ['server_error']
+  },
+  {
+    key: 'connection',
+    label: '连接问题',
+    desc: '超时或网络不可达，建议稍后重试',
+    icon: '&#9889;',
+    cls: 'health-group-connection',
+    statuses: ['timeout', 'network_error', 'ssl_error']
+  }
+];
+
+function renderHealthResults() {
+  const card = document.getElementById('healthResultsCard');
+  const list = document.getElementById('healthResultsList');
+  const filter = document.getElementById('healthFilterSelect')?.value || 'all_problems';
+  if (!card || !list) return;
+
+  const problemStatuses = ['not_found', 'server_error', 'timeout', 'network_error', 'ssl_error'];
+  let filtered;
+  if (filter === 'all_problems') {
+    filtered = healthResults.filter(r => problemStatuses.includes(r.status));
+  } else {
+    filtered = healthResults.filter(r => r.status === filter);
+  }
+
+  if (filtered.length === 0) {
+    card.style.display = healthResults.length > 0 ? '' : 'none';
+    list.innerHTML = '<div class="health-empty">没有发现问题书签</div>';
+    return;
+  }
+
+  card.style.display = '';
+
+  let html = '';
+  for (const group of SEVERITY_GROUPS) {
+    const groupItems = filtered.filter(r => group.statuses.includes(r.status));
+    if (groupItems.length === 0) continue;
+
+    html += `
+      <div class="health-group ${group.cls}">
+        <div class="health-group-header" data-group="${group.key}">
+          <div class="health-group-title">
+            <span class="health-group-icon">${group.icon}</span>
+            <span>${group.label}</span>
+            <span class="health-group-count">${groupItems.length}</span>
+          </div>
+          <div class="health-group-desc">${group.desc}</div>
+          <svg class="health-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="health-group-body">
+          ${groupItems.map(r => renderHealthResultItem(r)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
+  bindHealthResultEvents(list);
+}
+
+function renderHealthResultItem(r) {
+  const statusLabel = {
+    not_found: 'HTTP ' + (r.httpStatus || 404),
+    server_error: 'HTTP ' + (r.httpStatus || 500),
+    timeout: '连接超时',
+    network_error: '网络不可达',
+    ssl_error: 'SSL 证书错误'
+  }[r.status] || '';
+
+  const verifiedBadge = r.tabVerified
+    ? '<span class="health-verified-badge" title="已通过浏览器环境验证">已验证</span>'
+    : '';
+
+  return `
+    <div class="health-result-item" data-id="${r.id}">
+      <label class="health-checkbox-label">
+        <input type="checkbox" class="health-checkbox" data-bookmark-id="${r.id}">
+      </label>
+      <div class="health-result-status">${getStatusIcon(r.status)}</div>
+      <div class="health-result-content">
+        <div class="health-result-title-row">
+          <a class="health-result-title health-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener" title="在新标签页中打开">${escapeHtml(r.title || '无标题')}</a>
+          ${verifiedBadge}
+        </div>
+        <a class="health-result-url health-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>
+        <div class="health-result-detail">
+          <span class="health-status-badge">${statusLabel}</span>
+          ${r.error ? `<span>· ${escapeHtml(r.error)}</span>` : ''}
+          ${r.redirected ? `<span>· 重定向到 ${escapeHtml(r.finalUrl || '')}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm btn-danger health-delete-single" data-bookmark-id="${r.id}" title="删除此书签">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+function bindHealthResultEvents(list) {
+  list.querySelectorAll('.health-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const group = header.closest('.health-group');
+      group.classList.toggle('collapsed');
+    });
+  });
+
+  list.querySelectorAll('.health-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  });
+
+  list.querySelectorAll('.health-delete-single').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.bookmarkId;
+      if (!confirm('确定要删除这个书签吗？')) return;
+      const resp = await chrome.runtime.sendMessage({ type: 'DELETE_BOOKMARKS_BATCH', ids: [id] });
+      if (resp?.ok) {
+        healthResults = healthResults.filter(r => r.id !== id);
+        renderHealthResults();
+        showToast('已删除');
+      } else {
+        showToast('删除失败: ' + (resp?.error || '未知错误'));
+      }
+    });
+  });
+
+  list.querySelectorAll('.health-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateDeleteSelectedState);
+  });
+}
+
+function toggleSelectAllHealth() {
+  const checkboxes = document.querySelectorAll('#healthResultsList .health-checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => { cb.checked = !allChecked; });
+  updateDeleteSelectedState();
+}
+
+function updateDeleteSelectedState() {
+  const checked = document.querySelectorAll('#healthResultsList .health-checkbox:checked');
+  const deleteBtn = document.getElementById('healthDeleteSelectedBtn');
+  if (deleteBtn) {
+    deleteBtn.disabled = checked.length === 0;
+    deleteBtn.textContent = checked.length > 0 ? `删除选中 (${checked.length})` : '删除选中';
+  }
+}
+
+async function deleteSelectedHealthBookmarks() {
+  const checked = document.querySelectorAll('#healthResultsList .health-checkbox:checked');
+  const ids = Array.from(checked).map(cb => cb.dataset.bookmarkId);
+  if (ids.length === 0) return;
+
+  if (!confirm(`确定要删除选中的 ${ids.length} 个书签吗？此操作不可撤销。`)) return;
+
+  const resp = await chrome.runtime.sendMessage({ type: 'DELETE_BOOKMARKS_BATCH', ids });
+  if (resp?.ok) {
+    const deletedSet = new Set(ids);
+    healthResults = healthResults.filter(r => !deletedSet.has(r.id));
+    renderHealthResults();
+    showToast(`已删除 ${resp.deleted} 个书签`);
+    const badge = document.getElementById('bookmarksBadge');
+    if (badge) {
+      const current = parseInt(badge.textContent) || 0;
+      badge.textContent = Math.max(0, current - resp.deleted);
+    }
+  } else {
+    showToast('批量删除失败: ' + (resp?.error || '未知错误'));
   }
 }

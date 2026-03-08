@@ -19,7 +19,7 @@
           </div>
           <div class="logo-text">
             <span class="logo-title">书签搜索</span>
-            <span class="logo-version" id="versionText">v1.10.0</span>
+            <span class="logo-version" id="versionText">v1.10.1</span>
           </div>
         </div>
       </div>
@@ -58,6 +58,12 @@
           </svg>
           <span>书签管理</span>
           <span class="nav-badge" id="bookmarksBadge">0</span>
+        </a>
+        <a href="#health" class="nav-item" data-section="health">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <span>健康检测</span>
         </a>
         <a href="#history" class="nav-item" data-section="history">
           <svg viewBox="0 0 24 24" fill="currentColor">
@@ -117,13 +123,35 @@
           <div class="card-body">
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">唤起搜索浮层</div>
-                <div class="setting-desc">在任意网页按下快捷键打开搜索窗口</div>
+                <div class="setting-label">唤起搜索窗口</div>
+                <div class="setting-desc">按下快捷键打开搜索窗口</div>
               </div>
               <div class="shortcut-display">
                 <kbd id="currentShortcut">Alt + B</kbd>
                 <button class="btn btn-secondary btn-sm" id="editShortcutBtn">修改</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>搜索窗口</h3>
+          </div>
+          <div class="card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">搜索窗口模式</div>
+                <div class="setting-desc">选择点击扩展图标时的搜索界面样式</div>
+              </div>
+              <select class="form-select" id="searchWindowMode">
+                <option value="window">独立窗口（居中浮窗）</option>
+                <option value="popup">弹出面板（浏览器原生）</option>
+              </select>
+            </div>
+            <div class="setting-hint" id="searchWindowModeHint" style="padding: 8px 16px 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.5;">
+              <span id="hintWindow">独立窗口模式下，搜索窗口居中显示，支持自由调整大小和位置。</span>
+              <span id="hintPopup" style="display:none;">弹出面板模式下，搜索窗口在扩展图标下方弹出，关闭后自动消失。切换后需重新点击扩展图标生效。</span>
             </div>
           </div>
         </div>
@@ -232,7 +260,7 @@
             <div class="setting-row">
               <div class="setting-info">
                 <div class="setting-label">界面风格</div>
-                <div class="setting-desc">选择搜索浮层的视觉风格</div>
+                <div class="setting-desc">选择搜索窗口的视觉风格</div>
               </div>
               <select class="form-select" id="uiStyle">
                 <option value="spotlight">Spotlight (macOS 风格)</option>
@@ -254,7 +282,7 @@
             <div class="setting-row">
               <div class="setting-info">
                 <div class="setting-label">字体选择</div>
-                <div class="setting-desc">选择搜索浮层使用的字体</div>
+                <div class="setting-desc">选择搜索窗口使用的字体</div>
               </div>
               <select class="form-select" id="fontFamily">
                 <option value="system">系统默认</option>
@@ -510,6 +538,104 @@
         </div>
       </section>
 
+      <!-- 书签健康检测 -->
+      <section id="health" class="content-section">
+        <div class="section-header">
+          <h1>书签健康检测</h1>
+          <p>两阶段智能检测：先快速预筛所有书签，再用浏览器环境精确验证可疑链接，避免登录态页面被误判</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>检测控制</h3>
+          </div>
+          <div class="card-body">
+            <div class="health-control-bar">
+              <div class="health-settings-row">
+                <label class="setting-label">并发数</label>
+                <select id="healthConcurrency" class="form-select form-select-sm">
+                  <option value="3">3（保守）</option>
+                  <option value="5" selected>5（推荐）</option>
+                  <option value="10">10（激进）</option>
+                </select>
+                <label class="setting-label" style="margin-left:16px;">超时</label>
+                <select id="healthTimeout" class="form-select form-select-sm">
+                  <option value="5000">5 秒</option>
+                  <option value="8000" selected>8 秒</option>
+                  <option value="15000">15 秒</option>
+                  <option value="30000">30 秒</option>
+                </select>
+              </div>
+              <div class="health-action-row">
+                <button class="btn btn-primary" id="healthStartBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  开始检测
+                </button>
+                <button class="btn btn-secondary" id="healthPauseBtn" disabled>暂停</button>
+                <button class="btn btn-danger" id="healthStopBtn" disabled>停止</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="healthProgressCard" style="display:none;">
+          <div class="card-header">
+            <h3>检测进度</h3>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="health-phase-label" id="healthPhaseLabel">阶段 1/2：快速预筛</span>
+              <span class="card-badge" id="healthProgressBadge">0/0</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="health-phase-desc">
+              <span class="health-phase-step">1</span> 快速检测所有书签 →
+              <span class="health-phase-step">2</span> 对可疑链接用浏览器环境精确验证
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar" id="healthProgressBar" style="width:0%"></div>
+            </div>
+            <div class="health-progress-info">
+              <span id="healthCurrentUrl">准备中...</span>
+              <span id="healthTimeElapsed"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="healthSummaryCard" style="display:none;">
+          <div class="card-header">
+            <h3>检测结果摘要</h3>
+          </div>
+          <div class="card-body">
+            <div class="health-summary-grid" id="healthSummaryGrid">
+              <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="healthResultsCard" style="display:none;">
+          <div class="card-header">
+            <h3>问题书签</h3>
+            <div class="card-actions">
+              <select id="healthFilterSelect" class="form-select form-select-sm">
+                <option value="all_problems">所有问题</option>
+                <option value="not_found">404 未找到</option>
+                <option value="server_error">服务器错误</option>
+                <option value="timeout">超时</option>
+                <option value="network_error">网络错误</option>
+                <option value="ssl_error">SSL 错误</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" id="healthSelectAllBtn">全选</button>
+              <button class="btn btn-sm btn-danger" id="healthDeleteSelectedBtn" disabled>删除选中</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="health-results-list" id="healthResultsList">
+              <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 历史记录 -->
       <section id="history" class="content-section">
         <div class="section-header">
@@ -629,7 +755,7 @@
                 <div class="step-number">1</div>
                 <div class="step-content">
                   <strong>唤起搜索</strong>
-                  <p>按下 <kbd>Alt + B</kbd>（可在常规设置中修改），即可在任意网页上唤起搜索浮层。</p>
+                  <p>按下 <kbd>Alt + B</kbd>（可在常规设置中修改），即可唤起搜索窗口。</p>
                 </div>
               </div>
               <div class="guide-step">
@@ -788,13 +914,13 @@
               </svg>
             </div>
             <h3>界面风格</h3>
-            <p>点击搜索浮层右下角的调色盘按钮切换风格，或在外观设置中选择：</p>
+            <p>点击搜索窗口右下角的调色盘按钮切换风格，或在外观设置中选择：</p>
             <ul class="style-list">
               <li><strong>Spotlight</strong> - macOS 风格，毛玻璃效果，简约优雅</li>
               <li><strong>Raycast</strong> - 命令面板风格，深色主题，开发者最爱</li>
               <li><strong>Fluent</strong> - Windows 11 风格，亚克力效果，现代感</li>
             </ul>
-            <p style="margin-top: 8px; color: var(--text-secondary);">还可以切换字体：点击浮层右下角的 <strong>Aa</strong> 按钮循环切换系统默认、苹方、Inter、Noto 等字体。</p>
+            <p style="margin-top: 8px; color: var(--text-secondary);">还可以切换字体：点击搜索窗口右下角的 <strong>Aa</strong> 按钮循环切换系统默认、苹方、Inter、Noto 等字体。</p>
           </div>
 
           <!-- 书签状态 -->
@@ -815,6 +941,43 @@
             <p style="margin-top: 8px; color: var(--text-secondary);">在书签搜索模式中，可以通过筛选按钮快速过滤出不同状态的书签。</p>
           </div>
 
+          <!-- 搜索窗口模式 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <path d="M8 21h8M12 17v4"/>
+              </svg>
+            </div>
+            <h3>搜索窗口模式</h3>
+            <p>在常规设置中可以切换两种搜索窗口模式：</p>
+            <ul class="style-list">
+              <li><strong>独立窗口</strong>（默认） — 搜索窗口居中显示，支持自由调整大小和位置，关闭后不影响当前页面</li>
+              <li><strong>弹出面板</strong> — 点击扩展图标在下方弹出面板，失去焦点时自动关闭，适合快速查找</li>
+            </ul>
+            <p style="margin-top: 8px; color: var(--text-secondary);">切换模式后，下次点击扩展图标或按快捷键时立即生效。</p>
+          </div>
+
+          <!-- AI 智能搜索 -->
+          <div class="guide-card">
+            <div class="guide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35"/>
+                <path d="M11 8v6M8 11h6"/>
+              </svg>
+            </div>
+            <h3>AI 智能搜索</h3>
+            <p>启用 AI 搜索后，可以使用自然语言搜索书签：</p>
+            <ul class="style-list">
+              <li><strong>语义理解</strong> — 不需要精确关键字，用自然语言描述即可找到相关书签</li>
+              <li><strong>向量索引</strong> — 首次使用需构建向量索引，之后搜索速度极快</li>
+              <li><strong>多服务商</strong> — 支持 Gemini、OpenAI、SiliconFlow 和自定义 API</li>
+              <li><strong>自带 Key</strong> — 使用你自己的 API Key，数据不经第三方服务器</li>
+            </ul>
+            <p style="margin-top: 8px; color: var(--text-secondary);">在 AI 智能搜索设置中配置服务商和 API Key 后即可使用。</p>
+          </div>
+
           <!-- 实用技巧 -->
           <div class="guide-card">
             <div class="guide-icon">
@@ -828,7 +991,7 @@
               <li><strong>最近访问提示</strong> — 在书签/标签页模式下搜索时，底部会自动补充匹配的最近浏览历史</li>
               <li><strong>组合语法</strong> — 多种语法可组合使用，例如 <code>site:github.com after:2024-01 -fork</code></li>
               <li><strong>友情链接</strong> — 在设置中自定义搜索窗口底部的快捷链接，方便一键访问常用网站</li>
-              <li><strong>降级兜底</strong> — 在 <code>chrome://</code> 等无法注入浮层的页面，自动使用独立搜索窗口</li>
+              <li><strong>配置中心</strong> — 右键扩展图标 → 选项，可以配置所有搜索行为、外观和 AI 设置</li>
             </ul>
           </div>
         </div>
@@ -848,7 +1011,7 @@
             </svg>
           </div>
           <h2>Chrome Bookmarks Search</h2>
-          <p class="about-version">版本 <span id="aboutVersion">1.10.0</span></p>
+          <p class="about-version">版本 <span id="aboutVersion">1.10.1</span></p>
           <p class="about-desc">
             一款智能的 Chrome 浏览器扩展，帮助您快速搜索和管理书签、标签页、历史记录和下载文件。<br>
             支持多关键字搜索、高级语法过滤和智能排序。

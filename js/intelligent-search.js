@@ -989,25 +989,9 @@ ${text.slice(0, 3000)}`;
     return { ok: false, message: 'Embedding: ' + embeddingErr + '\nChat: ' + chatErr };
   }
 
-  // ==================== 网页内容提取 ====================
+  // ==================== 网页内容提取（Offscreen 优先 + 标签页复用兜底） ====================
 
-  async function extractWebContent(tabId) {
-    try {
-      const results = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => {
-          const article = document.querySelector('article') || document.querySelector('main') || document.body;
-          const scripts = article.querySelectorAll('script, style, nav, footer, header, aside');
-          scripts.forEach(el => el.remove());
-          return article.innerText.slice(0, 5000);
-        }
-      });
-      return results?.[0]?.result || '';
-    } catch (e) {
-      console.warn('[IntelligentSearch] Content extraction failed:', e.message);
-      return '';
-    }
-  }
+  const MIN_USEFUL_CONTENT_LENGTH = 100;
 
   function isUrlExtractable(url) {
     if (!url || typeof url !== 'string') return false;
@@ -1018,6 +1002,83 @@ ${text.slice(0, 3000)}`;
       'chrome-error://', 'devtools://'
     ];
     return !skipPrefixes.some(prefix => u.startsWith(prefix));
+  }
+
+  // ---- 方案 A: Offscreen DOM 解析（静默，无可见标签页） ----
+
+  let offscreenReady = false;
+
+  async function ensureOffscreen() {
+    if (offscreenReady) return;
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT']
+    });
+    if (contexts.length === 0) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['DOM_PARSER'],
+        justification: '后台解析网页 HTML 提取正文内容'
+      });
+    }
+    offscreenReady = true;
+  }
+
+  async function extractViaOffscreen(url) {
+    try {
+      await ensureOffscreen();
+      const resp = await fetch(url, {
+        signal: AbortSignal.timeout(12000),
+        headers: { 'Accept': 'text/html,application/xhtml+xml' }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('text/html') && !contentType.includes('xhtml')) {
+        throw new Error('非 HTML 内容: ' + contentType.split(';')[0]);
+      }
+      const html = await resp.text();
+
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(''), 5000);
+        chrome.runtime.sendMessage(
+          { target: 'offscreen', type: 'PARSE_HTML', html, url },
+          (result) => {
+            clearTimeout(timeout);
+            if (chrome.runtime.lastError || !result?.ok) {
+              resolve('');
+            } else {
+              resolve(result.content || '');
+            }
+          }
+        );
+      });
+    } catch (e) {
+      console.warn('[IntelligentSearch] Offscreen extraction failed:', e.message);
+      return '';
+    }
+  }
+
+  // ---- 方案 B: 复用后台标签页（兜底 SPA 页面） ----
+
+  let scrapeTabId = null;
+
+  async function ensureScrapeTab() {
+    if (scrapeTabId !== null) {
+      try {
+        await chrome.tabs.get(scrapeTabId);
+        return;
+      } catch {
+        scrapeTabId = null;
+      }
+    }
+    const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
+    scrapeTabId = tab.id;
+  }
+
+  async function releaseScrapeTab() {
+    if (scrapeTabId !== null) {
+      try { await chrome.tabs.remove(scrapeTabId); } catch (_) {}
+      scrapeTabId = null;
+    }
   }
 
   async function waitForTabLoad(tabId, timeoutMs = 15000) {
@@ -1043,6 +1104,46 @@ ${text.slice(0, 3000)}`;
     });
   }
 
+  async function extractViaTab(url) {
+    try {
+      await ensureScrapeTab();
+      await chrome.tabs.update(scrapeTabId, { url });
+      const loaded = await waitForTabLoad(scrapeTabId, 15000);
+      if (!loaded) throw new Error('页面加载超时');
+
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: scrapeTabId },
+        func: () => {
+          const selectors = ['article', 'main', '[role="main"]', '.post-content', '.article-content', '.entry-content', '#content'];
+          let root = null;
+          for (const sel of selectors) {
+            root = document.querySelector(sel);
+            if (root && root.innerText.trim().length > 100) break;
+            root = null;
+          }
+          if (!root) root = document.body;
+          root.querySelectorAll('script, style, noscript, svg, nav, footer, header, aside, iframe').forEach(el => el.remove());
+          return root.innerText.replace(/\s+/g, ' ').trim().slice(0, 5000);
+        }
+      });
+      return results?.[0]?.result || '';
+    } catch (e) {
+      console.warn('[IntelligentSearch] Tab extraction failed:', e.message);
+      return '';
+    }
+  }
+
+  // ---- 统一提取入口 ----
+
+  async function extractContent(url) {
+    const content = await extractViaOffscreen(url);
+    if (content.length >= MIN_USEFUL_CONTENT_LENGTH) {
+      return content;
+    }
+    console.log('[IntelligentSearch] Offscreen 内容不足，降级到标签页提取:', url);
+    return await extractViaTab(url);
+  }
+
   async function extractAndSummarize(bookmarkId, config) {
     const bookmark = (await chrome.bookmarks.get(bookmarkId))?.[0];
     if (!bookmark?.url) return { ok: false, error: '书签不存在或无 URL' };
@@ -1051,19 +1152,8 @@ ${text.slice(0, 3000)}`;
       return { ok: false, error: '该 URL 类型不支持提取' };
     }
 
-    let tab = null;
     try {
-      tab = await chrome.tabs.create({ url: bookmark.url, active: false });
-
-      const loaded = await waitForTabLoad(tab.id, 15000);
-      if (!loaded) {
-        throw new Error('页面加载失败或超时');
-      }
-
-      const content = await extractWebContent(tab.id);
-      await chrome.tabs.remove(tab.id);
-      tab = null;
-
+      const content = await extractContent(bookmark.url);
       if (!content) throw new Error('无法提取页面内容');
 
       const summaryData = await generateSummary(content, config);
@@ -1088,10 +1178,6 @@ ${text.slice(0, 3000)}`;
       return { ok: true, summary: summaryData.summary, tags: summaryData.tags };
     } catch (e) {
       return { ok: false, error: e.message };
-    } finally {
-      if (tab) {
-        try { await chrome.tabs.remove(tab.id); } catch (_) {}
-      }
     }
   }
 
@@ -1155,6 +1241,7 @@ ${text.slice(0, 3000)}`;
       }
 
       summaryBatchState.running = false;
+      await releaseScrapeTab();
       if (onProgress) onProgress({
         type: 'complete',
         progress: bookmarkIds.length,
@@ -1165,6 +1252,7 @@ ${text.slice(0, 3000)}`;
       return { ok: true, progress: bookmarkIds.length, errors: summaryBatchState.errors };
     } catch (e) {
       summaryBatchState.running = false;
+      await releaseScrapeTab();
       summaryBatchState.error = e.message;
       throw e;
     }

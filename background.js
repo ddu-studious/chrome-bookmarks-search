@@ -1,5 +1,6 @@
 // Background script for handling extension events
 importScripts('js/intelligent-search.js');
+importScripts('js/bookmark-health.js');
 console.log('[BookmarkSearch] Background script loaded');
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -641,6 +642,80 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // ==================== 书签健康检测 ====================
+
+  if (request.type === 'BOOKMARK_HEALTH_CHECK') {
+    (async () => {
+      try {
+        const bookmarks = await loadBookmarks();
+        const result = await BookmarkHealth.runBatchCheck(
+          bookmarks,
+          request.options || {},
+          (progress) => {
+            chrome.runtime.sendMessage({
+              type: 'BOOKMARK_HEALTH_PROGRESS',
+              ...progress
+            }).catch(() => {});
+          }
+        );
+        sendResponse({ ok: true, ...result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'BOOKMARK_HEALTH_STATUS') {
+    sendResponse({ ok: true, ...BookmarkHealth.getStatus() });
+    return true;
+  }
+
+  if (request.type === 'BOOKMARK_HEALTH_PAUSE') {
+    BookmarkHealth.pause();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'BOOKMARK_HEALTH_RESUME') {
+    BookmarkHealth.resume();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'BOOKMARK_HEALTH_STOP') {
+    BookmarkHealth.stop();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'BOOKMARK_HEALTH_RESULTS') {
+    sendResponse({ ok: true, ...BookmarkHealth.getResults() });
+    return true;
+  }
+
+  if (request.type === 'DELETE_BOOKMARKS_BATCH') {
+    (async () => {
+      try {
+        const ids = request.ids || [];
+        let deleted = 0;
+        let errors = [];
+        for (const id of ids) {
+          try {
+            await chrome.bookmarks.remove(id);
+            deleted++;
+          } catch (e) {
+            errors.push({ id, error: e.message });
+          }
+        }
+        sendResponse({ ok: true, deleted, errors });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
   // 以分组方式恢复已保存的标签页组
   // activateUrl: 可选，恢复后激活匹配此 URL 的标签页并展开分组
   if (request.type === 'RESTORE_GROUP') {
@@ -1060,9 +1135,47 @@ chrome.runtime.onStartup.addListener(async () => {
   }
 });
 
-// ==================== 独立搜索窗口（统一入口） ====================
+// ==================== 搜索窗口模式管理 ====================
 let searchWindowId = null;
 
+async function getSearchWindowMode() {
+  const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
+  const opts = result.optionsSettings || {};
+  const legacy = result.settings || {};
+  return opts.searchWindowMode || legacy.searchWindowMode || 'window';
+}
+
+async function applySearchWindowMode(mode) {
+  if (mode === 'popup') {
+    await chrome.action.setPopup({ popup: 'popup.html' });
+  } else {
+    await chrome.action.setPopup({ popup: '' });
+  }
+}
+
+async function initSearchWindowMode() {
+  const mode = await getSearchWindowMode();
+  await applySearchWindowMode(mode);
+}
+
+initSearchWindowMode();
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+  const relevant = changes.optionsSettings || changes.settings;
+  if (!relevant) return;
+
+  const newVal = relevant.newValue || {};
+  const oldVal = relevant.oldValue || {};
+  const newMode = newVal.searchWindowMode;
+  const oldMode = oldVal.searchWindowMode;
+
+  if (newMode && newMode !== oldMode) {
+    applySearchWindowMode(newMode);
+  }
+});
+
+// ==================== 独立搜索窗口 ====================
 async function openSearchWindow() {
   const currentWindow = await chrome.windows.getCurrent();
   const w = 640, h = 540;
@@ -1106,12 +1219,14 @@ async function toggleSearchWindow() {
   await openSearchWindow();
 }
 
-// 点击扩展图标 → 打开/切换搜索窗口
+// action.onClicked 仅在未设置 popup 时触发（即 window 模式）
 chrome.action.onClicked.addListener(() => toggleSearchWindow());
 
-// Alt+B 快捷键 → 打开/切换搜索窗口
-chrome.commands.onCommand.addListener((command) => {
+chrome.commands.onCommand.addListener(async (command) => {
   if (command === '_execute_action') {
-    toggleSearchWindow();
+    const mode = await getSearchWindowMode();
+    if (mode === 'window') {
+      toggleSearchWindow();
+    }
   }
 });

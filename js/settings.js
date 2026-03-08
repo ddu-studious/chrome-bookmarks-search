@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
   groupChildClickRestoreAll: true, // 点击分组内子标签时是否整组恢复
   defaultSearchEngine: null, // null = 自动检测(中文环境百度/其他Google), 或 google/baidu/bing/duckduckgo
   defaultMode: 'bookmarks', // 扩展打开时的默认搜索模式
+  searchWindowMode: 'window', // window = 独立搜索窗口, popup = 弹出面板
   intelligentSearch: {
     enabled: false,
     aiProvider: 'gemini', // gemini, openai, siliconflow, custom
