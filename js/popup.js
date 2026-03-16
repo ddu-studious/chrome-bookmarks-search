@@ -2564,15 +2564,63 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   function initPopupResize() {
     const handle = document.getElementById('resizeHandle');
-    const container = document.querySelector('.container');
-    if (!handle || !container) return;
+    if (!handle) return;
 
-    chrome.storage.sync.get('popupDimensions', (result) => {
-      const dims = result.popupDimensions;
-      if (dims) {
-        if (dims.width) document.body.style.width = dims.width + 'px';
-        if (dims.height) container.style.height = dims.height + 'px';
+    let maxHeight = window.screen.availHeight;
+    const root = document.documentElement;
+
+    function applyDimensions(w, h) {
+      root.style.setProperty('--popup-width', w + 'px');
+      root.style.setProperty('--popup-height', h + 'px');
+    }
+
+    chrome.storage.sync.get(['popupDimensions', 'popupMaxHeight'], (result) => {
+      if (typeof result.popupMaxHeight === 'number' && result.popupMaxHeight > 0) {
+        maxHeight = Math.min(maxHeight, result.popupMaxHeight);
       }
+
+      const dims = result.popupDimensions;
+      if (dims && dims.width && dims.height) {
+        const safeHeight = Math.max(300, Math.min(maxHeight, dims.height));
+        applyDimensions(dims.width, safeHeight);
+
+        // 如果曾经存过一个超过浏览器实际限制的高度，这里顺便纠正
+        if (safeHeight !== dims.height) {
+          chrome.storage.sync.set({
+            popupDimensions: {
+              width: dims.width,
+              height: safeHeight
+            }
+          });
+        }
+      }
+
+      // 每次打开 popup 都做一次“真实高度校准”：
+      // 当期望高度 > 实际可见高度时，说明触发了 Chrome popup 上限，需回写并裁剪。
+      requestAnimationFrame(() => {
+        const actualVisibleHeight = document.documentElement.clientHeight || document.body.offsetHeight;
+        const expectedHeight = (dims && dims.height) ? dims.height : document.body.offsetHeight;
+        if (!actualVisibleHeight) return;
+
+        if (expectedHeight > actualVisibleHeight + 2) {
+          maxHeight = Math.min(maxHeight, actualVisibleHeight);
+          const safeHeight = Math.max(300, Math.min(maxHeight, expectedHeight));
+          applyDimensions(document.body.offsetWidth, safeHeight);
+          chrome.storage.sync.set({
+            popupDimensions: {
+              width: document.body.offsetWidth,
+              height: safeHeight
+            },
+            popupMaxHeight: maxHeight
+          });
+          return;
+        }
+
+        // 如果还没有记录过上限，先记录一次当前可见高度，供设置页作为滑杆上限参考
+        if (!(typeof result.popupMaxHeight === 'number' && result.popupMaxHeight > 0)) {
+          chrome.storage.sync.set({ popupMaxHeight: actualVisibleHeight });
+        }
+      });
     });
 
     let startX, startY, startWidth, startHeight;
@@ -2585,7 +2633,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       startX = e.screenX;
       startY = e.screenY;
       startWidth = document.body.offsetWidth;
-      startHeight = container.offsetHeight;
+      startHeight = document.body.offsetHeight;
       handle.classList.add('dragging');
       document.body.classList.add('resizing');
     });
@@ -2593,9 +2641,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
       const newWidth = Math.max(320, Math.min(800, startWidth + (e.screenX - startX)));
-      const newHeight = Math.max(300, Math.min(600, startHeight + (e.screenY - startY)));
-      document.body.style.width = newWidth + 'px';
-      container.style.height = newHeight + 'px';
+      const newHeight = Math.max(300, Math.min(maxHeight, startHeight + (e.screenY - startY)));
+      applyDimensions(newWidth, newHeight);
     });
 
     document.addEventListener('mouseup', () => {
@@ -2603,11 +2650,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       isDragging = false;
       handle.classList.remove('dragging');
       document.body.classList.remove('resizing');
+      const finalWidth = document.body.offsetWidth;
+      const finalHeight = Math.min(maxHeight, document.body.offsetHeight);
       chrome.storage.sync.set({
         popupDimensions: {
-          width: document.body.offsetWidth,
-          height: container.offsetHeight
-        }
+          width: finalWidth,
+          height: finalHeight
+        },
+        popupMaxHeight: maxHeight
       });
     });
   }

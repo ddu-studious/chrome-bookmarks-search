@@ -235,18 +235,32 @@ function updateSearchWindowModeHint(mode) {
 const POPUP_DEFAULT_WIDTH = 480;
 const POPUP_DEFAULT_HEIGHT = 600;
 const POPUP_PREVIEW_SCALE_BASE = 0.38;
+const POPUP_BROWSER_MAX_HEIGHT_FALLBACK = 600;
 
 async function loadPopupDimensions() {
-  const result = await chrome.storage.sync.get('popupDimensions');
+  const result = await chrome.storage.sync.get(['popupDimensions', 'popupMaxHeight']);
   const dims = result.popupDimensions || { width: POPUP_DEFAULT_WIDTH, height: POPUP_DEFAULT_HEIGHT };
   
   const widthSlider = document.getElementById('popupWidth');
   const heightSlider = document.getElementById('popupHeight');
-  if (widthSlider) widthSlider.value = dims.width;
-  if (heightSlider) heightSlider.value = dims.height;
+
+  if (heightSlider) {
+    const screenMax = window.screen.availHeight || 1200;
+    const popupMax = typeof result.popupMaxHeight === 'number' && result.popupMaxHeight > 0
+      ? Math.min(screenMax, result.popupMaxHeight)
+      : Math.min(screenMax, POPUP_BROWSER_MAX_HEIGHT_FALLBACK);
+    heightSlider.max = popupMax;
+  }
+
+  const safeWidth = Math.max(320, Math.min(800, dims.width));
+  const maxHeight = parseInt(heightSlider?.max || (window.screen.availHeight || 1200), 10);
+  const safeHeight = Math.max(300, Math.min(maxHeight, dims.height));
+
+  if (widthSlider) widthSlider.value = safeWidth;
+  if (heightSlider) heightSlider.value = safeHeight;
   
-  updatePopupSizeDisplay(dims.width, dims.height);
-  updatePopupPreview(dims.width, dims.height);
+  updatePopupSizeDisplay(safeWidth, safeHeight);
+  updatePopupPreview(safeWidth, safeHeight);
 }
 
 function updatePopupSizeDisplay(width, height) {
@@ -267,7 +281,15 @@ function updatePopupPreview(width, height) {
 }
 
 function savePopupDimensions(width, height) {
-  chrome.storage.sync.set({ popupDimensions: { width, height } });
+  chrome.storage.sync.get('popupMaxHeight', (result) => {
+    const screenMax = window.screen.availHeight || 1200;
+    const maxHeight = typeof result.popupMaxHeight === 'number' && result.popupMaxHeight > 0
+      ? Math.min(screenMax, result.popupMaxHeight)
+      : Math.min(screenMax, POPUP_BROWSER_MAX_HEIGHT_FALLBACK);
+    const safeWidth = Math.max(320, Math.min(800, width));
+    const safeHeight = Math.max(300, Math.min(maxHeight, height));
+    chrome.storage.sync.set({ popupDimensions: { width: safeWidth, height: safeHeight } });
+  });
 }
 
 function bindPopupSizeEvents() {

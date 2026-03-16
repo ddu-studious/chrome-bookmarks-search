@@ -1,4 +1,8 @@
 :root {
+  /* 弹出面板尺寸（JS 会从 storage 覆盖） */
+  --popup-width: 480px;
+  --popup-height: 600px;
+
   /* 基础变量 */
   --font-size-base: 14px;
   --line-height-base: 1.5;
@@ -52,8 +56,10 @@
 
 /* 基础样式 */
 body {
-  width: 480px;
+  width: var(--popup-width);
+  height: var(--popup-height);
   margin: 0;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: var(--font-size-base);
   line-height: var(--line-height-base);
@@ -65,7 +71,7 @@ body {
 .container {
   display: flex;
   flex-direction: column;
-  height: 600px;
+  height: 100%;
   position: relative;
   background: var(--color-bg);
 }
