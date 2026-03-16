@@ -2562,11 +2562,64 @@ document.addEventListener('DOMContentLoaded', async function() {
     editUrl.addEventListener('input', updateSaveButton);
   }
 
+  function initPopupResize() {
+    const handle = document.getElementById('resizeHandle');
+    const container = document.querySelector('.container');
+    if (!handle || !container) return;
+
+    chrome.storage.sync.get('popupDimensions', (result) => {
+      const dims = result.popupDimensions;
+      if (dims) {
+        if (dims.width) document.body.style.width = dims.width + 'px';
+        if (dims.height) container.style.height = dims.height + 'px';
+      }
+    });
+
+    let startX, startY, startWidth, startHeight;
+    let isDragging = false;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      startX = e.screenX;
+      startY = e.screenY;
+      startWidth = document.body.offsetWidth;
+      startHeight = container.offsetHeight;
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing');
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const newWidth = Math.max(320, Math.min(800, startWidth + (e.screenX - startX)));
+      const newHeight = Math.max(300, Math.min(600, startHeight + (e.screenY - startY)));
+      document.body.style.width = newWidth + 'px';
+      container.style.height = newHeight + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      handle.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      chrome.storage.sync.set({
+        popupDimensions: {
+          width: document.body.offsetWidth,
+          height: container.offsetHeight
+        }
+      });
+    });
+  }
+
   // 在初始化函数中添加右键菜单初始化
   async function init() {
     // 初始化设置
     await window.settings.init();
     await initSettingsPanel();
+    
+    // 初始化弹出面板拖拽调整大小
+    initPopupResize();
     
     // 初始化搜索语法帮助
     initSearchSyntaxHelp();

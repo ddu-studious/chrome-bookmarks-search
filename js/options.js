@@ -155,6 +155,9 @@ async function loadSettings() {
   
   // 加载快捷键
   loadCurrentShortcut();
+  
+  // 加载弹出面板尺寸
+  loadPopupDimensions();
 }
 
 async function loadCurrentShortcut() {
@@ -222,8 +225,77 @@ async function saveSettings() {
 function updateSearchWindowModeHint(mode) {
   const hintWindow = document.getElementById('hintWindow');
   const hintPopup = document.getElementById('hintPopup');
+  const sizeConfig = document.getElementById('popupSizeConfig');
   if (hintWindow) hintWindow.style.display = mode === 'window' ? '' : 'none';
   if (hintPopup) hintPopup.style.display = mode === 'popup' ? '' : 'none';
+  if (sizeConfig) sizeConfig.style.display = mode === 'popup' ? '' : 'none';
+}
+
+// ==================== 弹出面板尺寸配置 ====================
+const POPUP_DEFAULT_WIDTH = 480;
+const POPUP_DEFAULT_HEIGHT = 600;
+const POPUP_PREVIEW_SCALE_BASE = 0.38;
+
+async function loadPopupDimensions() {
+  const result = await chrome.storage.sync.get('popupDimensions');
+  const dims = result.popupDimensions || { width: POPUP_DEFAULT_WIDTH, height: POPUP_DEFAULT_HEIGHT };
+  
+  const widthSlider = document.getElementById('popupWidth');
+  const heightSlider = document.getElementById('popupHeight');
+  if (widthSlider) widthSlider.value = dims.width;
+  if (heightSlider) heightSlider.value = dims.height;
+  
+  updatePopupSizeDisplay(dims.width, dims.height);
+  updatePopupPreview(dims.width, dims.height);
+}
+
+function updatePopupSizeDisplay(width, height) {
+  const wVal = document.getElementById('popupWidthValue');
+  const hVal = document.getElementById('popupHeightValue');
+  const dims = document.getElementById('previewDimensions');
+  if (wVal) wVal.textContent = width + 'px';
+  if (hVal) hVal.textContent = height + 'px';
+  if (dims) dims.textContent = width + ' × ' + height;
+}
+
+function updatePopupPreview(width, height) {
+  const preview = document.getElementById('popupSizePreview');
+  if (!preview) return;
+  const scale = Math.min(300 / width, 240 / height, POPUP_PREVIEW_SCALE_BASE);
+  preview.style.width = Math.round(width * scale) + 'px';
+  preview.style.height = Math.round(height * scale) + 'px';
+}
+
+function savePopupDimensions(width, height) {
+  chrome.storage.sync.set({ popupDimensions: { width, height } });
+}
+
+function bindPopupSizeEvents() {
+  const widthSlider = document.getElementById('popupWidth');
+  const heightSlider = document.getElementById('popupHeight');
+  const resetBtn = document.getElementById('popupSizeReset');
+
+  function onSliderChange() {
+    const w = parseInt(widthSlider.value);
+    const h = parseInt(heightSlider.value);
+    updatePopupSizeDisplay(w, h);
+    updatePopupPreview(w, h);
+    savePopupDimensions(w, h);
+  }
+
+  if (widthSlider) widthSlider.addEventListener('input', onSliderChange);
+  if (heightSlider) heightSlider.addEventListener('input', onSliderChange);
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (widthSlider) widthSlider.value = POPUP_DEFAULT_WIDTH;
+      if (heightSlider) heightSlider.value = POPUP_DEFAULT_HEIGHT;
+      updatePopupSizeDisplay(POPUP_DEFAULT_WIDTH, POPUP_DEFAULT_HEIGHT);
+      updatePopupPreview(POPUP_DEFAULT_WIDTH, POPUP_DEFAULT_HEIGHT);
+      savePopupDimensions(POPUP_DEFAULT_WIDTH, POPUP_DEFAULT_HEIGHT);
+      showToast('已恢复默认尺寸');
+    });
+  }
 }
 
 function bindSettingEvents() {
@@ -241,6 +313,8 @@ function bindSettingEvents() {
   document.getElementById('editShortcutBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
+
+  bindPopupSizeEvents();
 }
 
 // ==================== 统计数据 ====================

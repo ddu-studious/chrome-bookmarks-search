@@ -151,7 +151,68 @@
             </div>
             <div class="setting-hint" id="searchWindowModeHint" style="padding: 8px 16px 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.5;">
               <span id="hintWindow">独立窗口模式下，搜索窗口居中显示，支持自由调整大小和位置。</span>
-              <span id="hintPopup" style="display:none;">弹出面板模式下，搜索窗口在扩展图标下方弹出，关闭后自动消失。切换后需重新点击扩展图标生效。</span>
+              <span id="hintPopup" style="display:none;">弹出面板模式下，搜索窗口在扩展图标下方弹出，关闭后自动消失。支持拖拽右下角调整大小。</span>
+            </div>
+
+            <!-- 弹出面板尺寸配置（仅 popup 模式） -->
+            <div id="popupSizeConfig" style="display:none; padding: 0 16px 16px;">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-label">面板宽度</div>
+                  <div class="setting-desc">320 - 800 px</div>
+                </div>
+                <div class="popup-size-control">
+                  <input type="range" id="popupWidth" min="320" max="800" step="10" value="480" class="form-range">
+                  <span class="popup-size-value" id="popupWidthValue">480px</span>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-label">面板高度</div>
+                  <div class="setting-desc">300 - 600 px</div>
+                </div>
+                <div class="popup-size-control">
+                  <input type="range" id="popupHeight" min="300" max="600" step="10" value="600" class="form-range">
+                  <span class="popup-size-value" id="popupHeightValue">600px</span>
+                </div>
+              </div>
+              <div class="popup-size-actions" style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn btn-sm btn-secondary" id="popupSizeReset">恢复默认</button>
+              </div>
+
+              <!-- 预览效果 -->
+              <div class="popup-preview-section">
+                <div class="popup-preview-label">预览效果</div>
+                <div class="popup-preview-area">
+                  <div class="popup-preview-box" id="popupSizePreview">
+                    <div class="pp-tabs">
+                      <span class="pp-tab active">书签</span>
+                      <span class="pp-tab">标签页</span>
+                      <span class="pp-tab">历史</span>
+                      <span class="pp-tab">下载</span>
+                    </div>
+                    <div class="pp-search">
+                      <div class="pp-search-input"></div>
+                    </div>
+                    <div class="pp-results">
+                      <div class="pp-item"><div class="pp-dot"></div><div class="pp-line" style="width:85%"></div></div>
+                      <div class="pp-item"><div class="pp-dot"></div><div class="pp-line" style="width:70%"></div></div>
+                      <div class="pp-item"><div class="pp-dot"></div><div class="pp-line" style="width:90%"></div></div>
+                      <div class="pp-item"><div class="pp-dot"></div><div class="pp-line" style="width:60%"></div></div>
+                      <div class="pp-item"><div class="pp-dot"></div><div class="pp-line" style="width:75%"></div></div>
+                    </div>
+                    <div class="pp-footer">
+                      <div class="pp-link"></div>
+                      <div class="pp-link"></div>
+                      <div class="pp-link"></div>
+                    </div>
+                    <div class="pp-resize-grip">
+                      <svg width="8" height="8" viewBox="0 0 8 8"><path d="M7 1L1 7M7 4L4 7" stroke="currentColor" stroke-opacity="0.3" stroke-width="1" stroke-linecap="round"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="popup-preview-dims" id="previewDimensions">480 × 600</div>
+              </div>
             </div>
           </div>
         </div>

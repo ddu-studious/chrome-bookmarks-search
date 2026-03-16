@@ -1697,3 +1697,174 @@ kbd {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ==================== 弹出面板尺寸配置 ==================== */
+.popup-size-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.form-range {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.popup-size-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.popup-preview-section {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.popup-preview-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.popup-preview-area {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  min-height: 200px;
+}
+
+.popup-preview-box {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  position: relative;
+  transition: width 0.25s ease, height 0.25s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 6px 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.pp-tab {
+  font-size: 7px;
+  padding: 3px 6px;
+  border-radius: 4px 4px 0 0;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.pp-tab.active {
+  background: var(--bg-primary);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pp-search {
+  padding: 6px;
+}
+
+.pp-search-input {
+  height: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.pp-results {
+  flex: 1;
+  padding: 4px 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pp-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+}
+
+.pp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.pp-line {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.pp-footer {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+}
+
+.pp-link {
+  width: 24px;
+  height: 8px;
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.pp-resize-grip {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  color: var(--text-secondary);
+}
+
+.popup-preview-dims {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.popup-size-actions {
+  padding: 0 0 4px;
+}
