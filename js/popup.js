@@ -700,10 +700,57 @@ document.addEventListener('DOMContentLoaded', async function() {
     // ESC 键关闭设置面板
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && settingsPanel.classList.contains('show')) {
-        e.stopPropagation(); // 防止触发窗口关闭
+        e.stopPropagation();
         settingsPanel.classList.remove('show');
       }
     });
+
+    // 面板尺寸配置
+    const widthSlider = document.getElementById('popupWidthSlider');
+    const heightSlider = document.getElementById('popupHeightSlider');
+    const widthLabel = document.getElementById('popupWidthLabel');
+    const heightLabel = document.getElementById('popupHeightLabel');
+    const resetSizeBtn = document.getElementById('resetSizeBtn');
+    const container = document.querySelector('.container');
+
+    chrome.storage.sync.get('popupDimensions', (result) => {
+      const dims = result.popupDimensions || {};
+      if (widthSlider && dims.width) widthSlider.value = dims.width;
+      if (heightSlider && dims.height) heightSlider.value = dims.height;
+      if (widthLabel) widthLabel.textContent = (dims.width || 480) + 'px';
+      if (heightLabel) heightLabel.textContent = (dims.height || 600) + 'px';
+    });
+
+    if (heightSlider) {
+      heightSlider.max = window.screen.availHeight || 1200;
+    }
+
+    function applyAndSaveSize(w, h) {
+      document.body.style.width = w + 'px';
+      document.body.style.height = h + 'px';
+      if (container) container.style.height = h + 'px';
+      if (widthLabel) widthLabel.textContent = w + 'px';
+      if (heightLabel) heightLabel.textContent = h + 'px';
+      chrome.storage.sync.set({ popupDimensions: { width: w, height: h } });
+    }
+
+    if (widthSlider) {
+      widthSlider.addEventListener('input', () => {
+        applyAndSaveSize(parseInt(widthSlider.value), parseInt(heightSlider.value));
+      });
+    }
+    if (heightSlider) {
+      heightSlider.addEventListener('input', () => {
+        applyAndSaveSize(parseInt(widthSlider.value), parseInt(heightSlider.value));
+      });
+    }
+    if (resetSizeBtn) {
+      resetSizeBtn.addEventListener('click', () => {
+        if (widthSlider) widthSlider.value = 480;
+        if (heightSlider) heightSlider.value = 600;
+        applyAndSaveSize(480, 600);
+      });
+    }
   }
 
   // 初始化搜索语法帮助
@@ -1271,11 +1318,70 @@ document.addEventListener('DOMContentLoaded', async function() {
     editUrl.addEventListener('input', updateSaveButton);
   }
 
+  function initPopupResize() {
+    const handle = document.getElementById('resizeHandle');
+    const container = document.querySelector('.container');
+    if (!handle || !container) return;
+
+    const maxHeight = window.screen.availHeight;
+
+    function applyDimensions(w, h) {
+      document.body.style.width = w + 'px';
+      document.body.style.height = h + 'px';
+      container.style.height = h + 'px';
+    }
+
+    chrome.storage.sync.get('popupDimensions', (result) => {
+      const dims = result.popupDimensions;
+      if (dims && dims.width && dims.height) {
+        applyDimensions(dims.width, dims.height);
+      }
+    });
+
+    let startX, startY, startWidth, startHeight;
+    let isDragging = false;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      startX = e.screenX;
+      startY = e.screenY;
+      startWidth = document.body.offsetWidth;
+      startHeight = container.offsetHeight;
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing');
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const newWidth = Math.max(320, Math.min(800, startWidth + (e.screenX - startX)));
+      const newHeight = Math.max(300, Math.min(maxHeight, startHeight + (e.screenY - startY)));
+      applyDimensions(newWidth, newHeight);
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      handle.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      chrome.storage.sync.set({
+        popupDimensions: {
+          width: document.body.offsetWidth,
+          height: container.offsetHeight
+        }
+      });
+    });
+  }
+
   // 在初始化函数中添加右键菜单初始化
   async function init() {
     // 初始化设置
     await window.settings.init();
     await initSettingsPanel();
+    
+    // 初始化弹出面板拖拽调整大小
+    initPopupResize();
     
     // 初始化搜索语法帮助
     initSearchSyntaxHelp();
