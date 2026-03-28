@@ -16,6 +16,7 @@
 - [Content Script 注入限制调研](research/content-script-limitation-research.md)
 - [Chrome 标签页分组 API 调研](research/tab-groups-api-research.md)
 - [Focus Trap 冲突报告](research/focus-trap-conflict-report.md)
+- [无结果态调研与方案报告](research/no-results-state-research-2026-03-28.md)
 
 ### 使用指南 (guides/)
 - 开发指南
@@ -29,4 +30,4 @@
 
 ---
 
-**最后更新**: 2026-02-24
+**最后更新**: 2026-03-28
