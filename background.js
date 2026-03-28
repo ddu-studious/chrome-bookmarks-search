@@ -28,6 +28,109 @@ const THRESHOLDS = {
   DORMANT_DAYS: 180
 };
 
+const GROWTH_METRICS_KEY = 'growthMetrics';
+const SHARE_RESULTS_LIMIT = 5;
+const SEARCH_MODE_LABELS = {
+  bookmarks: '书签',
+  tabs: '标签页',
+  groups: '分组',
+  history: '历史记录',
+  downloads: '下载记录',
+  ai: 'AI 搜索'
+};
+
+function normalizeShareTitle(title, url) {
+  const trimmed = String(title || '').trim();
+  if (trimmed) {
+    return trimmed.length > 72 ? `${trimmed.slice(0, 69)}...` : trimmed;
+  }
+  try {
+    return new URL(url).hostname;
+  } catch (_) {
+    return url || '未命名结果';
+  }
+}
+
+function sanitizeGrowthMetadata(metadata = {}) {
+  const sanitized = {};
+
+  if (metadata.mode && SEARCH_MODE_LABELS[metadata.mode]) {
+    sanitized.mode = metadata.mode;
+  }
+
+  ['queryLength', 'totalResults', 'sharedResults'].forEach((key) => {
+    const value = Number(metadata[key]);
+    if (Number.isFinite(value) && value >= 0) {
+      sanitized[key] = Math.min(value, 9999);
+    }
+  });
+
+  return sanitized;
+}
+
+async function trackGrowthEvent(eventName, metadata = {}) {
+  const stored = await chrome.storage.local.get(GROWTH_METRICS_KEY);
+  const metrics = stored[GROWTH_METRICS_KEY] || { events: {}, updatedAt: null };
+  const currentEvent = metrics.events[eventName] || { count: 0 };
+
+  metrics.events[eventName] = {
+    count: currentEvent.count + 1,
+    lastTriggeredAt: Date.now(),
+    lastMetadata: sanitizeGrowthMetadata(metadata)
+  };
+  metrics.updatedAt = Date.now();
+
+  await chrome.storage.local.set({ [GROWTH_METRICS_KEY]: metrics });
+  return metrics.events[eventName];
+}
+
+async function buildShareResultsPayload(request) {
+  const query = String(request.query || '').trim();
+  const mode = SEARCH_MODE_LABELS[request.mode] ? request.mode : 'bookmarks';
+  const modeLabel = SEARCH_MODE_LABELS[mode];
+  const shareableItems = (request.items || [])
+    .filter(item => item && item.url)
+    .slice(0, SHARE_RESULTS_LIMIT)
+    .map(item => ({
+      title: normalizeShareTitle(item.title || item.filename, item.url),
+      url: item.url
+    }));
+  const totalResults = Math.max(Number(request.totalResults) || 0, shareableItems.length);
+  const appName = chrome.runtime.getManifest().name || 'Chrome Bookmarks Search';
+  const settingsResult = await chrome.storage.sync.get(['optionsSettings']);
+  const shareAppUrl = String(settingsResult.optionsSettings?.shareAppUrl || '').trim();
+
+  const lines = [];
+  if (query) {
+    lines.push(`我用 ${appName} 整理了「${query}」相关的 ${totalResults} 个结果，先分享前 ${shareableItems.length} 个：`);
+  } else {
+    lines.push(`我用 ${appName} 整理了 ${modeLabel} 里的 ${shareableItems.length} 个结果：`);
+  }
+  lines.push('');
+
+  shareableItems.forEach((item, index) => {
+    lines.push(`${index + 1}. ${item.title}`);
+    lines.push(item.url);
+    if (index < shareableItems.length - 1) {
+      lines.push('');
+    }
+  });
+
+  lines.push('');
+  lines.push('我是在浏览器里按 Alt+B 秒搜到这些链接的。');
+  lines.push(`想试试的话，搜索「${appName}」即可。`);
+  if (shareAppUrl) {
+    lines.push(shareAppUrl);
+  }
+
+  return {
+    title: query ? `分享「${query}」搜索结果` : `分享${modeLabel}搜索结果`,
+    text: lines.join('\n'),
+    sharedResults: shareableItems.length,
+    totalResults
+  };
+}
+
 // 获取URL的访问历史
 async function getUrlStats(url) {
   return new Promise((resolve) => {
@@ -431,6 +534,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });
+    return true;
+  }
+
+  // 生成分享当前搜索结果的文案
+  if (request.type === 'BUILD_SHARE_RESULTS_PAYLOAD') {
+    (async () => {
+      try {
+        const payload = await buildShareResultsPayload(request);
+        sendResponse({ success: true, payload });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // 记录轻量增长事件
+  if (request.type === 'TRACK_GROWTH_EVENT') {
+    (async () => {
+      try {
+        const event = await trackGrowthEvent(request.eventName, request.metadata);
+        sendResponse({ success: true, event });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_GROWTH_METRICS') {
+    (async () => {
+      const stored = await chrome.storage.local.get(GROWTH_METRICS_KEY);
+      sendResponse({ success: true, metrics: stored[GROWTH_METRICS_KEY] || { events: {}, updatedAt: null } });
+    })();
     return true;
   }
 

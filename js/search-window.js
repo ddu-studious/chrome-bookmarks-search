@@ -59,6 +59,7 @@
   const styleSwitcher = document.getElementById('styleSwitcher');
   const fontSwitcher = document.getElementById('fontSwitcher');
   const settingsBtn = document.getElementById('settingsBtn');
+  const shareResultsBtn = document.getElementById('shareResultsBtn');
   const contextMenu = document.getElementById('contextMenu');
   const editModal = document.getElementById('editModal');
   const toast = document.getElementById('toast');
@@ -78,6 +79,12 @@
       console.warn('[BookmarkSearch] sendMessage exception:', e.message);
       if (callback) callback(null);
     }
+  }
+
+  function sendMessageAsync(message) {
+    return new Promise((resolve) => {
+      safeSendMessage(message, resolve);
+    });
   }
 
   // ==================== 初始化 ====================
@@ -218,6 +225,10 @@
     settingsBtn.addEventListener('click', () => {
       safeSendMessage({ type: 'OPEN_OPTIONS' });
     });
+
+    if (shareResultsBtn) {
+      shareResultsBtn.addEventListener('click', handleShareResults);
+    }
 
     // 结果项点击
     resultsList.addEventListener('click', (e) => {
@@ -527,6 +538,7 @@
         </div>`;
       selectedIndex = -1;
       searchStats.textContent = '无结果';
+      updateShareResultsButton('');
       return;
     }
 
@@ -642,6 +654,137 @@
 
     selectedIndex = -1;
     searchStats.textContent = isSearching ? `找到 ${groups.length} 个分组` : `共 ${groups.length} 个分组`;
+    updateShareResultsButton();
+  }
+
+  function getShareableResults(items = currentResults) {
+    return (items || []).filter(item => item && item.url && !item._isSuggestion);
+  }
+
+  function updateShareResultsButton(query = searchInput.value || '') {
+    if (!shareResultsBtn) return;
+
+    const trimmedQuery = String(query || '').trim();
+    const shareableCount = getShareableResults().length;
+    const shareCount = Math.min(shareableCount, 5);
+    const canShare = currentMode !== 'groups' && !!trimmedQuery && shareCount > 0;
+    const label = shareResultsBtn.querySelector('.share-results-label');
+
+    shareResultsBtn.hidden = !canShare;
+    shareResultsBtn.disabled = !canShare;
+    shareResultsBtn.title = canShare ? `分享当前搜索结果（前 ${shareCount} 条）` : '分享当前搜索结果';
+    if (label) {
+      label.textContent = canShare ? `分享前 ${shareCount} 条` : '分享结果';
+    }
+  }
+
+  function trackGrowthEvent(eventName, metadata) {
+    safeSendMessage({
+      type: 'TRACK_GROWTH_EVENT',
+      eventName,
+      metadata
+    });
+  }
+
+  function buildLocalShareResultsPayload(query, items, totalResults) {
+    const shareItems = getShareableResults(items).slice(0, 5);
+    const lines = [
+      `我整理了「${query}」相关的 ${Math.max(totalResults || 0, shareItems.length)} 个结果，先分享前 ${shareItems.length} 个：`,
+      ''
+    ];
+
+    shareItems.forEach((item, index) => {
+      lines.push(`${index + 1}. ${item.title || item.url}`);
+      lines.push(item.url);
+      if (index < shareItems.length - 1) {
+        lines.push('');
+      }
+    });
+
+    lines.push('');
+    lines.push('我是在浏览器里按 Alt+B 秒搜到这些链接的。');
+    lines.push('想试试的话，搜索「Chrome Bookmarks Search」即可。');
+
+    return {
+      title: `分享「${query}」搜索结果`,
+      text: lines.join('\n')
+    };
+  }
+
+  async function writeClipboardText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (_) {}
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+
+  async function handleShareResults() {
+    const query = searchInput.value.trim();
+    const shareableResults = getShareableResults().slice(0, 5);
+
+    if (!query || shareableResults.length === 0) {
+      showToast('先搜索出可分享的结果');
+      updateShareResultsButton(query);
+      return;
+    }
+
+    shareResultsBtn.disabled = true;
+    const metadata = {
+      mode: currentMode,
+      queryLength: query.length,
+      totalResults: currentResults.length,
+      sharedResults: shareableResults.length
+    };
+    trackGrowthEvent('share_results_clicked', metadata);
+
+    let payload = null;
+    try {
+      const response = await sendMessageAsync({
+        type: 'BUILD_SHARE_RESULTS_PAYLOAD',
+        query,
+        mode: currentMode,
+        items: shareableResults,
+        totalResults: currentResults.length
+      });
+      payload = response?.success && response.payload
+        ? response.payload
+        : buildLocalShareResultsPayload(query, shareableResults, currentResults.length);
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: payload.title,
+            text: payload.text
+          });
+          trackGrowthEvent('share_results_completed', metadata);
+          showToast('已打开系统分享');
+          return;
+        } catch (error) {
+          if (error?.name === 'AbortError') {
+            showToast('已取消分享');
+            return;
+          }
+        }
+      }
+
+      await writeClipboardText(payload.text);
+      trackGrowthEvent('share_results_completed', metadata);
+      showToast('分享文案已复制');
+    } catch (error) {
+      console.warn('[BookmarkSearch] share results failed:', error);
+      showToast('分享失败，请重试');
+    } finally {
+      updateShareResultsButton(query);
+    }
   }
 
   // ==================== 搜索 ====================
@@ -693,6 +836,7 @@
     currentResults = items;
     selectedIndex = items.length > 0 ? 0 : -1;
     displayResults(items, query);
+    updateShareResultsButton(query);
 
     if (query && query.trim() && currentMode !== 'history') {
       appendHistorySuggestions(query, items);
@@ -705,6 +849,7 @@
       currentResults = [];
       searchStats.textContent = '输入需求描述或关键词，AI 语义搜索';
       selectedIndex = -1;
+      updateShareResultsButton('');
       loadSearchWindowRecommendations();
       return;
     }
@@ -721,6 +866,7 @@
       }, (response) => {
         if (!response) {
           searchStats.textContent = 'AI 搜索无响应';
+          updateShareResultsButton(query);
           return;
         }
         if (response.fallback) {
@@ -735,6 +881,7 @@
           selectedIndex = filtered.length > 0 ? 0 : -1;
           displayResults(filtered, query);
           searchStats.textContent = `找到 ${filtered.length} 个结果 (关键词回退)`;
+          updateShareResultsButton(query);
           return;
         }
         if (response.ok && response.results) {
@@ -743,6 +890,7 @@
           displayAiResults(response.results, query);
           const semanticCount = response.results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid').length;
           searchStats.textContent = `找到 ${response.results.length} 个结果 (语义 ${semanticCount})`;
+          updateShareResultsButton(query);
         }
       });
     }, 300);
@@ -753,6 +901,7 @@
 
     if (items.length === 0) {
       resultsList.innerHTML = '<div class="no-results">没有找到相关结果</div>';
+      updateShareResultsButton(query);
       return;
     }
 
@@ -841,6 +990,7 @@
 
       resultsList.appendChild(div);
     });
+    updateShareResultsButton(query);
   }
 
   async function checkAiProAccess() {
@@ -881,6 +1031,7 @@
         </div>
       </div>
     `;
+    updateShareResultsButton('');
     const upgradeBtn = document.getElementById('swAiUpgradeBtn');
     const trialBtn = document.getElementById('swAiTrialBtn');
     if (upgradeBtn) upgradeBtn.addEventListener('click', () => window.ProModule?.openPaymentPage());
@@ -932,6 +1083,7 @@
       });
       resultsList.appendChild(container);
       selectedIndex = -1;
+      updateShareResultsButton('');
     });
   }
 
@@ -1084,6 +1236,7 @@
     if (items.length === 0 && !trimmedQuery) {
       resultsList.innerHTML = '<div class="no-results">没有找到匹配的结果</div>';
       searchStats.textContent = '无结果';
+      updateShareResultsButton(trimmedQuery);
       return;
     }
 
@@ -1106,6 +1259,7 @@
           resultsList.insertAdjacentHTML('beforeend', engineHtml);
         }
       });
+      updateShareResultsButton(trimmedQuery);
       return;
     }
 
@@ -1146,6 +1300,7 @@
     }
 
     searchStats.textContent = `找到 ${items.length} 个结果`;
+    updateShareResultsButton(trimmedQuery);
 
     const fallbackSvg = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23999%22 d=%22M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z%22/></svg>';
     resultsList.querySelectorAll('img[data-fallback]').forEach(img => {

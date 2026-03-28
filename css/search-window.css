@@ -513,6 +513,39 @@ body.style-fluent .result-item.active {
   gap: 8px;
 }
 
+.share-results-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.share-results-btn:hover:not(:disabled) {
+  background: rgba(26, 115, 232, 0.16);
+  border-color: rgba(26, 115, 232, 0.22);
+}
+
+.share-results-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.share-results-btn[hidden] {
+  display: none !important;
+}
+
+.share-results-label {
+  white-space: nowrap;
+}
+
 .keyboard-hints {
   display: flex;
   gap: 12px;
