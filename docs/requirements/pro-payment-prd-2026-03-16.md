@@ -217,17 +217,19 @@ Pro 用户 AI 请求
 
 ### Phase 1：付费框架搭建（1-2 周）
 
-- [ ] 注册 ExtensionPay 账户
-- [ ] 在 ExtensionPay 注册扩展并设置价格方案
-- [ ] 下载 ExtPay.js，集成到 background.js
-- [ ] 实现 `checkProAccess()` 工具函数
-- [ ] 在 options.html 添加 Pro 会员 section
-- [ ] 实现 Feature Gating：健康检测 50 个上限
-- [ ] 更新 Chrome Web Store 描述（标注付费功能）
+- [ ] 注册 ExtensionPay 账户（手动）
+- [ ] 在 ExtensionPay 注册扩展并设置价格方案（手动）
+- [x] 下载 ExtPay.js，集成到 background.js
+- [x] 实现 `checkProAccess()` 工具函数（js/pro.js）
+- [x] 在 options.html 添加 Pro 会员 section（含状态卡片、定价、功能对比、账户管理）
+- [x] 实现 Feature Gating：健康检测 50 个上限
+- [x] AI 搜索 Feature Gating（popup.js + search-window.js）
+- [x] Pro 徽章标识（popup.html + search-window.html）
+- [ ] 更新 Chrome Web Store 描述（标注付费功能）（手动）
 
 ### Phase 2：托管 API 搭建（2-3 周）
 
-- [ ] 搭建 Cloudflare Worker 代理
+- [ ] 搭建 Cloudflare Worker 代理（手动）
 - [ ] 实现 API Key 管理和用户鉴权
 - [ ] 实现速率限制和额度管理
 - [ ] 扩展中添加托管 API 模式切换
@@ -235,19 +237,19 @@ Pro 用户 AI 请求
 
 ### Phase 3：付费体验优化（1-2 周）
 
-- [ ] 实现 7 天免费试用
-- [ ] 添加使用额度展示 UI
-- [ ] 添加 Pro 到期提醒
-- [ ] 实现年付/终身优惠展示
+- [x] 实现 7 天免费试用（ExtPay openTrialPage 已集成）
+- [ ] 添加使用额度展示 UI（依赖 Phase 2 托管 API）
+- [x] 添加 Pro 到期提醒
+- [x] 实现年付/终身优惠展示（定价卡片已实现）
 - [ ] 收集用户反馈优化定价
 
 ### Phase 4：高级 Pro 功能（2-3 周）
 
-- [ ] 定期自动健康检测（chrome.alarms）
-- [ ] 检测报告 CSV 导出
-- [ ] 重复书签检测
-- [ ] 域名统计分析
-- [ ] 书签使用趋势图表
+- [x] 定期自动健康检测（chrome.alarms）
+- [x] 检测报告 CSV 导出
+- [x] 重复书签检测
+- [x] 域名统计分析
+- [x] 书签使用趋势图表
 
 ---
 

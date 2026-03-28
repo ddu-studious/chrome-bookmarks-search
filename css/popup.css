@@ -2197,3 +2197,99 @@ body.resizing {
 .ai-no-embedding-hint a:hover {
   text-decoration: underline;
 }
+
+/* ==================== Pro 徽章和升级提示 ==================== */
+
+.pro-badge-tab {
+  font-size: 8px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.pro-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1.4;
+}
+
+.pro-upgrade-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.pro-upgrade-inline-icon {
+  color: #667eea;
+}
+
+.pro-upgrade-inline-text {
+  font-size: 13px;
+  color: var(--color-text, #202124);
+  line-height: 1.5;
+}
+
+.pro-upgrade-inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-pro-upgrade {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-pro-upgrade:hover {
+  opacity: 0.9;
+}
+
+.btn-pro-trial {
+  background: transparent;
+  color: #667eea;
+  border: 1px solid #667eea;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-pro-trial:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+/* Dark theme Pro */
+.dark-theme .pro-upgrade-inline-text {
+  color: var(--color-text, #e8eaed);
+}
+
+.dark-theme .btn-pro-trial {
+  color: #8ab4f8;
+  border-color: #8ab4f8;
+}
+
+.dark-theme .btn-pro-trial:hover {
+  background: rgba(138, 180, 248, 0.1);
+}

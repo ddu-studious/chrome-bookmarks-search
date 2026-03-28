@@ -1868,3 +1868,622 @@ kbd {
 .popup-size-actions {
   padding: 0 0 4px;
 }
+
+/* ==================== Pro 会员样式 ==================== */
+
+.pro-nav-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-weight: 600;
+  margin-left: auto;
+  line-height: 1.4;
+}
+
+/* Pro 状态卡片 */
+.pro-status-card {
+  background: linear-gradient(135deg, #667eea08 0%, #764ba220 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.pro-status-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pro-status-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.pro-status-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.pro-status-info {
+  flex: 1;
+}
+
+.pro-status-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pro-status-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.pro-status-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Pro 激活卡片 */
+.pro-active-card {
+  background: linear-gradient(135deg, #10b98108 0%, #059e7420 100%);
+  border: 1px solid #10b98140;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.pro-active-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pro-active-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981 0%, #059e74 100%);
+  border-radius: 12px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.pro-active-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.pro-active-info {
+  flex: 1;
+}
+
+.pro-active-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pro-active-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.pro-active-badge {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+}
+
+/* Pro 按钮 */
+.btn-pro-upgrade {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.btn-pro-upgrade:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-pro-trial {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-pro-trial:hover {
+  background: var(--accent-light, rgba(102, 126, 234, 0.1));
+}
+
+/* 定价 */
+.pro-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.pro-pricing-section {
+  margin-bottom: 24px;
+}
+
+.pro-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.pro-plan-card {
+  position: relative;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pro-plan-card:hover {
+  border-color: var(--accent);
+}
+
+.pro-plan-recommended {
+  border-color: #667eea;
+  box-shadow: 0 0 0 1px #667eea;
+}
+
+.pro-plan-badge-label {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 12px;
+  border-radius: 10px;
+}
+
+.pro-plan-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.pro-plan-price {
+  margin-bottom: 8px;
+}
+
+.pro-price-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pro-price-period {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pro-plan-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 功能对比表 */
+.pro-comparison-section {
+  margin-bottom: 24px;
+}
+
+.pro-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pro-comparison-table th,
+.pro-comparison-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.pro-comparison-table th {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.pro-comparison-table td {
+  color: var(--text-primary);
+}
+
+.pro-col {
+  background: linear-gradient(135deg, #667eea08 0%, #764ba210 100%);
+}
+
+.pro-comparison-table th.pro-col {
+  background: linear-gradient(135deg, #667eea15 0%, #764ba220 100%);
+}
+
+.pro-check {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.pro-cross {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+/* 账户管理 */
+.pro-account-section {
+  margin-bottom: 24px;
+}
+
+/* 健康检测限制提示 */
+.health-limit-notice {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea08 0%, #764ba215 100%);
+  border: 1px solid #667eea40;
+  border-radius: 8px;
+}
+
+.health-limit-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.health-limit-content svg {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.health-limit-content .btn-pro-upgrade {
+  padding: 4px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Pro 升级提示框 */
+.pro-upgrade-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea08 0%, #764ba215 100%);
+  border: 1px solid #667eea30;
+  border-radius: 12px;
+  margin: 16px 0;
+}
+
+.pro-upgrade-icon {
+  color: #667eea;
+}
+
+.pro-upgrade-text {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.pro-upgrade-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Pro badge（通用） */
+.pro-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1.4;
+}
+
+.pro-badge-lg {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+/* Dark theme Pro 适配 */
+:root.dark-theme .pro-status-card {
+  background: linear-gradient(135deg, #667eea10 0%, #764ba225 100%);
+}
+
+:root.dark-theme .pro-active-card {
+  background: linear-gradient(135deg, #10b98110 0%, #059e7425 100%);
+}
+
+:root.dark-theme .pro-plan-card {
+  background: var(--bg-primary);
+}
+
+:root.dark-theme .pro-col {
+  background: linear-gradient(135deg, #667eea10 0%, #764ba218 100%);
+}
+
+:root.dark-theme .pro-comparison-table th.pro-col {
+  background: linear-gradient(135deg, #667eea18 0%, #764ba225 100%);
+}
+
+:root.dark-theme .health-limit-notice {
+  background: linear-gradient(135deg, #667eea10 0%, #764ba220 100%);
+}
+
+:root.dark-theme .pro-upgrade-prompt {
+  background: linear-gradient(135deg, #667eea10 0%, #764ba220 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-theme) .pro-status-card {
+    background: linear-gradient(135deg, #667eea10 0%, #764ba225 100%);
+  }
+  :root:not(.light-theme) .pro-active-card {
+    background: linear-gradient(135deg, #10b98110 0%, #059e7425 100%);
+  }
+  :root:not(.light-theme) .pro-plan-card {
+    background: var(--bg-primary);
+  }
+  :root:not(.light-theme) .pro-col {
+    background: linear-gradient(135deg, #667eea10 0%, #764ba218 100%);
+  }
+  :root:not(.light-theme) .pro-comparison-table th.pro-col {
+    background: linear-gradient(135deg, #667eea18 0%, #764ba225 100%);
+  }
+  :root:not(.light-theme) .health-limit-notice {
+    background: linear-gradient(135deg, #667eea10 0%, #764ba220 100%);
+  }
+  :root:not(.light-theme) .pro-upgrade-prompt {
+    background: linear-gradient(135deg, #667eea10 0%, #764ba220 100%);
+  }
+}
+
+/* ==================== Pro badge inline ==================== */
+
+.pro-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.pro-nav-indicator {
+  margin-left: auto;
+}
+
+/* ==================== 书签分析 ==================== */
+
+.analysis-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.analysis-stat {
+  text-align: center;
+  padding: 16px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.analysis-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.analysis-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.analysis-stat-warn .analysis-stat-value {
+  color: #e37400;
+}
+
+/* 重复书签 */
+
+.duplicate-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.duplicate-url {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.duplicate-items {
+  padding: 4px 0;
+}
+
+.duplicate-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.duplicate-item:first-child {
+  border-top: none;
+}
+
+.duplicate-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.duplicate-path {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.duplicate-delete {
+  flex-shrink: 0;
+  padding: 4px 6px !important;
+}
+
+/* 域名统计条形图 */
+
+.domain-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.domain-bar-label {
+  width: 160px;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.domain-bar-track {
+  flex: 1;
+  height: 18px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.domain-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #667eea);
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 0.4s ease;
+}
+
+.domain-bar-count {
+  width: 40px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* 使用趋势图 */
+
+.trend-chart {
+  padding: 8px 0;
+}
+
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  height: 150px;
+  gap: 1px;
+}
+
+.trend-bar-col {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+}
+
+.trend-bar {
+  width: 80%;
+  min-height: 2px;
+  background: linear-gradient(180deg, var(--accent), #667eea);
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
+}
+
+.trend-bar-col:hover .trend-bar {
+  opacity: 0.8;
+}
+
+.trend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ==================== 按钮大号 ==================== */
+
+.btn-lg {
+  padding: 12px 28px;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

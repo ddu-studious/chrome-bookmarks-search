@@ -1,7 +1,12 @@
 // Background script for handling extension events
 importScripts('js/intelligent-search.js');
 importScripts('js/bookmark-health.js');
+importScripts('ExtPay.js');
 console.log('[BookmarkSearch] Background script loaded');
+
+// ==================== ExtPay 初始化 ====================
+const extpay = ExtPay('chrome-bookmarks-search');
+extpay.startBackground();
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[BookmarkSearch] Extension installed');
@@ -642,12 +647,72 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // ==================== Pro 会员状态 ====================
+
+  if (request.type === 'CHECK_PRO_STATUS') {
+    (async () => {
+      try {
+        const user = await extpay.getUser();
+        sendResponse({
+          ok: true,
+          paid: !!user.paid,
+          paidAt: user.paidAt ? user.paidAt.toISOString() : null,
+          installedAt: user.installedAt ? user.installedAt.toISOString() : null,
+          trialStartedAt: user.trialStartedAt ? user.trialStartedAt.toISOString() : null
+        });
+      } catch (e) {
+        console.warn('[BookmarkSearch] ExtPay getUser error:', e);
+        sendResponse({ ok: false, error: String(e) });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'OPEN_PAYMENT_PAGE') {
+    extpay.openPaymentPage();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'OPEN_TRIAL_PAGE') {
+    extpay.openTrialPage('7 day');
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'OPEN_LOGIN_PAGE') {
+    extpay.openLoginPage();
+    sendResponse({ ok: true });
+    return true;
+  }
+
   // ==================== 书签健康检测 ====================
 
   if (request.type === 'BOOKMARK_HEALTH_CHECK') {
     (async () => {
       try {
-        const bookmarks = await loadBookmarks();
+        let bookmarks = await loadBookmarks();
+
+        // Pro Feature Gating: 免费用户限制 50 个书签
+        let isLimited = false;
+        let totalBeforeLimit = bookmarks.length;
+        try {
+          const user = await extpay.getUser();
+          if (!user.paid) {
+            const FREE_LIMIT = 50;
+            if (bookmarks.length > FREE_LIMIT) {
+              isLimited = true;
+              bookmarks = bookmarks.slice(0, FREE_LIMIT);
+            }
+          }
+        } catch (e) {
+          const FREE_LIMIT = 50;
+          if (bookmarks.length > FREE_LIMIT) {
+            isLimited = true;
+            bookmarks = bookmarks.slice(0, FREE_LIMIT);
+          }
+        }
+
         const result = await BookmarkHealth.runBatchCheck(
           bookmarks,
           request.options || {},
@@ -658,7 +723,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }).catch(() => {});
           }
         );
-        sendResponse({ ok: true, ...result });
+        sendResponse({
+          ok: true,
+          ...result,
+          isLimited,
+          totalBookmarks: totalBeforeLimit,
+          checkedCount: bookmarks.length
+        });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
@@ -709,6 +780,158 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
         }
         sendResponse({ ok: true, deleted, errors });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  // ==================== 书签分析 ====================
+
+  if (request.type === 'RUN_BOOKMARK_ANALYSIS') {
+    (async () => {
+      try {
+        const user = await extpay.getUser().catch(() => null);
+        if (!user?.paid) {
+          sendResponse({ ok: false, error: 'Pro 专属功能' });
+          return;
+        }
+
+        const bookmarks = await loadBookmarks();
+
+        const urlMap = new Map();
+        const domainMap = new Map();
+        const folderMap = new Map();
+
+        async function buildFolderPath(id) {
+          if (folderMap.has(id)) return folderMap.get(id);
+          try {
+            const nodes = await chrome.bookmarks.get(id);
+            if (!nodes || !nodes[0]) return '';
+            const node = nodes[0];
+            if (!node.parentId || node.parentId === '0') {
+              folderMap.set(id, node.title || '');
+              return node.title || '';
+            }
+            const parentPath = await buildFolderPath(node.parentId);
+            const fullPath = parentPath ? parentPath + ' / ' + node.title : node.title;
+            folderMap.set(id, fullPath);
+            return fullPath;
+          } catch { return ''; }
+        }
+
+        for (const bm of bookmarks) {
+          if (!bm.url) continue;
+          try {
+            const parsed = new URL(bm.url);
+            const normalizedUrl = parsed.origin + parsed.pathname.replace(/\/+$/, '') + parsed.search;
+
+            if (!urlMap.has(normalizedUrl)) urlMap.set(normalizedUrl, []);
+            urlMap.get(normalizedUrl).push(bm);
+
+            const domain = parsed.hostname.replace(/^www\./, '');
+            domainMap.set(domain, (domainMap.get(domain) || 0) + 1);
+          } catch {}
+        }
+
+        const duplicates = [];
+        for (const [url, items] of urlMap) {
+          if (items.length < 2) continue;
+          const enriched = [];
+          for (const item of items) {
+            const folderPath = item.parentId ? await buildFolderPath(item.parentId) : '';
+            enriched.push({ id: item.id, title: item.title, url: item.url, folderPath });
+          }
+          duplicates.push({ url, items: enriched });
+        }
+
+        const domainStats = Array.from(domainMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 20)
+          .map(([domain, count]) => ({ domain, count }));
+
+        let trendData = [];
+        try {
+          const now = Date.now();
+          const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+          const history = await new Promise(resolve => {
+            chrome.history.search({ text: '', startTime: thirtyDaysAgo, maxResults: 10000 }, resolve);
+          });
+
+          const dayMap = new Map();
+          for (let d = 0; d < 30; d++) {
+            const date = new Date(now - d * 24 * 60 * 60 * 1000);
+            const key = date.toISOString().slice(0, 10);
+            dayMap.set(key, 0);
+          }
+
+          const bookmarkUrls = new Set(bookmarks.map(b => b.url).filter(Boolean));
+          for (const item of history) {
+            if (!bookmarkUrls.has(item.url)) continue;
+            if (item.lastVisitTime) {
+              const key = new Date(item.lastVisitTime).toISOString().slice(0, 10);
+              if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + 1);
+            }
+          }
+
+          trendData = Array.from(dayMap.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, visits]) => ({ date: date.slice(5), visits }));
+        } catch (e) {
+          console.warn('[BookmarkSearch] Trend data error:', e);
+        }
+
+        let neverUsed = 0, dormant = 0;
+        try {
+          for (const bm of bookmarks) {
+            if (!bm.url) continue;
+            const visits = await new Promise(resolve => {
+              chrome.history.getVisits({ url: bm.url }, v => resolve(v || []));
+            });
+            if (visits.length === 0) { neverUsed++; continue; }
+            const lastVisit = Math.max(...visits.map(v => v.visitTime));
+            if ((Date.now() - lastVisit) > 180 * 24 * 60 * 60 * 1000) dormant++;
+          }
+        } catch {}
+
+        const duplicateCount = duplicates.reduce((sum, g) => sum + g.items.length, 0);
+
+        sendResponse({
+          ok: true,
+          totalBookmarks: bookmarks.length,
+          totalDomains: domainMap.size,
+          duplicateGroups: duplicates.length,
+          duplicateCount,
+          neverUsed,
+          dormant,
+          duplicates,
+          domainStats,
+          trendData
+        });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  // ==================== 自动健康检测定时器 ====================
+
+  if (request.type === 'UPDATE_AUTO_HEALTH_ALARM') {
+    (async () => {
+      try {
+        const result = await chrome.storage.sync.get('autoHealthCheck');
+        const config = result.autoHealthCheck || { enabled: false, intervalDays: 30 };
+
+        await chrome.alarms.clear('autoHealthCheck');
+        if (config.enabled) {
+          chrome.alarms.create('autoHealthCheck', {
+            periodInMinutes: config.intervalDays * 24 * 60
+          });
+          console.log(`[BookmarkSearch] Auto health check alarm set: every ${config.intervalDays} days`);
+        }
+        sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
@@ -1106,6 +1329,29 @@ chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
 chrome.alarms.create('syncTabGroups', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'syncTabGroups') syncAllGroups();
+  if (alarm.name === 'autoHealthCheck') {
+    try {
+      const user = await extpay.getUser().catch(() => null);
+      if (!user?.paid) return;
+      console.log('[BookmarkSearch] Running auto health check...');
+      const bookmarks = await loadBookmarks();
+      const result = await BookmarkHealth.runBatchCheck(bookmarks, { concurrency: 3, timeout: 10000 }, () => {});
+      const problemCount = (result.results || []).filter(r =>
+        ['not_found', 'server_error', 'timeout', 'network_error', 'ssl_error'].includes(r.status)
+      ).length;
+      await chrome.storage.local.set({
+        autoHealthLastRun: Date.now(),
+        autoHealthLastResult: { summary: result.summary, problemCount, total: bookmarks.length }
+      });
+      if (problemCount > 0) {
+        chrome.action.setBadgeText({ text: String(problemCount) });
+        chrome.action.setBadgeBackgroundColor({ color: '#e53935' });
+      }
+      console.log(`[BookmarkSearch] Auto health check done: ${problemCount} problems found`);
+    } catch (e) {
+      console.warn('[BookmarkSearch] Auto health check failed:', e.message);
+    }
+  }
   if (alarm.name === 'embeddingBuildResume') {
     try {
       const persistedState = await IntelligentSearch.loadBuildState();
@@ -1124,6 +1370,28 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 chrome.runtime.onStartup.addListener(async () => {
   syncAllGroups().catch(e => console.warn('[BookmarkSearch] Startup sync failed:', e.message));
+
+  try {
+    const user = await extpay.getUser().catch(() => null);
+    if (user?.trialStartedAt && !user.paid) {
+      const trialEnd = new Date(user.trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const daysLeft = Math.ceil((trialEnd - Date.now()) / (24 * 60 * 60 * 1000));
+      if (daysLeft <= 2 && daysLeft > 0) {
+        chrome.action.setBadgeText({ text: `${daysLeft}d` });
+        chrome.action.setBadgeBackgroundColor({ color: '#ff9800' });
+      } else if (daysLeft <= 0) {
+        chrome.action.setBadgeText({ text: '' });
+      }
+    }
+  } catch (e) { console.warn('[BookmarkSearch] Trial check failed:', e.message); }
+
+  try {
+    const ahResult = await chrome.storage.sync.get('autoHealthCheck');
+    const ahConfig = ahResult.autoHealthCheck || { enabled: false, intervalDays: 30 };
+    if (ahConfig.enabled) {
+      chrome.alarms.create('autoHealthCheck', { periodInMinutes: ahConfig.intervalDays * 24 * 60 });
+    }
+  } catch (e) { console.warn('[BookmarkSearch] Auto health alarm restore failed:', e.message); }
   try {
     const persistedState = await IntelligentSearch.loadBuildState();
     if (persistedState && persistedState.status === 'running') {

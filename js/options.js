@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindModalEvents();
   bindAiSearchEvents();
   bindHealthCheckEvents();
+  bindAutoHealthCheckEvents();
+  bindAnalysisEvents();
+  bindProEvents();
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
   
@@ -96,6 +99,8 @@ function handleHashChange() {
   if (hash === 'downloads') loadDownloads();
   if (hash === 'links') loadFriendLinks();
   if (hash === 'ai-search') refreshOptAiIndexStatus();
+  if (hash === 'analysis') initAnalysisSection();
+  if (hash === 'pro') refreshProStatus();
 }
 
 function showSection(sectionId) {
@@ -1429,6 +1434,7 @@ function bindHealthCheckEvents() {
   const filterSelect = document.getElementById('healthFilterSelect');
   const selectAllBtn = document.getElementById('healthSelectAllBtn');
   const deleteSelectedBtn = document.getElementById('healthDeleteSelectedBtn');
+  const exportCsvBtn = document.getElementById('healthExportCsvBtn');
 
   if (startBtn) startBtn.addEventListener('click', startHealthCheck);
   if (pauseBtn) pauseBtn.addEventListener('click', toggleHealthPause);
@@ -1436,6 +1442,7 @@ function bindHealthCheckEvents() {
   if (filterSelect) filterSelect.addEventListener('change', () => renderHealthResults());
   if (selectAllBtn) selectAllBtn.addEventListener('click', toggleSelectAllHealth);
   if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelectedHealthBookmarks);
+  if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportHealthCsv);
 }
 
 async function startHealthCheck() {
@@ -1468,6 +1475,9 @@ async function startHealthCheck() {
       healthResults = resp.results || [];
       renderHealthSummary(resp.summary);
       renderHealthResults();
+      if (resp.isLimited) {
+        showHealthLimitNotice(resp.checkedCount, resp.totalBookmarks);
+      }
     } else {
       showToast('检测失败: ' + (resp?.error || '未知错误'));
     }
@@ -1788,4 +1798,399 @@ async function deleteSelectedHealthBookmarks() {
   } else {
     showToast('批量删除失败: ' + (resp?.error || '未知错误'));
   }
+}
+
+function showHealthLimitNotice(checked, total) {
+  const card = document.getElementById('healthSummaryCard');
+  if (!card) return;
+  const existing = card.querySelector('.health-limit-notice');
+  if (existing) existing.remove();
+
+  const notice = document.createElement('div');
+  notice.className = 'health-limit-notice';
+  notice.innerHTML = `
+    <div class="health-limit-content">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 8v4M12 16h.01"/>
+      </svg>
+      <span>免费版仅检测了前 ${checked} 个书签（共 ${total} 个）。<strong>升级 Pro</strong> 解锁无限制检测。</span>
+      <button class="btn btn-sm btn-pro-upgrade" onclick="window.ProModule && window.ProModule.openPaymentPage()">升级 Pro</button>
+    </div>
+  `;
+  card.appendChild(notice);
+}
+
+// ==================== Pro 会员管理 ====================
+
+let currentProStatus = null;
+
+function bindProEvents() {
+  const upgradeBtn = document.getElementById('proUpgradeBtn');
+  const trialBtn = document.getElementById('proTrialBtn');
+  const restoreBtn = document.getElementById('proRestoreBtn');
+
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener('click', () => {
+      if (window.ProModule) window.ProModule.openPaymentPage();
+    });
+  }
+
+  if (trialBtn) {
+    trialBtn.addEventListener('click', () => {
+      if (window.ProModule) window.ProModule.openTrialPage();
+    });
+  }
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async () => {
+      if (window.ProModule) window.ProModule.openLoginPage();
+    });
+  }
+
+  refreshProStatus();
+}
+
+async function refreshProStatus() {
+  if (!window.ProModule) return;
+
+  try {
+    const status = await window.ProModule.checkProAccess();
+    currentProStatus = status;
+    updateProUI(status);
+  } catch (e) {
+    console.warn('[Options] Failed to get Pro status:', e);
+  }
+}
+
+function updateProUI(status) {
+  const statusCard = document.getElementById('proStatusCard');
+  const activeCard = document.getElementById('proActiveCard');
+  const pricingSection = document.getElementById('proPricingSection');
+  const navBadge = document.getElementById('proNavBadge');
+  const statusTitle = document.getElementById('proStatusTitle');
+  const statusDesc = document.getElementById('proStatusDesc');
+  const activeDesc = document.getElementById('proActiveDesc');
+
+  if (status.isPro) {
+    if (statusCard) statusCard.style.display = 'none';
+    if (activeCard) activeCard.style.display = '';
+    if (pricingSection) pricingSection.style.display = 'none';
+    if (navBadge) {
+      navBadge.style.display = '';
+      navBadge.textContent = 'Pro';
+    }
+    if (activeDesc && status.paidAt) {
+      const paidDate = new Date(status.paidAt).toLocaleDateString();
+      activeDesc.textContent = `自 ${paidDate} 起激活`;
+    }
+  } else {
+    if (statusCard) statusCard.style.display = '';
+    if (activeCard) activeCard.style.display = 'none';
+    if (pricingSection) pricingSection.style.display = '';
+    if (navBadge) navBadge.style.display = 'none';
+
+    if (status.trialStartedAt) {
+      const trialStart = new Date(status.trialStartedAt);
+      const trialEnd = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      if (now < trialEnd) {
+        const daysLeft = Math.ceil((trialEnd - now) / (24 * 60 * 60 * 1000));
+        if (statusTitle) statusTitle.textContent = '试用中';
+        if (statusDesc) statusDesc.textContent = `免费试用还剩 ${daysLeft} 天`;
+      } else {
+        if (statusTitle) statusTitle.textContent = '试用已结束';
+        if (statusDesc) statusDesc.textContent = '升级 Pro 继续使用高级功能';
+      }
+    }
+  }
+}
+
+// ==================== CSV 导出 ====================
+
+async function exportHealthCsv() {
+  if (!healthResults || healthResults.length === 0) {
+    showToast('没有可导出的检测结果');
+    return;
+  }
+
+  const isPro = currentProStatus?.isPro;
+  if (!isPro) {
+    showToast('CSV 导出是 Pro 专属功能');
+    if (window.ProModule) window.ProModule.openPaymentPage();
+    return;
+  }
+
+  const BOM = '\uFEFF';
+  const headers = ['标题', '网址', '状态', 'HTTP 状态码', '错误信息', '重定向', '最终网址', '浏览器验证'];
+  const statusLabels = {
+    ok: '正常', redirect: '重定向', not_found: '未找到',
+    server_error: '服务器错误', timeout: '超时',
+    network_error: '网络错误', ssl_error: 'SSL错误', skipped: '已跳过'
+  };
+
+  const rows = healthResults.map(r => [
+    csvEscape(r.title || ''),
+    csvEscape(r.url || ''),
+    statusLabels[r.status] || r.status,
+    r.httpStatus || '',
+    csvEscape(r.error || ''),
+    r.redirected ? '是' : '否',
+    csvEscape(r.finalUrl || ''),
+    r.tabVerified ? '是' : '否'
+  ]);
+
+  const csv = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bookmark-health-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('CSV 导出成功');
+}
+
+function csvEscape(str) {
+  if (!str) return '';
+  str = String(str);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+// ==================== 定期自动健康检测 ====================
+
+function bindAutoHealthCheckEvents() {
+  const enabledToggle = document.getElementById('autoHealthEnabled');
+  const intervalSelect = document.getElementById('autoHealthInterval');
+
+  if (!enabledToggle) return;
+
+  loadAutoHealthSettings();
+
+  enabledToggle.addEventListener('change', async () => {
+    const isPro = currentProStatus?.isPro;
+    if (!isPro && enabledToggle.checked) {
+      enabledToggle.checked = false;
+      showToast('定期自动检测是 Pro 专属功能');
+      if (window.ProModule) window.ProModule.openPaymentPage();
+      return;
+    }
+    await saveAutoHealthSettings();
+    await chrome.runtime.sendMessage({ type: 'UPDATE_AUTO_HEALTH_ALARM' });
+  });
+
+  if (intervalSelect) {
+    intervalSelect.addEventListener('change', async () => {
+      await saveAutoHealthSettings();
+      await chrome.runtime.sendMessage({ type: 'UPDATE_AUTO_HEALTH_ALARM' });
+    });
+  }
+}
+
+async function loadAutoHealthSettings() {
+  try {
+    const result = await chrome.storage.sync.get('autoHealthCheck');
+    const config = result.autoHealthCheck || { enabled: false, intervalDays: 30 };
+    const enabledToggle = document.getElementById('autoHealthEnabled');
+    const intervalSelect = document.getElementById('autoHealthInterval');
+    const intervalRow = document.getElementById('autoHealthIntervalRow');
+    const lastRunRow = document.getElementById('autoHealthLastRunRow');
+
+    if (enabledToggle) enabledToggle.checked = config.enabled;
+    if (intervalSelect) intervalSelect.value = String(config.intervalDays || 30);
+    if (intervalRow) intervalRow.style.display = config.enabled ? '' : 'none';
+    if (lastRunRow) lastRunRow.style.display = config.enabled ? '' : 'none';
+
+    const local = await chrome.storage.local.get('autoHealthLastRun');
+    const lastRunText = document.getElementById('autoHealthLastRunText');
+    if (lastRunText && local.autoHealthLastRun) {
+      lastRunText.textContent = new Date(local.autoHealthLastRun).toLocaleString();
+    }
+  } catch (e) {
+    console.warn('[Options] loadAutoHealthSettings error:', e);
+  }
+}
+
+async function saveAutoHealthSettings() {
+  const enabled = document.getElementById('autoHealthEnabled')?.checked || false;
+  const intervalDays = parseInt(document.getElementById('autoHealthInterval')?.value) || 30;
+  const intervalRow = document.getElementById('autoHealthIntervalRow');
+  const lastRunRow = document.getElementById('autoHealthLastRunRow');
+
+  if (intervalRow) intervalRow.style.display = enabled ? '' : 'none';
+  if (lastRunRow) lastRunRow.style.display = enabled ? '' : 'none';
+
+  await chrome.storage.sync.set({ autoHealthCheck: { enabled, intervalDays } });
+}
+
+// ==================== 书签分析 ====================
+
+let analysisData = null;
+
+function bindAnalysisEvents() {
+  const runBtn = document.getElementById('runAnalysisBtn');
+  const upgradeBtn = document.getElementById('analysisUpgradeBtn');
+  const trialBtn = document.getElementById('analysisTrialBtn');
+
+  if (runBtn) runBtn.addEventListener('click', runAnalysis);
+  if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
+    if (window.ProModule) window.ProModule.openPaymentPage();
+  });
+  if (trialBtn) trialBtn.addEventListener('click', () => {
+    if (window.ProModule) window.ProModule.openTrialPage();
+  });
+}
+
+async function initAnalysisSection() {
+  if (!window.ProModule) return;
+
+  try {
+    if (!currentProStatus) {
+      currentProStatus = await window.ProModule.checkProAccess();
+    }
+  } catch (e) {}
+
+  const isPro = currentProStatus?.isPro;
+  const actionCard = document.getElementById('analysisActionCard');
+  const resultsDiv = document.getElementById('analysisResults');
+  const proGate = document.getElementById('analysisProGate');
+
+  if (isPro) {
+    if (actionCard) actionCard.style.display = '';
+    if (proGate) proGate.style.display = 'none';
+    if (resultsDiv) resultsDiv.style.display = analysisData ? '' : 'none';
+  } else {
+    if (actionCard) actionCard.style.display = 'none';
+    if (proGate) proGate.style.display = '';
+    if (resultsDiv) resultsDiv.style.display = 'none';
+  }
+}
+
+async function runAnalysis() {
+  const runBtn = document.getElementById('runAnalysisBtn');
+  const resultsDiv = document.getElementById('analysisResults');
+  if (runBtn) { runBtn.disabled = true; runBtn.textContent = '分析中...'; }
+
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'RUN_BOOKMARK_ANALYSIS' });
+    if (resp?.ok) {
+      analysisData = resp;
+      if (resultsDiv) resultsDiv.style.display = '';
+      renderAnalysisOverview(resp);
+      renderDuplicates(resp.duplicates);
+      renderDomainChart(resp.domainStats);
+      renderTrendChart(resp.trendData);
+    } else {
+      showToast('分析失败: ' + (resp?.error || '未知错误'));
+    }
+  } catch (e) {
+    showToast('分析出错: ' + e.message);
+  } finally {
+    if (runBtn) { runBtn.disabled = false; runBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> 开始分析'; }
+  }
+}
+
+function renderAnalysisOverview(data) {
+  const grid = document.getElementById('analysisOverviewGrid');
+  if (!grid) return;
+
+  grid.innerHTML = `
+    <div class="analysis-stat"><div class="analysis-stat-value">${data.totalBookmarks}</div><div class="analysis-stat-label">书签总数</div></div>
+    <div class="analysis-stat"><div class="analysis-stat-value">${data.totalDomains}</div><div class="analysis-stat-label">涉及域名</div></div>
+    <div class="analysis-stat analysis-stat-warn"><div class="analysis-stat-value">${data.duplicateGroups}</div><div class="analysis-stat-label">重复组</div></div>
+    <div class="analysis-stat analysis-stat-warn"><div class="analysis-stat-value">${data.duplicateCount}</div><div class="analysis-stat-label">重复书签</div></div>
+    <div class="analysis-stat"><div class="analysis-stat-value">${data.neverUsed}</div><div class="analysis-stat-label">从未访问</div></div>
+    <div class="analysis-stat"><div class="analysis-stat-value">${data.dormant}</div><div class="analysis-stat-label">休眠 (>180天)</div></div>
+  `;
+}
+
+function renderDuplicates(duplicates) {
+  const list = document.getElementById('analysisDuplicatesList');
+  const badge = document.getElementById('duplicateCount');
+  if (!list) return;
+  if (badge) badge.textContent = (duplicates || []).length;
+
+  if (!duplicates || duplicates.length === 0) {
+    list.innerHTML = '<div class="health-empty">没有发现重复书签</div>';
+    return;
+  }
+
+  list.innerHTML = duplicates.map(group => `
+    <div class="duplicate-group">
+      <div class="duplicate-url">${escapeHtml(group.url)}</div>
+      <div class="duplicate-items">
+        ${group.items.map(item => `
+          <div class="duplicate-item">
+            <span class="duplicate-title">${escapeHtml(item.title || '无标题')}</span>
+            <span class="duplicate-path">${escapeHtml(item.folderPath || '')}</span>
+            <button class="btn btn-sm btn-danger duplicate-delete" data-id="${item.id}" title="删除此书签">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.duplicate-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      if (!confirm('确定要删除这个重复书签吗？')) return;
+      const resp = await chrome.runtime.sendMessage({ type: 'DELETE_BOOKMARKS_BATCH', ids: [id] });
+      if (resp?.ok) {
+        btn.closest('.duplicate-item').remove();
+        showToast('已删除');
+      }
+    });
+  });
+}
+
+function renderDomainChart(domainStats) {
+  const container = document.getElementById('analysisDomainChart');
+  if (!container || !domainStats || domainStats.length === 0) return;
+
+  const maxCount = domainStats[0]?.count || 1;
+
+  container.innerHTML = domainStats.map(d => `
+    <div class="domain-bar-row">
+      <div class="domain-bar-label" title="${escapeHtml(d.domain)}">${escapeHtml(d.domain)}</div>
+      <div class="domain-bar-track">
+        <div class="domain-bar-fill" style="width:${(d.count / maxCount * 100).toFixed(1)}%"></div>
+      </div>
+      <div class="domain-bar-count">${d.count}</div>
+    </div>
+  `).join('');
+}
+
+function renderTrendChart(trendData) {
+  const container = document.getElementById('analysisTrendChart');
+  if (!container || !trendData || trendData.length === 0) {
+    if (container) container.innerHTML = '<div class="health-empty">暂无访问数据</div>';
+    return;
+  }
+
+  const maxVisits = Math.max(...trendData.map(d => d.visits), 1);
+  const barWidth = Math.max(100 / trendData.length, 2);
+
+  container.innerHTML = `
+    <div class="trend-chart">
+      <div class="trend-bars">
+        ${trendData.map(d => `
+          <div class="trend-bar-col" style="width:${barWidth}%" title="${d.date}: ${d.visits} 次访问">
+            <div class="trend-bar" style="height:${(d.visits / maxVisits * 100).toFixed(1)}%"></div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="trend-labels">
+        <span>${trendData[0]?.date || ''}</span>
+        <span>${trendData[Math.floor(trendData.length / 2)]?.date || ''}</span>
+        <span>${trendData[trendData.length - 1]?.date || ''}</span>
+      </div>
+    </div>
+  `;
 }

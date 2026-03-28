@@ -65,6 +65,13 @@
           </svg>
           <span>健康检测</span>
         </a>
+        <a href="#analysis" class="nav-item" data-section="analysis">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 20V10M12 20V4M6 20v-6"/>
+          </svg>
+          <span>书签分析</span>
+          <span class="pro-badge-inline pro-nav-indicator">Pro</span>
+        </a>
         <a href="#history" class="nav-item" data-section="history">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/>
@@ -85,6 +92,17 @@
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
           </svg>
           <span>友情链接</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-title">会员</div>
+        <a href="#pro" class="nav-item" data-section="pro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+          <span>Pro 会员</span>
+          <span class="pro-nav-badge" id="proNavBadge" style="display:none">Pro</span>
         </a>
       </div>
 
@@ -639,6 +657,41 @@
           </div>
         </div>
 
+        <div class="card" id="healthAutoCheckCard">
+          <div class="card-header">
+            <h3>定期自动检测</h3>
+            <span class="pro-badge-inline">Pro</span>
+          </div>
+          <div class="card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">启用自动检测</div>
+                <div class="setting-desc">定期自动检测书签健康状态，发现问题后通知</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="autoHealthEnabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row" id="autoHealthIntervalRow" style="display:none;">
+              <div class="setting-info">
+                <div class="setting-label">检测频率</div>
+                <div class="setting-desc">选择自动检测的间隔周期</div>
+              </div>
+              <select id="autoHealthInterval" class="form-select form-select-sm">
+                <option value="7">每周</option>
+                <option value="30" selected>每月</option>
+              </select>
+            </div>
+            <div class="setting-row" id="autoHealthLastRunRow" style="display:none;">
+              <div class="setting-info">
+                <div class="setting-label">上次自动检测</div>
+                <div class="setting-desc" id="autoHealthLastRunText">从未执行</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="card" id="healthProgressCard" style="display:none;">
           <div class="card-header">
             <h3>检测进度</h3>
@@ -687,11 +740,94 @@
               </select>
               <button class="btn btn-sm btn-secondary" id="healthSelectAllBtn">全选</button>
               <button class="btn btn-sm btn-danger" id="healthDeleteSelectedBtn" disabled>删除选中</button>
+              <button class="btn btn-sm btn-secondary" id="healthExportCsvBtn" title="导出检测报告为 CSV">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                导出 CSV
+              </button>
             </div>
           </div>
           <div class="card-body">
             <div class="health-results-list" id="healthResultsList">
               <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 书签分析 -->
+      <section id="analysis" class="content-section">
+        <div class="section-header">
+          <h1>书签分析</h1>
+          <p>深度分析书签集合：重复检测、域名统计、使用趋势 <span class="pro-badge-inline">Pro</span></p>
+        </div>
+
+        <div class="card" id="analysisActionCard">
+          <div class="card-body" style="text-align:center; padding:24px;">
+            <button class="btn btn-primary btn-lg" id="runAnalysisBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              开始分析
+            </button>
+            <p class="setting-desc" style="margin-top:12px;">分析所有书签的重复情况、域名分布和使用趋势</p>
+          </div>
+        </div>
+
+        <div id="analysisResults" style="display:none;">
+          <!-- 分析概览 -->
+          <div class="card" id="analysisOverviewCard">
+            <div class="card-header">
+              <h3>分析概览</h3>
+            </div>
+            <div class="card-body">
+              <div class="analysis-overview-grid" id="analysisOverviewGrid"></div>
+            </div>
+          </div>
+
+          <!-- 重复书签 -->
+          <div class="card" id="analysisDuplicatesCard">
+            <div class="card-header">
+              <h3>重复书签</h3>
+              <div class="card-actions">
+                <span class="card-badge" id="duplicateCount">0</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="analysisDuplicatesList"></div>
+            </div>
+          </div>
+
+          <!-- 域名统计 -->
+          <div class="card" id="analysisDomainCard">
+            <div class="card-header">
+              <h3>域名分布 Top 20</h3>
+            </div>
+            <div class="card-body">
+              <div id="analysisDomainChart"></div>
+            </div>
+          </div>
+
+          <!-- 使用趋势 -->
+          <div class="card" id="analysisTrendCard">
+            <div class="card-header">
+              <h3>使用趋势（近 30 天）</h3>
+            </div>
+            <div class="card-body">
+              <div id="analysisTrendChart"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="analysisProGate" style="display:none;">
+          <div class="card">
+            <div class="card-body" style="text-align:center; padding:40px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity:0.4; margin-bottom:16px;">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+              <h3 style="margin-bottom:8px;">Pro 专属功能</h3>
+              <p class="setting-desc" style="margin-bottom:20px;">书签分析报告是 Pro 会员专属功能，包含重复检测、域名统计和使用趋势分析。</p>
+              <div style="display:flex; gap:12px; justify-content:center;">
+                <button class="btn btn-pro-upgrade" id="analysisUpgradeBtn">升级 Pro</button>
+                <button class="btn btn-pro-trial" id="analysisTrialBtn">免费试用 7 天</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1058,6 +1194,177 @@
         </div>
       </section>
 
+      <!-- Pro 会员 -->
+      <section id="pro" class="content-section">
+        <div class="section-header">
+          <h1>Pro 会员</h1>
+          <p>解锁全部高级功能，获得开箱即用的 AI 搜索体验</p>
+        </div>
+
+        <!-- Pro 状态卡片 -->
+        <div class="pro-status-card" id="proStatusCard">
+          <div class="pro-status-header">
+            <div class="pro-status-icon" id="proStatusIcon">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <div class="pro-status-info">
+              <div class="pro-status-title" id="proStatusTitle">免费版</div>
+              <div class="pro-status-desc" id="proStatusDesc">升级 Pro 解锁全部高级功能</div>
+            </div>
+            <div class="pro-status-actions" id="proStatusActions">
+              <button class="btn btn-pro-upgrade" id="proUpgradeBtn">升级 Pro</button>
+              <button class="btn btn-pro-trial" id="proTrialBtn">免费试用 7 天</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pro 已激活卡片（默认隐藏） -->
+        <div class="pro-active-card" id="proActiveCard" style="display:none">
+          <div class="pro-active-header">
+            <div class="pro-active-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <div class="pro-active-info">
+              <div class="pro-active-title">Pro 会员</div>
+              <div class="pro-active-desc" id="proActiveDesc">已激活</div>
+            </div>
+            <span class="pro-active-badge">已激活</span>
+          </div>
+        </div>
+
+        <!-- 定价方案 -->
+        <div class="pro-pricing-section" id="proPricingSection">
+          <h2 class="pro-section-title">选择适合你的方案</h2>
+          <div class="pro-pricing-grid">
+            <div class="pro-plan-card">
+              <div class="pro-plan-name">月付</div>
+              <div class="pro-plan-price">
+                <span class="pro-price-amount">$3.99</span>
+                <span class="pro-price-period">/月</span>
+              </div>
+              <div class="pro-plan-desc">灵活试用，随时取消</div>
+            </div>
+            <div class="pro-plan-card pro-plan-recommended">
+              <div class="pro-plan-badge-label">推荐</div>
+              <div class="pro-plan-name">年付</div>
+              <div class="pro-plan-price">
+                <span class="pro-price-amount">$29.99</span>
+                <span class="pro-price-period">/年</span>
+              </div>
+              <div class="pro-plan-desc">折合 $2.50/月，省 37%</div>
+            </div>
+            <div class="pro-plan-card">
+              <div class="pro-plan-name">终身</div>
+              <div class="pro-plan-price">
+                <span class="pro-price-amount">$59.99</span>
+                <span class="pro-price-period">一次性</span>
+              </div>
+              <div class="pro-plan-desc">买断制，无后续费用</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能对比表 -->
+        <div class="pro-comparison-section">
+          <h2 class="pro-section-title">功能对比</h2>
+          <div class="card">
+            <div class="card-body" style="padding:0">
+              <table class="pro-comparison-table">
+                <thead>
+                  <tr>
+                    <th>功能</th>
+                    <th>免费版</th>
+                    <th class="pro-col">Pro 版</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>书签/标签页/历史/下载搜索</td>
+                    <td><span class="pro-check">✓</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>高级搜索语法</td>
+                    <td><span class="pro-check">✓</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>UI 定制（主题、字体、风格）</td>
+                    <td><span class="pro-check">✓</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>智能排序</td>
+                    <td><span class="pro-check">✓</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>AI 语义搜索（自带 Key）</td>
+                    <td><span class="pro-check">✓</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>AI 语义搜索（托管 API，开箱即用）</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>书签健康检测</td>
+                    <td>限 50 个/次</td>
+                    <td class="pro-col"><span class="pro-check">✓</span> 无限制</td>
+                  </tr>
+                  <tr>
+                    <td>定期自动健康检测</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>批量摘要生成</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>AI 重排序 (Rerank)</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>书签分析报告</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                  <tr>
+                    <td>检测报告导出 (CSV)</td>
+                    <td><span class="pro-cross">✗</span></td>
+                    <td class="pro-col"><span class="pro-check">✓</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 账户管理 -->
+        <div class="pro-account-section">
+          <h2 class="pro-section-title">账户管理</h2>
+          <div class="card">
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-label">恢复购买</div>
+                  <div class="setting-desc">如果你已在其他设备上购买 Pro，可以在这里恢复</div>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="proRestoreBtn">恢复购买</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 关于 -->
       <section id="about" class="content-section">
         <div class="section-header">
@@ -1195,6 +1502,7 @@
     </div>
   </div>
 
+  <script src="js/pro.js"></script>
   <script src="js/options.js"></script>
 </body>
 </html>

@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   let visitCounts = new Map();
   let searchDebounceTimer = null;
   let aiSearchDebounceTimer = null;
+  let cachedProStatus = null;
   
   // 书签使用状态常量
   const BOOKMARK_STATUS = {
@@ -1418,6 +1419,20 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   async function loadAiData() {
     try {
+      const settings = await window.settings.get();
+      const hasApiKey = !!(settings.intelligentSearch?.aiApiKey);
+
+      if (!hasApiKey) {
+        if (!cachedProStatus && window.ProModule) {
+          cachedProStatus = await window.ProModule.checkProAccess();
+        }
+        const isPro = cachedProStatus?.isPro || false;
+        if (!isPro) {
+          showAiUpgradePrompt();
+          return;
+        }
+      }
+
       const bookmarkTree = await chrome.bookmarks.getTree();
       const bookmarks = [];
       function traverse(node) {
@@ -1433,6 +1448,36 @@ document.addEventListener('DOMContentLoaded', async function() {
     } catch (e) {
       console.error('[BookmarkSearch] loadAiData error:', e);
     }
+  }
+
+  function showAiUpgradePrompt() {
+    const resultsList = document.getElementById('resultsList');
+    totalCountElement.textContent = '0';
+    searchStatsElement.textContent = '';
+    resultsList.innerHTML = `
+      <div class="pro-upgrade-inline">
+        <div class="pro-upgrade-inline-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </div>
+        <div class="pro-upgrade-inline-text">
+          <strong>AI 智能搜索</strong> 需要配置 API Key 或升级 Pro<br>
+          <span style="font-size:12px;opacity:0.7">自带 API Key 可免费使用，或升级 Pro 享受开箱即用体验</span>
+        </div>
+        <div class="pro-upgrade-inline-actions">
+          <button class="btn-pro-upgrade" id="aiUpgradeBtn">升级 Pro</button>
+          <button class="btn-pro-trial" id="aiTrialBtn">免费试用 7 天</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary,#5f6368);margin-top:4px;">
+          或在设置面板中配置自己的 API Key（永久免费）
+        </div>
+      </div>
+    `;
+    const upgradeBtn = document.getElementById('aiUpgradeBtn');
+    const trialBtn = document.getElementById('aiTrialBtn');
+    if (upgradeBtn) upgradeBtn.addEventListener('click', () => window.ProModule?.openPaymentPage());
+    if (trialBtn) trialBtn.addEventListener('click', () => window.ProModule?.openTrialPage());
   }
 
   function loadAiRecommendations() {
