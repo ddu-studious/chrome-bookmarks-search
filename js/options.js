@@ -1,28 +1,20 @@
 /**
  * 设置页面脚本
+ * 注意：DEFAULT_SETTINGS 已在 settings.js 中定义，此处使用 OPTIONS_DEFAULTS 作为选项页面特有的默认值扩展
  */
 
-// 默认设置
-const DEFAULT_SETTINGS = {
-  theme: 'system',
+const OPTIONS_DEFAULTS = {
   uiStyle: 'spotlight',
-  fontSize: 'medium',
   fontFamily: 'system',
-  animation: true,
-  highContrast: false,
-  defaultMode: 'bookmarks',
   defaultSort: 'smart',
   historyRange: 30,
   showStats: true,
-  showGroupsMode: false,
   friendLinks: [
     { name: 'DeepSeek', url: 'https://www.deepseek.com' },
     { name: '爱奇艺', url: 'https://www.iqiyi.com' },
     { name: '哔哩哔哩', url: 'https://www.bilibili.com' },
     { name: 'YouTube', url: 'https://www.youtube.com' }
-  ],
-  defaultSearchEngine: null,
-  searchWindowMode: 'window'
+  ]
 };
 
 // 分页配置
@@ -47,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindAutoHealthCheckEvents();
   bindAnalysisEvents();
   bindProEvents();
+  bindOrganizeEvents();
   handleHashChange();
   window.addEventListener('hashchange', handleHashChange);
   
@@ -101,6 +94,25 @@ function handleHashChange() {
   if (hash === 'ai-search') refreshOptAiIndexStatus();
   if (hash === 'analysis') initAnalysisSection();
   if (hash === 'pro') refreshProStatus();
+  if (hash === 'platforms') loadPlatformsSection();
+}
+
+async function loadPlatformsSection() {
+  try {
+    const result = await chrome.storage.sync.get('optionsSettings');
+    const settings = { ...DEFAULT_SETTINGS, ...OPTIONS_DEFAULTS, ...result.optionsSettings };
+    const sp = settings.searchPlatforms || DEFAULT_SETTINGS.searchPlatforms || {};
+    const platformEnabledEl = document.getElementById('platformEnabled');
+    const platformPrefixEl = document.getElementById('platformPrefixEnabled');
+    const platformShowEl = document.getElementById('platformShowInResults');
+    if (platformEnabledEl) platformEnabledEl.checked = sp.enabled !== false;
+    if (platformPrefixEl) platformPrefixEl.checked = sp.prefixEnabled !== false;
+    if (platformShowEl) platformShowEl.checked = sp.showInResults !== false;
+    renderPlatformList(sp.enabledPlatforms || ['g','bd','gh','so','zh','bl','yt','npm','mdn']);
+    renderCustomPlatformList(sp.customPlatforms || []);
+  } catch (e) {
+    console.error('[Options] loadPlatformsSection error:', e);
+  }
 }
 
 function showSection(sectionId) {
@@ -125,43 +137,44 @@ function bindNavigationEvents() {
 // ==================== 设置加载/保存 ====================
 async function loadSettings() {
   const result = await chrome.storage.sync.get(['optionsSettings', 'overlayFont']);
-  const settings = { ...DEFAULT_SETTINGS, ...result.optionsSettings };
+  const settings = { ...DEFAULT_SETTINGS, ...OPTIONS_DEFAULTS, ...result.optionsSettings };
   
-  // 如果有单独存储的字体设置，使用它
   if (result.overlayFont) {
     settings.fontFamily = result.overlayFont;
   }
   
-  // 应用到表单
-  document.getElementById('themeMode').value = settings.theme;
-  document.getElementById('uiStyle').value = settings.uiStyle;
-  document.getElementById('fontSize').value = settings.fontSize;
-  document.getElementById('fontFamily').value = settings.fontFamily;
-  document.getElementById('enableAnimation').checked = settings.animation;
-  document.getElementById('highContrast').checked = settings.highContrast;
-  document.getElementById('defaultMode').value = settings.defaultMode;
-  document.getElementById('defaultSort').value = settings.defaultSort;
-  document.getElementById('historyRange').value = settings.historyRange;
-  document.getElementById('showStats').checked = settings.showStats;
-  document.getElementById('showGroupsMode').checked = !!settings.showGroupsMode;
+  const safeSet = (id, prop, val) => {
+    const el = document.getElementById(id);
+    if (el) el[prop] = val;
+  };
+
+  safeSet('themeMode', 'value', settings.theme);
+  safeSet('uiStyle', 'value', settings.uiStyle);
+  safeSet('fontSize', 'value', settings.fontSize);
+  safeSet('fontFamily', 'value', settings.fontFamily);
+  safeSet('enableAnimation', 'checked', settings.animation);
+  safeSet('highContrast', 'checked', settings.highContrast);
+  safeSet('defaultMode', 'value', settings.defaultMode);
+  safeSet('defaultSort', 'value', settings.defaultSort);
+  safeSet('historyRange', 'value', settings.historyRange);
+  safeSet('showStats', 'checked', settings.showStats);
+  safeSet('showGroupsMode', 'checked', !!settings.showGroupsMode);
+  safeSet('defaultSearchEngine', 'value', settings.defaultSearchEngine || 'auto');
   
-  // 搜索引擎
-  const engineSelect = document.getElementById('defaultSearchEngine');
-  if (engineSelect) {
-    engineSelect.value = settings.defaultSearchEngine || 'auto';
-  }
-  
-  // 搜索窗口模式
   const modeSelect = document.getElementById('searchWindowMode');
   if (modeSelect) {
     modeSelect.value = settings.searchWindowMode || 'window';
     updateSearchWindowModeHint(settings.searchWindowMode || 'window');
   }
   
-  // 加载快捷键
+  const sp = settings.searchPlatforms || DEFAULT_SETTINGS.searchPlatforms || {};
+  safeSet('platformEnabled', 'checked', sp.enabled !== false);
+  safeSet('platformPrefixEnabled', 'checked', sp.prefixEnabled !== false);
+  safeSet('platformShowInResults', 'checked', sp.showInResults !== false);
+  renderPlatformList(sp.enabledPlatforms || ['g','bd','gh','so','zh','bl','yt','npm','mdn']);
+  renderCustomPlatformList(sp.customPlatforms || []);
+
   loadCurrentShortcut();
-  
-  // 加载弹出面板尺寸
   loadPopupDimensions();
 }
 
@@ -199,10 +212,19 @@ async function saveSettings() {
   // 保留已有的友情链接和 AI 配置
   const result = await chrome.storage.sync.get(['optionsSettings', 'settings']);
   const prevOptions = result.optionsSettings || {};
-  settings.friendLinks = prevOptions.friendLinks || DEFAULT_SETTINGS.friendLinks;
+  settings.friendLinks = prevOptions.friendLinks || OPTIONS_DEFAULTS.friendLinks;
   if (prevOptions.intelligentSearch) {
     settings.intelligentSearch = prevOptions.intelligentSearch;
   }
+
+  // 保存多平台搜索设置
+  settings.searchPlatforms = {
+    enabled: document.getElementById('platformEnabled')?.checked !== false,
+    prefixEnabled: document.getElementById('platformPrefixEnabled')?.checked !== false,
+    showInResults: document.getElementById('platformShowInResults')?.checked !== false,
+    enabledPlatforms: getEnabledPlatformsFromUI(),
+    customPlatforms: getCustomPlatformsFromUI()
+  };
   
   await chrome.storage.sync.set({ optionsSettings: settings });
   
@@ -860,7 +882,7 @@ function handleDownloadAction(e) {
 // ==================== 友情链接 ====================
 async function loadFriendLinks() {
   const result = await chrome.storage.sync.get('optionsSettings');
-  const links = result.optionsSettings?.friendLinks || DEFAULT_SETTINGS.friendLinks;
+  const links = result.optionsSettings?.friendLinks || OPTIONS_DEFAULTS.friendLinks;
   
   const container = document.getElementById('linkList');
   container.innerHTML = links.map((link, index) => `
@@ -916,7 +938,7 @@ async function loadFriendLinks() {
 
 async function saveFriendLinks(links) {
   const result = await chrome.storage.sync.get('optionsSettings');
-  const settings = { ...DEFAULT_SETTINGS, ...result.optionsSettings, friendLinks: links };
+  const settings = { ...DEFAULT_SETTINGS, ...OPTIONS_DEFAULTS, ...result.optionsSettings, friendLinks: links };
   await chrome.storage.sync.set({ optionsSettings: settings });
   showToast('链接已保存');
 }
@@ -956,7 +978,7 @@ function bindModalEvents() {
     }
     
     const result = await chrome.storage.sync.get('optionsSettings');
-    const links = result.optionsSettings?.friendLinks || DEFAULT_SETTINGS.friendLinks;
+    const links = result.optionsSettings?.friendLinks || OPTIONS_DEFAULTS.friendLinks;
     links.push({ name, url });
     await saveFriendLinks(links);
     
@@ -1914,13 +1936,6 @@ async function exportHealthCsv() {
     return;
   }
 
-  const isPro = currentProStatus?.isPro;
-  if (!isPro) {
-    showToast('CSV 导出是 Pro 专属功能');
-    if (window.ProModule) window.ProModule.openPaymentPage();
-    return;
-  }
-
   const BOM = '\uFEFF';
   const headers = ['标题', '网址', '状态', 'HTTP 状态码', '错误信息', '重定向', '最终网址', '浏览器验证'];
   const statusLabels = {
@@ -1973,13 +1988,6 @@ function bindAutoHealthCheckEvents() {
   loadAutoHealthSettings();
 
   enabledToggle.addEventListener('change', async () => {
-    const isPro = currentProStatus?.isPro;
-    if (!isPro && enabledToggle.checked) {
-      enabledToggle.checked = false;
-      showToast('定期自动检测是 Pro 专属功能');
-      if (window.ProModule) window.ProModule.openPaymentPage();
-      return;
-    }
     await saveAutoHealthSettings();
     await chrome.runtime.sendMessage({ type: 'UPDATE_AUTO_HEALTH_ALARM' });
   });
@@ -2047,28 +2055,13 @@ function bindAnalysisEvents() {
 }
 
 async function initAnalysisSection() {
-  if (!window.ProModule) return;
-
-  try {
-    if (!currentProStatus) {
-      currentProStatus = await window.ProModule.checkProAccess();
-    }
-  } catch (e) {}
-
-  const isPro = currentProStatus?.isPro;
   const actionCard = document.getElementById('analysisActionCard');
   const resultsDiv = document.getElementById('analysisResults');
   const proGate = document.getElementById('analysisProGate');
 
-  if (isPro) {
-    if (actionCard) actionCard.style.display = '';
-    if (proGate) proGate.style.display = 'none';
-    if (resultsDiv) resultsDiv.style.display = analysisData ? '' : 'none';
-  } else {
-    if (actionCard) actionCard.style.display = 'none';
-    if (proGate) proGate.style.display = '';
-    if (resultsDiv) resultsDiv.style.display = 'none';
-  }
+  if (actionCard) actionCard.style.display = '';
+  if (proGate) proGate.style.display = 'none';
+  if (resultsDiv) resultsDiv.style.display = analysisData ? '' : 'none';
 }
 
 async function runAnalysis() {
@@ -2193,4 +2186,381 @@ function renderTrendChart(trendData) {
       </div>
     </div>
   `;
+}
+
+// ==================== 多平台搜索管理 ====================
+const BUILTIN_PLATFORMS = {
+  g: { name: 'Google', url: 'https://www.google.com/search?q={query}' },
+  bd: { name: '百度', url: 'https://www.baidu.com/s?wd={query}' },
+  gh: { name: 'GitHub', url: 'https://github.com/search?q={query}&type=repositories' },
+  so: { name: 'Stack Overflow', url: 'https://stackoverflow.com/search?q={query}' },
+  zh: { name: '知乎', url: 'https://www.zhihu.com/search?type=content&q={query}' },
+  bl: { name: '哔哩哔哩', url: 'https://search.bilibili.com/all?keyword={query}' },
+  yt: { name: 'YouTube', url: 'https://www.youtube.com/results?search_query={query}' },
+  npm: { name: 'NPM', url: 'https://www.npmjs.com/search?q={query}' },
+  mdn: { name: 'MDN', url: 'https://developer.mozilla.org/search?q={query}' },
+  x: { name: 'Twitter/X', url: 'https://x.com/search?q={query}' },
+  rd: { name: 'Reddit', url: 'https://www.reddit.com/search/?q={query}' },
+  ph: { name: 'Product Hunt', url: 'https://www.producthunt.com/search?q={query}' }
+};
+
+function renderPlatformList(enabledPlatforms) {
+  const container = document.getElementById('platformList');
+  if (!container) return;
+
+  container.innerHTML = Object.entries(BUILTIN_PLATFORMS).map(([prefix, p]) => {
+    const checked = enabledPlatforms.includes(prefix) ? 'checked' : '';
+    return `
+      <label class="platform-checkbox-item">
+        <input type="checkbox" data-platform="${prefix}" ${checked}>
+        <span class="platform-label">
+          <strong>${prefix}:</strong> ${p.name}
+        </span>
+        <span class="platform-url-hint">${p.url.replace('{query}', '...')}</span>
+      </label>
+    `;
+  }).join('');
+
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', saveSettings);
+  });
+}
+
+function renderCustomPlatformList(customPlatforms) {
+  const container = document.getElementById('customPlatformList');
+  if (!container) return;
+
+  container.innerHTML = customPlatforms.map((p, i) => `
+    <div class="custom-platform-row" data-index="${i}">
+      <input type="text" class="custom-prefix" value="${p.prefix || ''}" placeholder="前缀" style="width:60px">
+      <input type="text" class="custom-name" value="${p.name || ''}" placeholder="名称" style="width:80px">
+      <input type="text" class="custom-url" value="${p.url || ''}" placeholder="URL (含 {query})" style="flex:1">
+      <button class="btn-icon remove-custom-platform" title="删除">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.remove-custom-platform').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.target.closest('.custom-platform-row').remove();
+      saveSettings();
+    });
+  });
+
+  container.querySelectorAll('input').forEach(input => {
+    input.addEventListener('change', saveSettings);
+  });
+}
+
+function getEnabledPlatformsFromUI() {
+  const checkboxes = document.querySelectorAll('#platformList input[data-platform]:checked');
+  return Array.from(checkboxes).map(cb => cb.dataset.platform);
+}
+
+function getCustomPlatformsFromUI() {
+  const rows = document.querySelectorAll('#customPlatformList .custom-platform-row');
+  const platforms = [];
+  rows.forEach(row => {
+    const prefix = row.querySelector('.custom-prefix')?.value?.trim();
+    const name = row.querySelector('.custom-name')?.value?.trim();
+    const url = row.querySelector('.custom-url')?.value?.trim();
+    if (prefix && name && url) {
+      platforms.push({ prefix, name, url });
+    }
+  });
+  return platforms;
+}
+
+// 绑定添加自定义平台按钮
+document.getElementById('addCustomPlatform')?.addEventListener('click', () => {
+  const container = document.getElementById('customPlatformList');
+  if (!container) return;
+  const index = container.children.length;
+  const html = `
+    <div class="custom-platform-row" data-index="${index}">
+      <input type="text" class="custom-prefix" value="" placeholder="前缀" style="width:60px">
+      <input type="text" class="custom-name" value="" placeholder="名称" style="width:80px">
+      <input type="text" class="custom-url" value="" placeholder="URL (含 {query})" style="flex:1">
+      <button class="btn-icon remove-custom-platform" title="删除">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+  const newRow = container.lastElementChild;
+  newRow.querySelector('.remove-custom-platform').addEventListener('click', (e) => {
+    e.target.closest('.custom-platform-row').remove();
+    saveSettings();
+  });
+  newRow.querySelectorAll('input').forEach(input => {
+    input.addEventListener('change', saveSettings);
+  });
+});
+
+// ==================== 使用说明 TOC 联动 ====================
+(function initGuideToc() {
+  const tocItems = document.querySelectorAll('.guide-toc-item');
+  const contentArea = document.querySelector('.guide-content-area');
+  if (!tocItems.length || !contentArea) return;
+
+  tocItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.getElementById(item.dataset.guideChapter);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  contentArea.addEventListener('scroll', () => {
+    const chapters = contentArea.querySelectorAll('.guide-chapter');
+    let current = '';
+    chapters.forEach(ch => {
+      const rect = ch.getBoundingClientRect();
+      const areaRect = contentArea.getBoundingClientRect();
+      if (rect.top - areaRect.top <= 60) current = ch.id;
+    });
+    tocItems.forEach(item => {
+      item.classList.toggle('active', item.dataset.guideChapter === current);
+    });
+  });
+})();
+
+// ==================== 书签整理 ====================
+function bindOrganizeEvents() {
+  document.getElementById('addPaletteTagBtn')?.addEventListener('click', async () => {
+    const tagName = prompt('输入新标签名称：');
+    if (!tagName || !tagName.trim()) return;
+    try {
+      const palette = await BookmarkTags.getTagPalette();
+      if (!palette.includes(tagName.trim())) {
+        palette.push(tagName.trim());
+        await BookmarkTags.setTagPalette(palette);
+      }
+      renderPaletteTagList();
+      showToast('标签已添加');
+    } catch (e) { showToast('添加失败: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('refreshTagStatsBtn')?.addEventListener('click', renderTagStats);
+
+  document.getElementById('addDomainMapBtn')?.addEventListener('click', async () => {
+    const domain = prompt('输入域名（如 github.com）：');
+    if (!domain || !domain.trim()) return;
+    const category = prompt('输入分类名称（如 开发工具）：');
+    if (!category || !category.trim()) return;
+    try {
+      const custom = await BookmarkOrganizer.getDomainCategories();
+      custom[domain.trim()] = category.trim();
+      await BookmarkOrganizer.setCustomDomainCategories(custom);
+      renderDomainMapList();
+      showToast('映射已添加');
+    } catch (e) { showToast('添加失败: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('analyzeOrganizeBtn')?.addEventListener('click', async () => {
+    try {
+      const useAI = document.getElementById('organizeUseAI')?.checked || false;
+      const organizeSubfolders = document.getElementById('organizeSubfolders')?.checked || false;
+      const btn = document.getElementById('analyzeOrganizeBtn');
+      btn.disabled = true;
+      btn.textContent = useAI ? '正在分析（含 AI）...' : '正在分析...';
+      showToast(useAI ? '正在分析书签（AI 辅助分类中）...' : '正在分析书签...');
+      const result = await BookmarkOrganizer.analyzeBookmarks({ useAI, organizeSubfolders });
+      renderOrganizePreview(result);
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> 分析并预览`;
+    } catch (e) {
+      showToast('分析失败: ' + e.message, 'error');
+      const btn = document.getElementById('analyzeOrganizeBtn');
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> 分析并预览`;
+    }
+  });
+
+  document.getElementById('executeOrganizeBtn')?.addEventListener('click', async () => {
+    if (!confirm('确定执行整理？操作前会自动备份，可在下方撤销。')) return;
+    try {
+      showToast('正在执行整理...');
+      await BookmarkOrganizer.backup();
+      const result = window._currentOrganizeResult;
+      if (result && result.plan) {
+        await BookmarkOrganizer.executePlan(result.plan, '1', result.subfolderPlans);
+        showToast('整理完成！');
+        document.getElementById('organizePreview').style.display = 'none';
+        window._currentOrganizeResult = null;
+      }
+    } catch (e) { showToast('执行失败: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('cancelOrganizeBtn')?.addEventListener('click', () => {
+    document.getElementById('organizePreview').style.display = 'none';
+    window._currentOrganizeResult = null;
+  });
+
+  document.getElementById('undoOrganizeBtn')?.addEventListener('click', async () => {
+    if (!confirm('确定撤销上次整理操作？')) return;
+    try {
+      await BookmarkOrganizer.undoLastOrganize();
+      showToast('撤销成功！');
+    } catch (e) { showToast('撤销失败: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('refreshBackupsBtn')?.addEventListener('click', renderBackupList);
+
+  renderPaletteTagList();
+  renderDomainMapList();
+}
+
+async function renderPaletteTagList() {
+  const container = document.getElementById('paletteTagList');
+  if (!container) return;
+  try {
+    const palette = await BookmarkTags.getTagPalette();
+    if (palette.length === 0) {
+      container.innerHTML = '<p class="setting-desc">暂无标签，点击"添加标签"创建</p>';
+      return;
+    }
+    container.innerHTML = palette.map(tag => `
+      <span class="organize-palette-tag">
+        ${tag}
+        <span class="tag-remove" data-tag="${tag}">&times;</span>
+      </span>
+    `).join('');
+    container.querySelectorAll('.tag-remove').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const tagName = e.target.dataset.tag;
+        const p = await BookmarkTags.getTagPalette();
+        await BookmarkTags.setTagPalette(p.filter(t => t !== tagName));
+        renderPaletteTagList();
+        showToast('标签已移除');
+      });
+    });
+  } catch (e) { container.innerHTML = '<p class="setting-desc">加载失败</p>'; }
+}
+
+async function renderTagStats() {
+  const container = document.getElementById('tagStatsContainer');
+  if (!container) return;
+  try {
+    const stats = await BookmarkTags.getTagStats();
+    const entries = Object.entries(stats);
+    if (entries.length === 0) {
+      container.innerHTML = '<p class="setting-desc">暂无标签使用记录</p>';
+      return;
+    }
+    entries.sort((a, b) => b[1] - a[1]);
+    container.innerHTML = entries.map(([tag, count]) => `
+      <span class="organize-stat-item">
+        ${tag}
+        <span class="organize-stat-count">${count}</span>
+      </span>
+    `).join('');
+  } catch (e) { container.innerHTML = '<p class="setting-desc">加载失败</p>'; }
+}
+
+async function renderDomainMapList() {
+  const container = document.getElementById('domainMapList');
+  if (!container) return;
+  try {
+    const categories = await BookmarkOrganizer.getDomainCategories();
+    const entries = Object.entries(categories);
+    if (entries.length === 0) {
+      container.innerHTML = '<p class="setting-desc">暂无自定义映射，点击"添加映射"创建</p>';
+      return;
+    }
+    container.innerHTML = entries.map(([domain, cat]) => `
+      <div class="organize-domain-row">
+        <span class="domain-name">${domain}</span>
+        <span class="domain-category">${cat}</span>
+        <span class="domain-remove" data-domain="${domain}">&times;</span>
+      </div>
+    `).join('');
+    container.querySelectorAll('.domain-remove').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const domain = e.target.dataset.domain;
+        const cats = await BookmarkOrganizer.getDomainCategories();
+        delete cats[domain];
+        await BookmarkOrganizer.setCustomDomainCategories(cats);
+        renderDomainMapList();
+        showToast('映射已删除');
+      });
+    });
+  } catch (e) { container.innerHTML = '<p class="setting-desc">加载失败</p>'; }
+}
+
+function renderOrganizePreview(result) {
+  const previewDiv = document.getElementById('organizePreview');
+  const listDiv = document.getElementById('organizePreviewList');
+  const countBadge = document.getElementById('organizePreviewCount');
+  const ruleBadge = document.getElementById('ruleClassifiedBadge');
+  const aiBadge = document.getElementById('aiClassifiedBadge');
+  if (!previewDiv || !listDiv) return;
+
+  const plan = result.plan || {};
+  const totalToMove = Object.entries(plan).filter(([k]) => k !== '未分类').reduce((sum, [, v]) => sum + v.length, 0);
+
+  if (totalToMove === 0) {
+    showToast('所有书签已经整理好了，无需移动');
+    previewDiv.style.display = 'none';
+    return;
+  }
+
+  window._currentOrganizeResult = result;
+  countBadge.textContent = `${totalToMove} 个书签将被移动`;
+
+  if (result.ruleClassifiedCount > 0 && ruleBadge) {
+    ruleBadge.textContent = `规则: ${result.ruleClassifiedCount}`;
+    ruleBadge.style.display = 'inline';
+  } else if (ruleBadge) ruleBadge.style.display = 'none';
+
+  if (result.aiClassifiedCount > 0 && aiBadge) {
+    aiBadge.textContent = `AI: ${result.aiClassifiedCount}`;
+    aiBadge.style.display = 'inline';
+  } else if (aiBadge) aiBadge.style.display = 'none';
+
+  let html = '';
+  for (const [category, bookmarks] of Object.entries(plan)) {
+    html += `<div class="organize-category-group">
+      <div class="organize-category-header">
+        <span class="organize-category-name">${category}</span>
+        <span class="organize-category-count">${bookmarks.length} 个</span>
+      </div>`;
+    for (const bm of bookmarks) {
+      const sourceBadge = bm.source === 'ai'
+        ? `<span class="ai-source-badge ${bm.confidence === 'low' ? 'confidence-low' : bm.confidence === 'medium' ? 'confidence-medium' : 'confidence-high'}">AI${bm.confidence ? ' · ' + ({high:'高',medium:'中',low:'低'}[bm.confidence]) : ''}</span>`
+        : '';
+      html += `<div class="organize-preview-item">
+        <span class="preview-title" title="${bm.title || ''}">${bm.title || '(无标题)'}</span>
+        ${sourceBadge}
+        <span class="preview-arrow">→</span>
+        <span class="preview-folder">${category}</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  listDiv.innerHTML = html;
+  previewDiv.style.display = 'block';
+}
+
+async function renderBackupList() {
+  const container = document.getElementById('backupListContainer');
+  if (!container) return;
+  try {
+    const backups = await BookmarkOrganizer.getBackups();
+    if (!backups || backups.length === 0) {
+      container.innerHTML = '<p class="setting-desc">暂无备份记录</p>';
+      return;
+    }
+    container.innerHTML = backups.map((b, i) => `
+      <div class="organize-backup-item">
+        <span class="organize-backup-time">${new Date(b.timestamp).toLocaleString()}</span>
+        <span class="organize-backup-count">${b.count || '?'} 个书签</span>
+      </div>
+    `).join('');
+  } catch (e) { container.innerHTML = '<p class="setting-desc">加载失败</p>'; }
 }

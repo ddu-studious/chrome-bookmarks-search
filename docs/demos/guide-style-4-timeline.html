@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用说明 - 风格 4: 时间线+搜索</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #f5f5f7;
+      padding: 40px;
+      max-width: 750px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: #a1a1a6;
+      font-size: 14px;
+    }
+
+    .search-filter {
+      position: sticky;
+      top: 0;
+      background: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(20px);
+      padding: 12px 0;
+      margin-bottom: 24px;
+      z-index: 10;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px 12px 40px;
+      background: #2c2c2e;
+      border: 1px solid #3d3d3f;
+      border-radius: 10px;
+      color: #f5f5f7;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      border-color: #0a84ff;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #6e6e73;
+    }
+
+    .search-wrapper {
+      position: relative;
+    }
+
+    .timeline {
+      position: relative;
+      padding-left: 36px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 13px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #3d3d3f;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 32px;
+      transition: opacity 0.2s;
+    }
+
+    .timeline-item.hidden {
+      display: none;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -36px;
+      top: 4px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #1c1c1e;
+    }
+
+    .timeline-dot svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .timeline-dot.blue { background: #0a84ff; }
+    .timeline-dot.purple { background: #bf5af2; }
+    .timeline-dot.green { background: #30d158; }
+    .timeline-dot.orange { background: #ff9500; }
+    .timeline-dot.red { background: #ff453a; }
+    .timeline-dot.cyan { background: #64d2ff; }
+
+    .timeline-card {
+      background: #2c2c2e;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #3d3d3f;
+    }
+
+    .timeline-card .tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .tag.beginner { background: rgba(48, 209, 88, 0.15); color: #30d158; }
+    .tag.intermediate { background: rgba(10, 132, 255, 0.15); color: #0a84ff; }
+    .tag.advanced { background: rgba(191, 90, 242, 0.15); color: #bf5af2; }
+
+    .timeline-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .timeline-card p {
+      font-size: 13px;
+      color: #a1a1a6;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .timeline-card p:last-child {
+      margin-bottom: 0;
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: "SF Mono", Monaco, monospace;
+      background: #3a3a3c;
+      border: 1px solid #48484a;
+      border-radius: 4px;
+      color: #f5f5f7;
+    }
+
+    code {
+      font-family: "SF Mono", Monaco, monospace;
+      background: rgba(10, 132, 255, 0.1);
+      color: #64d2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .mini-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #1c1c1e;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .mini-item span {
+      color: #6e6e73;
+      font-size: 11px;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: #6e6e73;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>使用说明</h1>
+    <p>学习路径 — 从入门到精通</p>
+  </div>
+
+  <div class="search-filter">
+    <div class="search-wrapper">
+      <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" class="search-input" placeholder="搜索使用说明..." oninput="filterGuide(this.value)">
+    </div>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <div class="timeline-item" data-keywords="快速开始 唤起 搜索 alt b 入门">
+      <div class="timeline-dot blue">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag beginner">入门</span>
+        <h3>快速开始</h3>
+        <p>按下 <kbd>Alt + B</kbd> 唤起搜索 → 输入关键字实时过滤 → <kbd>↑</kbd><kbd>↓</kbd> 选择 + <kbd>Enter</kbd> 打开。</p>
+        <p>就这么简单，三步即可开始使用。</p>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-keywords="搜索模式 书签 标签页 历史记录 下载 tab">
+      <div class="timeline-dot green">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><rect x="5" y="5" width="5" height="5"/><rect x="14" y="5" width="5" height="5"/><rect x="5" y="14" width="5" height="5"/><rect x="14" y="14" width="5" height="5"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag beginner">入门</span>
+        <h3>搜索模式</h3>
+        <p>使用 <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> 切换五种模式：书签、标签页、历史记录、下载、AI 搜索。</p>
+        <p>每种模式聚焦不同数据源，精准快速定位内容。</p>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-keywords="快捷键 键盘 esc enter tab ctrl shift">
+      <div class="timeline-dot orange">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><rect x="4" y="6" width="16" height="12" rx="2"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag beginner">入门</span>
+        <h3>快捷键</h3>
+        <div class="mini-grid">
+          <div class="mini-item"><kbd>Alt+B</kbd> <span>打开/关闭</span></div>
+          <div class="mini-item"><kbd>↑ ↓</kbd> <span>选择结果</span></div>
+          <div class="mini-item"><kbd>Tab</kbd> <span>切换模式</span></div>
+          <div class="mini-item"><kbd>Enter</kbd> <span>打开选中</span></div>
+          <div class="mini-item"><kbd>Esc</kbd> <span>关闭窗口</span></div>
+          <div class="mini-item"><kbd>Ctrl+Click</kbd> <span>多选</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-keywords="搜索语法 site type in after before 排除 精确">
+      <div class="timeline-dot purple">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><circle cx="11" cy="11" r="7"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag intermediate">进阶</span>
+        <h3>搜索语法</h3>
+        <div class="mini-grid">
+          <div class="mini-item"><code>site:域名</code> <span>限定网站</span></div>
+          <div class="mini-item"><code>type:类型</code> <span>文件类型</span></div>
+          <div class="mini-item"><code>in:title</code> <span>搜索标题</span></div>
+          <div class="mini-item"><code>in:url</code> <span>搜索 URL</span></div>
+          <div class="mini-item"><code>after:日期</code> <span>日期之后</span></div>
+          <div class="mini-item"><code>before:日期</code> <span>日期之前</span></div>
+          <div class="mini-item"><code>"词组"</code> <span>精确匹配</span></div>
+          <div class="mini-item"><code>-排除</code> <span>排除结果</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-keywords="多平台 跳转 google github youtube 百度 知乎 前缀">
+      <div class="timeline-dot red">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><circle cx="12" cy="12" r="8"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag intermediate">进阶</span>
+        <h3>多平台搜索</h3>
+        <p>输入 <code>前缀:</code> + 关键词，按 Enter 跳转到对应平台。</p>
+        <div class="mini-grid">
+          <div class="mini-item"><code>g:</code> <span>Google</span></div>
+          <div class="mini-item"><code>gh:</code> <span>GitHub</span></div>
+          <div class="mini-item"><code>yt:</code> <span>YouTube</span></div>
+          <div class="mini-item"><code>bd:</code> <span>百度</span></div>
+          <div class="mini-item"><code>zh:</code> <span>知乎</span></div>
+          <div class="mini-item"><code>npm:</code> <span>NPM</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-keywords="批量操作 多选 复制 打开 范围">
+      <div class="timeline-dot cyan">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h10v2H4z"/></svg>
+      </div>
+      <div class="timeline-card">
+        <span class="tag advanced">高级</span>
+        <h3>批量操作</h3>
+        <p><kbd>Ctrl/⌘ + Click</kbd> 多选，<kbd>Shift + Click</kbd> 范围选择。选中后可批量打开链接或复制 URL。右键菜单提供更多操作选项。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="no-results" id="noResults">没有找到匹配的说明内容</div>
+
+  <script>
+    function filterGuide(query) {
+      const items = document.querySelectorAll('.timeline-item');
+      const noResults = document.getElementById('noResults');
+      const q = query.toLowerCase().trim();
+      let visibleCount = 0;
+
+      items.forEach(item => {
+        const keywords = item.dataset.keywords.toLowerCase();
+        const title = item.querySelector('h3').textContent.toLowerCase();
+        const text = item.textContent.toLowerCase();
+        const match = !q || keywords.includes(q) || title.includes(q) || text.includes(q);
+        item.classList.toggle('hidden', !match);
+        if (match) visibleCount++;
+      });
+
+      noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+  </script>
+</body>
+</html>

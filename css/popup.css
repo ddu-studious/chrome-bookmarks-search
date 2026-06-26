@@ -434,6 +434,7 @@ body.resizing {
 .results-container {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   margin: 0 15px 15px;
   min-height: 100px;
   scroll-behavior: smooth;
@@ -586,6 +587,10 @@ body.resizing {
   color: var(--color-primary);
 }
 
+.result-item.active .result-title strong {
+  color: inherit !important;
+}
+
 .url-open-item .special-icon {
   color: #34a853;
 }
@@ -609,6 +614,7 @@ body.resizing {
   border: 2px solid transparent;
   position: relative;
   background: var(--color-bg);
+  overflow: hidden;
 }
 
 .result-item:hover {
@@ -765,6 +771,7 @@ body.resizing {
 .results-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
 }
 
@@ -1462,6 +1469,160 @@ body.resizing {
 .dark-theme .edit-btn-save:hover {
   background: #aecbfa;
 }
+
+/* ===== 书签标签 ===== */
+.bookmark-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 16px;
+  background: var(--color-primary, #1a73e8);
+  color: #fff;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.85;
+}
+.dark-theme .bookmark-tag {
+  background: var(--color-primary, #8ab4f8);
+  color: #202124;
+}
+
+/* ===== 标签管理弹窗 ===== */
+.tag-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s;
+}
+.tag-modal.show { opacity: 1; visibility: visible; }
+
+.tag-modal-content {
+  background: var(--color-bg, #fff);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  width: 340px;
+  max-width: 90%;
+  transform: scale(0.95) translateY(-10px);
+  transition: transform 0.15s;
+}
+.tag-modal.show .tag-modal-content { transform: scale(1) translateY(0); }
+
+.tag-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--color-border, #e8eaed);
+}
+.tag-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text, #202124);
+}
+.tag-modal-close {
+  background: none; border: none; padding: 4px; cursor: pointer;
+  color: var(--color-text-secondary, #5f6368);
+  border-radius: 50%;
+}
+.tag-modal-close:hover { background: var(--color-hover, #f1f3f4); }
+
+.tag-modal-body { padding: 14px 16px; }
+
+.tag-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 12px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--color-primary, #1a73e8);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tag-chip-remove {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.8;
+}
+.tag-chip-remove:hover { opacity: 1; }
+
+.tag-empty {
+  color: var(--color-text-secondary, #999);
+  font-size: 12px;
+}
+
+.tag-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tag-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #202124);
+  outline: none;
+}
+.tag-input:focus { border-color: var(--color-primary, #1a73e8); }
+
+.tag-add-btn {
+  padding: 6px 14px;
+  background: var(--color-primary, #1a73e8);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tag-add-btn:hover { opacity: 0.9; }
+
+.tag-palette-label {
+  font-size: 11px;
+  color: var(--color-text-secondary, #999);
+  margin-bottom: 6px;
+}
+.tag-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-palette-item {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text, #202124);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.tag-palette-item:hover {
+  background: var(--color-primary, #1a73e8);
+  color: #fff;
+  border-color: var(--color-primary, #1a73e8);
+}
+
+.dark-theme .tag-modal { background: rgba(0,0,0,0.65); }
+.dark-theme .tag-modal-content { box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+.dark-theme .tag-chip { background: var(--color-primary, #8ab4f8); color: #202124; }
+.dark-theme .tag-input:focus { box-shadow: 0 0 0 3px rgba(138,180,248,0.2); }
+.dark-theme .tag-add-btn { background: var(--color-primary, #8ab4f8); color: #202124; }
 
 /* ===== 标签页分组颜色变量 ===== */
 :root {
@@ -2292,4 +2453,104 @@ body.resizing {
 
 .dark-theme .btn-pro-trial:hover {
   background: rgba(138, 180, 248, 0.1);
+}
+
+/* ==================== 多平台快捷搜索 ==================== */
+.platform-search-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  gap: 8px;
+  color: var(--color-text-secondary, #5f6368);
+}
+
+.platform-hint-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.platform-hint-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.platform-hint-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text, #202124);
+}
+
+.platform-hint-example {
+  font-size: 12px;
+  color: var(--color-text-secondary, #5f6368);
+}
+
+.platform-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.platform-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.platform-divider {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px 4px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #5f6368);
+  gap: 8px;
+}
+
+.platform-divider::before,
+.platform-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #e0e0e0);
+}
+
+.platform-jump-item .result-title {
+  font-size: 13px;
+}
+
+.platform-jump-item .result-url {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.suggestion-divider {
+  height: 1px;
+  background: var(--color-border, #e0e0e0);
+  margin: 4px 12px;
+}
+
+/* Dark theme */
+.dark-theme .platform-search-hint {
+  color: var(--color-text-secondary, #9aa0a6);
+}
+
+.dark-theme .platform-hint-text {
+  color: var(--color-text, #e8eaed);
+}
+
+.dark-theme .platform-divider {
+  color: var(--color-text-secondary, #9aa0a6);
+}
+
+.dark-theme .platform-divider::before,
+.dark-theme .platform-divider::after {
+  background: var(--color-border, #3c4043);
+}
+
+.dark-theme .suggestion-divider {
+  background: var(--color-border, #3c4043);
 }

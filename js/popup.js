@@ -212,6 +212,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 等待所有统计数据加载完成
     const bookmarksWithStats = await Promise.all(statsPromises);
+
+    // 注入标签数据供 tag: 语法过滤
+    try {
+      const tagData = await BookmarkTags.getAll();
+      for (const bm of bookmarksWithStats) {
+        bm._tags = tagData.tags[bm.id] || [];
+      }
+    } catch {}
     
     // 按访问次数和最后访问时间排序
     allBookmarks = bookmarksWithStats.sort((a, b) => {
@@ -646,6 +654,49 @@ document.addEventListener('DOMContentLoaded', async function() {
     return item;
   }
 
+  // 追加多平台搜索跳转项
+  function appendPlatformSearchItems(query, container) {
+    window.settings.get().then(settings => {
+      const spSettings = settings.searchPlatforms || {};
+      if (!spSettings.showInResults) return;
+
+      const platforms = window.SearchParser.getAvailablePlatforms(settings);
+      const defaultEngine = settings.defaultSearchEngine || window.getDefaultSearchEngine();
+      const shown = platforms.filter(p => {
+        if (defaultEngine === 'google' && p.prefix === 'g') return false;
+        if (defaultEngine === 'baidu' && p.prefix === 'bd') return false;
+        return true;
+      }).slice(0, 5);
+
+      if (shown.length === 0) return;
+
+      const divider = document.createElement('div');
+      divider.className = 'platform-divider';
+      divider.innerHTML = '<span>在其他平台搜索</span>';
+      container.appendChild(divider);
+
+      shown.forEach(p => {
+        const searchUrl = p.url.replace('{query}', encodeURIComponent(query));
+        const item = document.createElement('div');
+        item.className = 'result-item special-item platform-jump-item';
+        item.dataset.specialAction = 'platform-search';
+        item.dataset.url = searchUrl;
+        item.innerHTML = `
+          <div class="result-icon special-icon platform-icon">${getPlatformIcon(p.icon)}</div>
+          <div class="result-item-content">
+            <div class="result-title">${escapeHtml(p.name)} 搜索 "<strong>${escapeHtml(query)}</strong>"</div>
+            <div class="result-url">${escapeHtml(p.prefix)}:${escapeHtml(query)}</div>
+          </div>
+        `;
+        item.addEventListener('click', () => {
+          chrome.tabs.create({ url: searchUrl });
+          window.close();
+        });
+        container.appendChild(item);
+      });
+    });
+  }
+
   // 创建搜索引擎跳转项
   function createSearchEngineItem(query, engine) {
     const item = document.createElement('div');
@@ -788,6 +839,12 @@ document.addEventListener('DOMContentLoaded', async function() {
           metaContent += `<span class="added-date">添加于 ${formatAddedDate(item.dateAdded)}</span>`;
         }
         
+        if (item._tags && item._tags.length > 0) {
+          metaContent += item._tags.map(t =>
+            `<span class="bookmark-tag">${escapeHtml(t)}</span>`
+          ).join('');
+        }
+
         meta.innerHTML = metaContent;
       } else if (currentMode === 'history' && item.visitCount > 0) {
         meta.innerHTML = `
@@ -853,7 +910,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       resultsList.appendChild(resultItem);
     });
 
-    // 有搜索词时，在结果末尾追加搜索引擎跳转项
+    // 有搜索词时，在结果末尾追加搜索引擎和多平台跳转项
     if (trimmedQuery) {
       const detectedUrl = window.normalizeUrl(trimmedQuery);
       if (detectedUrl) {
@@ -870,6 +927,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         resultsList.appendChild(createSearchEngineItem(trimmedQuery, engine));
       });
+      appendPlatformSearchItems(trimmedQuery, resultsList);
     }
     
     // 初始化时不选中任何项
@@ -944,27 +1002,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     const editModal = document.getElementById('editModal');
     const isEditModalOpen = editModal && editModal.classList.contains('show');
     
-    // 检查焦点是否在输入框中（但排除主搜索框，主搜索框不需要左右键移动光标的需求较小）
+    // 检查焦点是否在输入框中（但排除主搜索框）
     const activeElement = document.activeElement;
     const isInNonSearchInput = activeElement && 
       (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') &&
       activeElement.id !== 'searchInput';
     
-    // 如果编辑弹窗打开或焦点在非搜索输入框中，跳过全局快捷键处理
-    // 让输入框正常处理方向键、文本选择等
     if (isEditModalOpen || isInNonSearchInput) {
-      // 只处理 Escape 键关闭弹窗（但让弹窗自己的事件处理器处理）
       return;
     }
     
-    // 处理左右键切换模式（所有模式通用）
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    // Tab / Shift+Tab 切换搜索模式
+    if (e.key === 'Tab') {
       e.preventDefault();
       const modes = getVisibleModes();
       const currentIndex = modes.indexOf(currentMode);
       let newIndex;
       
-      if (e.key === 'ArrowLeft') {
+      if (e.shiftKey) {
         newIndex = currentIndex <= 0 ? modes.length - 1 : currentIndex - 1;
       } else {
         newIndex = currentIndex >= modes.length - 1 ? 0 : currentIndex + 1;
@@ -975,67 +1030,138 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // 分组模式下不使用上下键/Enter 选中（树状结构用鼠标交互）
-    if (currentMode === 'groups') return;
+    if (currentMode === 'groups') {
+      if (e.key === 'Escape') {
+        window.close();
+      }
+      return;
+    }
 
     const items = document.querySelectorAll('.result-item');
-    if (items.length === 0) return;
 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        if (selectedIndex === -1) {
-          // 如果没有选中项，选择第一项
-          selectedIndex = 0;
-        } else if (selectedIndex < items.length - 1) {
-          selectedIndex++;
+        if (items.length === 0) break;
+        if (e.shiftKey) {
+          // Shift+↓: 扩展多选
+          if (selectedIndex < items.length - 1) {
+            if (selectedItems.size === 0 && selectedIndex >= 0) {
+              selectedItems.add(items[selectedIndex].dataset.id);
+              items[selectedIndex].classList.add('selected');
+            }
+            if (selectedIndex === -1) selectedIndex = 0;
+            else selectedIndex++;
+            const curItem = items[selectedIndex];
+            if (curItem) {
+              selectedItems.add(curItem.dataset.id);
+              curItem.classList.add('selected');
+            }
+            updateSelection();
+            updateBatchToolbar();
+          }
+        } else {
+          if (selectedItems.size > 0) clearSelection();
+          if (selectedIndex === -1) {
+            selectedIndex = 0;
+          } else if (selectedIndex < items.length - 1) {
+            selectedIndex++;
+          }
+          updateSelection();
         }
-        updateSelection();
         break;
       case 'ArrowUp':
         e.preventDefault();
-        if (selectedIndex === -1) {
-          // 如果没有选中项，选择最后一项
-          selectedIndex = items.length - 1;
-        } else if (selectedIndex > 0) {
-          selectedIndex--;
+        if (items.length === 0) break;
+        if (e.shiftKey) {
+          // Shift+↑: 扩展多选
+          if (selectedIndex > 0) {
+            if (selectedItems.size === 0 && selectedIndex >= 0) {
+              selectedItems.add(items[selectedIndex].dataset.id);
+              items[selectedIndex].classList.add('selected');
+            }
+            selectedIndex--;
+            const curItem = items[selectedIndex];
+            if (curItem) {
+              selectedItems.add(curItem.dataset.id);
+              curItem.classList.add('selected');
+            }
+            updateSelection();
+            updateBatchToolbar();
+          } else if (selectedIndex === -1) {
+            selectedIndex = items.length - 1;
+            updateSelection();
+          }
+        } else {
+          if (selectedItems.size > 0) clearSelection();
+          if (selectedIndex === -1) {
+            selectedIndex = items.length - 1;
+          } else if (selectedIndex > 0) {
+            selectedIndex--;
+          }
+          updateSelection();
         }
-        updateSelection();
         break;
-      case 'Enter':
+      case 'Enter': {
         e.preventDefault();
+        let handled = false;
+
+        // 有多选项时，批量打开
+        if (selectedItems.size > 1) {
+          openSelectedItems();
+          window.close();
+          return;
+        }
+
         if (selectedIndex >= 0 && selectedIndex < items.length) {
           const selectedEl = items[selectedIndex];
           const specialAction = selectedEl?.dataset?.specialAction;
           if (specialAction && selectedEl.dataset.url) {
             chrome.tabs.create({ url: selectedEl.dataset.url });
-            window.close();
-            break;
-          }
-          const item = currentResults[selectedIndex];
-          if (item) {
-            switch (currentMode) {
-              case 'bookmarks':
-              case 'ai':
-                chrome.tabs.create({ url: item.url });
-                break;
-              case 'tabs':
-                chrome.tabs.update(item.id, { active: true });
-                chrome.windows.update(item.windowId, { focused: true });
-                break;
-              case 'history':
-                chrome.tabs.create({ url: item.url });
-                break;
-              case 'downloads':
-                chrome.downloads.open(item.id);
-                break;
+            handled = true;
+          } else {
+            const item = currentResults[selectedIndex];
+            if (item) {
+              switch (currentMode) {
+                case 'bookmarks':
+                case 'ai':
+                  chrome.tabs.create({ url: item.url });
+                  break;
+                case 'tabs':
+                  chrome.tabs.update(item.id, { active: true });
+                  chrome.windows.update(item.windowId, { focused: true });
+                  break;
+                case 'history':
+                  chrome.tabs.create({ url: item.url });
+                  break;
+                case 'downloads':
+                  chrome.downloads.open(item.id);
+                  break;
+              }
+              handled = true;
+            } else if (selectedEl?.dataset?.url) {
+              chrome.tabs.create({ url: selectedEl.dataset.url });
+              handled = true;
             }
-            window.close();
-          } else if (selectedEl?.dataset?.url) {
-            chrome.tabs.create({ url: selectedEl.dataset.url });
-            window.close();
           }
         }
+
+        // 没有选中项时，按搜索引擎搜索当前关键词
+        if (!handled) {
+          const query = searchInput.value.trim();
+          if (query) {
+            getSearchEngine().then(engine => {
+              const searchUrl = engine.url.replace('{query}', encodeURIComponent(query));
+              chrome.tabs.create({ url: searchUrl });
+              window.close();
+            });
+            return;
+          }
+        }
+
+        window.close();
         break;
+      }
       case 'Escape':
         window.close();
         break;
@@ -1092,6 +1218,13 @@ document.addEventListener('DOMContentLoaded', async function() {
   let currentSort = 'smart';
 
   function search(query) {
+    // 平台前缀搜索拦截
+    const platformResult = window.SearchParser.parsePlatformSearch(query);
+    if (platformResult) {
+      displayPlatformSearch(platformResult);
+      return;
+    }
+
     if (currentMode === 'groups') {
       const filtered = searchGroups(query, allGroups);
       displayGroupResults(filtered);
@@ -1139,6 +1272,77 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     selectedIndex = -1;
+  }
+
+  function displayPlatformSearch(platformResult) {
+    const resultsList = document.getElementById('resultsList');
+    if (!resultsList) return;
+    resultsList.innerHTML = '';
+
+    const { prefix, platform, query } = platformResult;
+
+    if (!query) {
+      searchStatsElement.textContent = `输入关键词在 ${platform.name} 中搜索`;
+      resultsList.innerHTML = `<div class="platform-search-hint">
+        <div class="platform-hint-icon">${getPlatformIcon(platform.icon)}</div>
+        <div class="platform-hint-text">在 <strong>${escapeHtml(platform.name)}</strong> 中搜索</div>
+        <div class="platform-hint-example">输入关键词后按 Enter 跳转</div>
+      </div>`;
+      selectedIndex = -1;
+      return;
+    }
+
+    const searchUrl = platform.url.replace('{query}', encodeURIComponent(query));
+    searchStatsElement.textContent = `在 ${platform.name} 搜索`;
+
+    const item = document.createElement('div');
+    item.className = 'result-item special-item platform-search-item selected';
+    item.dataset.specialAction = 'platform-search';
+    item.dataset.url = searchUrl;
+    item.innerHTML = `
+      <div class="result-icon special-icon platform-icon">${getPlatformIcon(platform.icon)}</div>
+      <div class="result-item-content">
+        <div class="result-title">在 ${escapeHtml(platform.name)} 搜索 "<strong>${escapeHtml(query)}</strong>"</div>
+        <div class="result-url">${escapeHtml(searchUrl)}</div>
+      </div>
+    `;
+    item.addEventListener('click', () => {
+      chrome.tabs.create({ url: searchUrl });
+      window.close();
+    });
+    resultsList.appendChild(item);
+    selectedIndex = 0;
+  }
+
+  let originalPlaceholder = '';
+  function updatePlatformPlaceholder(value) {
+    if (!originalPlaceholder) {
+      originalPlaceholder = searchInput.placeholder;
+    }
+    const platformResult = window.SearchParser.parsePlatformSearch(value);
+    if (platformResult && !platformResult.query) {
+      searchInput.placeholder = `在 ${platformResult.platform.name} 中搜索...`;
+    } else if (!platformResult) {
+      searchInput.placeholder = originalPlaceholder;
+    }
+  }
+
+  function getPlatformIcon(iconName) {
+    const icons = {
+      google: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>',
+      baidu: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#2319DC" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm4 0h-2v-6h2v6zm-2-8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>',
+      github: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>',
+      stackoverflow: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#F48024" d="M15.725 0l-1.72 1.277 6.39 8.588 1.72-1.277L15.725 0zm-3.94 3.418l-1.369 1.644 8.225 6.85 1.369-1.644-8.225-6.85zm-3.15 4.465l-.905 1.94 9.702 4.517.905-1.94-9.702-4.517zm-1.85 4.86l-.44 2.093 10.473 2.2.44-2.092-10.473-2.2zM1.89 21.906v2.094h13.97v-2.094H1.89zm1.046-4.08v2.094h11.878V17.83H2.935z"/></svg>',
+      zhihu: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#0066FF" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3 14h-2l-1-3H8v-2h4V9H8V7h8v2h-2l1 3h2l-2 4z"/></svg>',
+      bilibili: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#00A1D6" d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.124.929.373.258.249.383.553.383.907 0 .355-.138.657-.413.906l-1.126 1.147zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773H5.333zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+      npm: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#CB3837" d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331z"/></svg>',
+      mdn: '<svg viewBox="0 0 24 24" width="16" height="16"><rect fill="#000" width="24" height="24" rx="4"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="9" font-weight="bold">MDN</text></svg>',
+      x: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+      reddit: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#FF4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
+      producthunt: '<svg viewBox="0 0 24 24" width="16" height="16"><circle fill="#DA552F" cx="12" cy="12" r="12"/><path fill="white" d="M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.806-1.799-1.801-1.799zM13.604 13.8H10.2v3.6H8.399V6.6h5.205c1.99 0 3.6 1.611 3.6 3.6 0 1.99-1.611 3.6-3.6 3.6z"/></svg>'
+    };
+    return icons[iconName] || '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
   }
 
   function searchAi(query) {
@@ -1423,14 +1627,8 @@ document.addEventListener('DOMContentLoaded', async function() {
       const hasApiKey = !!(settings.intelligentSearch?.aiApiKey);
 
       if (!hasApiKey) {
-        if (!cachedProStatus && window.ProModule) {
-          cachedProStatus = await window.ProModule.checkProAccess();
-        }
-        const isPro = cachedProStatus?.isPro || false;
-        if (!isPro) {
-          showAiUpgradePrompt();
-          return;
-        }
+        showAiConfigPrompt();
+        return;
       }
 
       const bookmarkTree = await chrome.bookmarks.getTree();
@@ -1450,34 +1648,33 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
-  function showAiUpgradePrompt() {
+  function showAiConfigPrompt() {
     const resultsList = document.getElementById('resultsList');
     totalCountElement.textContent = '0';
     searchStatsElement.textContent = '';
     resultsList.innerHTML = `
-      <div class="pro-upgrade-inline">
+      <div class="ai-config-prompt">
         <div class="pro-upgrade-inline-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
           </svg>
         </div>
         <div class="pro-upgrade-inline-text">
-          <strong>AI 智能搜索</strong> 需要配置 API Key 或升级 Pro<br>
-          <span style="font-size:12px;opacity:0.7">自带 API Key 可免费使用，或升级 Pro 享受开箱即用体验</span>
+          <strong>AI 智能搜索</strong> 需要配置 API Key<br>
+          <span style="font-size:12px;opacity:0.7">支持 Gemini、OpenAI、DeepSeek 等多种 AI 服务商</span>
         </div>
         <div class="pro-upgrade-inline-actions">
-          <button class="btn-pro-upgrade" id="aiUpgradeBtn">升级 Pro</button>
-          <button class="btn-pro-trial" id="aiTrialBtn">免费试用 7 天</button>
+          <button class="btn-pro-upgrade" id="aiConfigBtn" style="background:var(--color-primary,#1a73e8);">前往配置</button>
         </div>
         <div style="font-size:11px;color:var(--text-secondary,#5f6368);margin-top:4px;">
-          或在设置面板中配置自己的 API Key（永久免费）
+          在设置面板或配置中心中配置 API Key 即可使用
         </div>
       </div>
     `;
-    const upgradeBtn = document.getElementById('aiUpgradeBtn');
-    const trialBtn = document.getElementById('aiTrialBtn');
-    if (upgradeBtn) upgradeBtn.addEventListener('click', () => window.ProModule?.openPaymentPage());
-    if (trialBtn) trialBtn.addEventListener('click', () => window.ProModule?.openTrialPage());
+    const configBtn = document.getElementById('aiConfigBtn');
+    if (configBtn) configBtn.addEventListener('click', () => {
+      chrome.runtime.openOptionsPage();
+    });
   }
 
   function loadAiRecommendations() {
@@ -1597,8 +1794,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
-  // 处理快捷键
-  document.addEventListener('keydown', handleKeydown);
+  // handleKeydown 在 init() 中通过 document.addEventListener 统一注册
 
   // 初始化设置
   let settings = {
@@ -2249,6 +2445,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         const isBookmarkSource = activeItem?.dataset?.source === 'bookmark' || currentMode === 'bookmarks';
         extractSummaryAction.style.display = (currentMode === 'ai' && isBookmarkSource) ? 'flex' : 'none';
       }
+
+      const tagAction = contextMenu.querySelector('.tag-action');
+      if (tagAction) {
+        tagAction.style.display = currentMode === 'bookmarks' ? 'flex' : 'none';
+      }
       
       const deleteAction = contextMenu.querySelector('.delete-action');
       if (deleteAction) {
@@ -2423,6 +2624,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
       if (action === 'extract-summary') {
         handleExtractSummary();
+        hideContextMenu();
+        return;
+      }
+
+      if (action === 'manage-tags') {
+        const bookmarkId = activeItem.dataset.id;
+        if (bookmarkId) openTagModal(bookmarkId);
         hideContextMenu();
         return;
       }
@@ -2607,6 +2815,87 @@ document.addEventListener('DOMContentLoaded', async function() {
     editUrl.addEventListener('input', updateSaveButton);
   }
 
+  // ==================== 标签管理弹窗 ====================
+  let tagModalBookmarkId = null;
+
+  function openTagModal(bookmarkId) {
+    tagModalBookmarkId = bookmarkId;
+    const modal = document.getElementById('tagModal');
+    modal.classList.add('show');
+    refreshTagModal();
+    document.getElementById('tagInput').focus();
+  }
+
+  function closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    modal.classList.remove('show');
+    tagModalBookmarkId = null;
+    document.getElementById('tagInput').value = '';
+  }
+
+  async function refreshTagModal() {
+    if (!tagModalBookmarkId) return;
+    const currentTags = await BookmarkTags.getTagsForBookmark(tagModalBookmarkId);
+    const palette = await BookmarkTags.getPalette();
+
+    const currentList = document.getElementById('tagCurrentList');
+    currentList.innerHTML = currentTags.length === 0
+      ? '<span class="tag-empty">暂无标签</span>'
+      : currentTags.map(t =>
+        `<span class="tag-chip">${t}<span class="tag-chip-remove" data-tag="${t}">&times;</span></span>`
+      ).join('');
+
+    currentList.querySelectorAll('.tag-chip-remove').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await BookmarkTags.removeTag(tagModalBookmarkId, btn.dataset.tag);
+        updateBookmarkTagsInList(tagModalBookmarkId);
+        refreshTagModal();
+      });
+    });
+
+    const paletteList = document.getElementById('tagPaletteList');
+    paletteList.innerHTML = palette.filter(t => !currentTags.includes(t)).map(t =>
+      `<span class="tag-palette-item" data-tag="${t}">${t}</span>`
+    ).join('');
+
+    paletteList.querySelectorAll('.tag-palette-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        await BookmarkTags.addTag(tagModalBookmarkId, el.dataset.tag);
+        updateBookmarkTagsInList(tagModalBookmarkId);
+        refreshTagModal();
+      });
+    });
+  }
+
+  function updateBookmarkTagsInList(bookmarkId) {
+    const bm = allBookmarks.find(b => b.id === bookmarkId);
+    if (bm) {
+      BookmarkTags.getTagsForBookmark(bookmarkId).then(tags => { bm._tags = tags; });
+    }
+  }
+
+  async function addTagFromInput() {
+    const input = document.getElementById('tagInput');
+    const tag = input.value.trim();
+    if (!tag || !tagModalBookmarkId) return;
+    await BookmarkTags.addTag(tagModalBookmarkId, tag);
+    input.value = '';
+    updateBookmarkTagsInList(tagModalBookmarkId);
+    refreshTagModal();
+  }
+
+  function initTagModal() {
+    document.getElementById('tagModalClose').addEventListener('click', closeTagModal);
+    document.getElementById('tagModal').addEventListener('click', e => {
+      if (e.target.id === 'tagModal') closeTagModal();
+    });
+    document.getElementById('tagAddBtn').addEventListener('click', addTagFromInput);
+    document.getElementById('tagInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addTagFromInput(); }
+      if (e.key === 'Escape') { e.stopPropagation(); closeTagModal(); }
+    });
+  }
+
   function initPopupResize() {
     const handle = document.getElementById('resizeHandle');
     if (!handle) return;
@@ -2735,6 +3024,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 初始化编辑弹窗
     initEditModal();
     
+    // 初始化标签管理弹窗
+    initTagModal();
+    
     // 加载数据
     loadData();
     searchInput.focus();
@@ -2748,6 +3040,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 添加搜索事件监听（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
+      updatePlatformPlaceholder(e.target.value);
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(() => {
         search(e.target.value);

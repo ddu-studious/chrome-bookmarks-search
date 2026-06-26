@@ -48,6 +48,13 @@
           </svg>
           <span>AI 智能搜索</span>
         </a>
+        <a href="#platforms" class="nav-item" data-section="platforms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/>
+          </svg>
+          <span>多平台搜索</span>
+        </a>
       </div>
 
       <div class="nav-section">
@@ -58,6 +65,13 @@
           </svg>
           <span>书签管理</span>
           <span class="nav-badge" id="bookmarksBadge">0</span>
+        </a>
+        <a href="#organize" class="nav-item" data-section="organize">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            <path d="M12 11v6M9 14h6"/>
+          </svg>
+          <span>书签整理</span>
         </a>
         <a href="#health" class="nav-item" data-section="health">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -70,7 +84,6 @@
             <path d="M18 20V10M12 20V4M6 20v-6"/>
           </svg>
           <span>书签分析</span>
-          <span class="pro-badge-inline pro-nav-indicator">Pro</span>
         </a>
         <a href="#history" class="nav-item" data-section="history">
           <svg viewBox="0 0 24 24" fill="currentColor">
@@ -95,7 +108,8 @@
         </a>
       </div>
 
-      <div class="nav-section">
+      <!-- Pro 会员导航（付费功能未上线，暂时隐藏） -->
+      <div class="nav-section" style="display:none">
         <div class="nav-title">会员</div>
         <a href="#pro" class="nav-item" data-section="pro">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -570,6 +584,103 @@
         </div>
       </section>
 
+      <!-- 多平台搜索 -->
+      <section id="platforms" class="content-section">
+        <div class="section-header">
+          <h1>多平台搜索</h1>
+          <p>配置可快捷跳转的外部搜索平台，在搜索栏输入前缀即可直接跳转</p>
+        </div>
+
+        <div class="platform-usage-guide">
+          <div class="platform-usage-title">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+            </svg>
+            如何使用
+          </div>
+          <div class="platform-usage-steps">
+            <div class="platform-usage-step">
+              <span class="platform-usage-num">1</span>
+              <span>在搜索框输入平台前缀，如 <kbd>gh:</kbd></span>
+            </div>
+            <div class="platform-usage-step">
+              <span class="platform-usage-num">2</span>
+              <span>紧跟搜索关键词，如 <kbd>gh:react hooks</kbd></span>
+            </div>
+            <div class="platform-usage-step">
+              <span class="platform-usage-num">3</span>
+              <span>按 <kbd>Enter</kbd> 即可跳转到对应平台搜索</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>功能开关</h3>
+          </div>
+          <div class="card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">启用多平台搜索</div>
+                <div class="setting-desc">输入前缀（如 gh:）即可搜索其他平台</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="platformEnabled" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">前缀触发模式</div>
+                <div class="setting-desc">在搜索框中输入 "前缀:" 即可搜索对应平台</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="platformPrefixEnabled" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">结果末尾显示跳转建议</div>
+                <div class="setting-desc">搜索结果底部显示其他平台搜索链接</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="platformShowInResults" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>启用的搜索平台</h3>
+          </div>
+          <div class="card-body">
+            <p class="settings-group-desc">勾选要启用的内置搜索平台，取消勾选即可隐藏</p>
+            <div id="platformList" class="platform-list"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>自定义平台</h3>
+          </div>
+          <div class="card-body">
+            <p class="settings-group-desc">添加自定义搜索平台，URL 中使用 <code>{query}</code> 作为搜索词占位符</p>
+            <div id="customPlatformList" class="custom-platform-list"></div>
+            <button id="addCustomPlatform" class="btn-secondary" style="margin-top: 12px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              添加平台
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- 书签管理 -->
       <section id="bookmarks" class="content-section">
         <div class="section-header">
@@ -612,6 +723,139 @@
           <div class="data-list-footer">
             <div class="pagination" id="bookmarkPagination">
               <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 书签整理 -->
+      <section id="organize" class="content-section">
+        <div class="section-header">
+          <h1>书签整理</h1>
+          <p>管理书签标签、配置域名分类映射，智能整理书签到文件夹</p>
+        </div>
+
+        <!-- 标签调色板管理 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>标签调色板</h3>
+            <button class="btn btn-primary btn-sm" id="addPaletteTagBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              添加标签
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="setting-desc" style="margin-bottom:12px;">这些标签会在搜索窗口的标签管理弹窗中作为快捷选项显示</p>
+            <div id="paletteTagList" class="organize-tag-palette-list">
+              <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 标签统计 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>标签使用统计</h3>
+            <button class="btn btn-secondary btn-sm" id="refreshTagStatsBtn">刷新</button>
+          </div>
+          <div class="card-body">
+            <div id="tagStatsContainer" class="organize-tag-stats">
+              <p class="setting-desc">点击刷新查看标签使用情况</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 域名分类映射 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>域名分类映射</h3>
+            <button class="btn btn-primary btn-sm" id="addDomainMapBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              添加映射
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="setting-desc" style="margin-bottom:12px;">自定义域名到分类文件夹的映射，智能整理时会按此规则分类书签</p>
+            <div id="domainMapList" class="organize-domain-map-list">
+              <!-- 动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 智能整理 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>智能整理</h3>
+          </div>
+          <div class="card-body">
+            <p class="setting-desc" style="margin-bottom:16px;">分析所有书签，根据域名分类和关键词匹配，自动生成整理方案。操作前会自动备份，支持一键撤销。</p>
+
+            <div class="organize-options">
+              <label class="organize-option-item">
+                <input type="checkbox" id="organizeUseAI">
+                <svg class="ai-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v2a3 3 0 01-3 3h-1v1a4 4 0 01-8 0v-1H7a3 3 0 01-3-3v-2a3 3 0 013-3h1V6a4 4 0 014-4z"/>
+                  <circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/>
+                </svg>
+                <span>启用 AI 辅助分类</span>
+                <span class="organize-option-desc">规则无法识别的书签交给 AI 分析</span>
+              </label>
+              <label class="organize-option-item">
+                <input type="checkbox" id="organizeSubfolders">
+                <span>也整理已分类书签</span>
+                <span class="organize-option-desc">对已在子文件夹中的书签进行目录内细分</span>
+              </label>
+            </div>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+              <button class="btn btn-primary" id="analyzeOrganizeBtn">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                </svg>
+                分析并预览
+              </button>
+              <button class="btn btn-secondary" id="undoOrganizeBtn">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 10h10a5 5 0 010 10H9M3 10l4-4M3 10l4 4"/>
+                </svg>
+                撤销上次整理
+              </button>
+            </div>
+
+            <!-- 整理预览区域 -->
+            <div id="organizePreview" style="display:none; margin-top:16px;">
+              <div class="organize-preview-header">
+                <h4>整理预览</h4>
+                <div class="organize-preview-badges">
+                  <span class="card-badge" id="organizePreviewCount">0 个书签将被移动</span>
+                  <span class="card-badge badge-rule" id="ruleClassifiedBadge" style="display:none">规则: 0</span>
+                  <span class="card-badge badge-ai" id="aiClassifiedBadge" style="display:none">AI: 0</span>
+                </div>
+              </div>
+              <div id="organizePreviewList" class="organize-preview-list">
+                <!-- 动态生成 -->
+              </div>
+              <div style="display:flex; gap:12px; margin-top:12px;">
+                <button class="btn btn-primary" id="executeOrganizeBtn">确认执行</button>
+                <button class="btn btn-secondary" id="cancelOrganizeBtn">取消</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 备份记录 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>备份记录</h3>
+            <button class="btn btn-secondary btn-sm" id="refreshBackupsBtn">刷新</button>
+          </div>
+          <div class="card-body">
+            <div id="backupListContainer" class="organize-backup-list">
+              <p class="setting-desc">点击刷新查看整理备份</p>
             </div>
           </div>
         </div>
@@ -660,7 +904,6 @@
         <div class="card" id="healthAutoCheckCard">
           <div class="card-header">
             <h3>定期自动检测</h3>
-            <span class="pro-badge-inline">Pro</span>
           </div>
           <div class="card-body">
             <div class="setting-row">
@@ -758,7 +1001,7 @@
       <section id="analysis" class="content-section">
         <div class="section-header">
           <h1>书签分析</h1>
-          <p>深度分析书签集合：重复检测、域名统计、使用趋势 <span class="pro-badge-inline">Pro</span></p>
+          <p>深度分析书签集合：重复检测、域名统计、使用趋势</p>
         </div>
 
         <div class="card" id="analysisActionCard">
@@ -936,266 +1179,214 @@
         </div>
       </section>
 
-      <!-- 使用说明 -->
+      <!-- 使用说明（书籍目录风格） -->
       <section id="guide" class="content-section">
-        <div class="section-header">
-          <h1>使用说明</h1>
-          <p>全面了解 Chrome Bookmarks Search 的功能和使用技巧</p>
-        </div>
+        <div class="guide-book-layout">
+          <nav class="guide-toc-sidebar">
+            <div class="guide-toc-title">使用说明</div>
+            <div class="guide-toc-group">
+              <div class="guide-toc-group-title">入门</div>
+              <a href="#guide-ch-quickstart" class="guide-toc-item active" data-guide-chapter="guide-ch-quickstart">
+                <span class="guide-toc-num">1</span><span>快速开始</span>
+              </a>
+              <a href="#guide-ch-modes" class="guide-toc-item" data-guide-chapter="guide-ch-modes">
+                <span class="guide-toc-num">2</span><span>搜索模式</span>
+              </a>
+            </div>
+            <div class="guide-toc-group">
+              <div class="guide-toc-group-title">进阶</div>
+              <a href="#guide-ch-syntax" class="guide-toc-item" data-guide-chapter="guide-ch-syntax">
+                <span class="guide-toc-num">3</span><span>搜索语法</span>
+              </a>
+              <a href="#guide-ch-shortcuts" class="guide-toc-item" data-guide-chapter="guide-ch-shortcuts">
+                <span class="guide-toc-num">4</span><span>快捷键</span>
+              </a>
+            </div>
+            <div class="guide-toc-group">
+              <div class="guide-toc-group-title">高级</div>
+              <a href="#guide-ch-platforms" class="guide-toc-item" data-guide-chapter="guide-ch-platforms">
+                <span class="guide-toc-num">5</span><span>多平台搜索</span>
+              </a>
+              <a href="#guide-ch-batch" class="guide-toc-item" data-guide-chapter="guide-ch-batch">
+                <span class="guide-toc-num">6</span><span>批量操作</span>
+              </a>
+              <a href="#guide-ch-tags" class="guide-toc-item" data-guide-chapter="guide-ch-tags">
+                <span class="guide-toc-num">7</span><span>书签标签</span>
+              </a>
+              <a href="#guide-ch-organize" class="guide-toc-item" data-guide-chapter="guide-ch-organize">
+                <span class="guide-toc-num">8</span><span>智能整理</span>
+              </a>
+              <a href="#guide-ch-ai" class="guide-toc-item" data-guide-chapter="guide-ch-ai">
+                <span class="guide-toc-num">9</span><span>AI 搜索</span>
+              </a>
+              <a href="#guide-ch-tips" class="guide-toc-item" data-guide-chapter="guide-ch-tips">
+                <span class="guide-toc-num">10</span><span>实用技巧</span>
+              </a>
+            </div>
+          </nav>
 
-        <!-- 快速开始 -->
-        <div class="card" style="margin-bottom: 24px;">
-          <div class="card-header"><h3>快速开始</h3></div>
-          <div class="card-body">
-            <div class="guide-steps">
-              <div class="guide-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                  <strong>唤起搜索</strong>
-                  <p>按下 <kbd>Alt + B</kbd>（可在常规设置中修改），即可唤起搜索窗口。</p>
-                </div>
-              </div>
-              <div class="guide-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                  <strong>输入关键字</strong>
-                  <p>直接输入搜索词，结果会实时过滤。支持多关键字、高级语法和排除语法。</p>
-                </div>
-              </div>
-              <div class="guide-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                  <strong>选择并打开</strong>
-                  <p>用 <kbd>↑</kbd> <kbd>↓</kbd> 选择结果，<kbd>Enter</kbd> 打开。也可以直接鼠标点击。</p>
-                </div>
+          <div class="guide-content-area">
+            <!-- Chapter 1 -->
+            <div id="guide-ch-quickstart" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 1</div>
+              <h2>快速开始</h2>
+              <p class="guide-chapter-desc">三步即可开始使用 Chrome Bookmarks Search 高效管理你的浏览数据。</p>
+              <div class="guide-steps">
+                <div class="guide-step-card"><div class="guide-step-num">1</div><div class="guide-step-body"><strong>唤起搜索</strong><p>按下 <kbd>Alt + B</kbd>（可自定义快捷键），搜索窗口即刻弹出。</p></div></div>
+                <div class="guide-step-card"><div class="guide-step-num">2</div><div class="guide-step-body"><strong>输入关键字</strong><p>直接输入搜索词，结果实时过滤。支持多关键字、高级语法和排除语法。</p></div></div>
+                <div class="guide-step-card"><div class="guide-step-num">3</div><div class="guide-step-body"><strong>选择并打开</strong><p>用 <kbd>↑</kbd> <kbd>↓</kbd> 选择结果，<kbd>Enter</kbd> 打开。也可直接鼠标点击。</p></div></div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div class="guide-grid">
-          <!-- 搜索模式 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-              </svg>
+            <!-- Chapter 2 -->
+            <div id="guide-ch-modes" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 2</div>
+              <h2>搜索模式</h2>
+              <p class="guide-chapter-desc">使用 <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> 在五种模式间快速切换。</p>
+              <div class="guide-section"><h3>书签搜索</h3><p>搜索所有保存的书签。结果包含访问统计（未使用、很少使用、休眠等状态标签）。</p></div>
+              <div class="guide-section"><h3>标签页搜索</h3><p>搜索当前打开的所有标签页。点击结果可切换到对应标签。</p></div>
+              <div class="guide-section"><h3>历史记录</h3><p>搜索最近的浏览历史。时间范围可在设置中调整（默认 30 天）。</p></div>
+              <div class="guide-section"><h3>下载搜索</h3><p>搜索下载的文件，按文件类型显示不同图标。支持 <code>type:</code> 语法按格式过滤。</p></div>
             </div>
-            <h3>五大搜索模式</h3>
-            <p>使用 <kbd>←</kbd> <kbd>→</kbd> 方向键快速切换模式：</p>
-            <ul class="style-list">
-              <li><strong>书签</strong> - 搜索所有保存的书签，显示访问统计和状态标签</li>
-              <li><strong>标签页</strong> - 搜索当前打开的所有标签页，点击可切换到对应标签</li>
-              <li><strong>历史记录</strong> - 搜索最近浏览历史（时间范围可在设置中调整）</li>
-              <li><strong>下载</strong> - 搜索下载的文件，按文件类型显示不同图标</li>
-              <li><strong>分组</strong> - 搜索 Chrome 标签页分组（需在设置中开启）</li>
-            </ul>
-          </div>
 
-          <!-- 快捷键 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                <path d="M6 8h4M14 8h4M6 12h12M6 16h8"/>
-              </svg>
+            <!-- Chapter 3 -->
+            <div id="guide-ch-syntax" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 3</div>
+              <h2>搜索语法</h2>
+              <p class="guide-chapter-desc">使用高级搜索语法精确定位你需要的内容。</p>
+              <table class="guide-syntax-table">
+                <thead><tr><th>语法</th><th>说明</th><th>示例</th></tr></thead>
+                <tbody>
+                  <tr><td><code>site:域名</code></td><td>限定特定网站</td><td><code>site:github.com react</code></td></tr>
+                  <tr><td><code>type:类型</code></td><td>按文件类型过滤</td><td><code>type:pdf 报告</code></td></tr>
+                  <tr><td><code>in:title</code></td><td>仅搜索标题</td><td><code>in:title 会议纪要</code></td></tr>
+                  <tr><td><code>in:url</code></td><td>仅搜索 URL</td><td><code>in:url github</code></td></tr>
+                  <tr><td><code>after:日期</code></td><td>某日期之后</td><td><code>after:2024-01</code></td></tr>
+                  <tr><td><code>before:日期</code></td><td>某日期之前</td><td><code>before:2024-06</code></td></tr>
+                  <tr><td><code>"精确词组"</code></td><td>引号内整体匹配</td><td><code>"machine learning"</code></td></tr>
+                  <tr><td><code>-排除词</code></td><td>排除包含该词的结果</td><td><code>react -native</code></td></tr>
+                  <tr><td><code>tag:标签</code></td><td>按书签标签过滤</td><td><code>tag:工作 react</code></td></tr>
+                </tbody>
+              </table>
+              <div class="guide-tip-box"><strong>提示</strong><p>语法可以组合使用，例如 <code>site:github.com type:pdf after:2024-01 报告</code></p></div>
             </div>
-            <h3>快捷键指南</h3>
-            <div class="keyboard-grid">
-              <div class="key-item"><kbd>Alt + B</kbd><span>打开/关闭搜索</span></div>
-              <div class="key-item"><kbd>↑ ↓</kbd><span>上下选择结果</span></div>
-              <div class="key-item"><kbd>← →</kbd><span>切换搜索模式</span></div>
-              <div class="key-item"><kbd>Enter</kbd><span>打开选中项</span></div>
-              <div class="key-item"><kbd>Esc</kbd><span>关闭搜索窗口</span></div>
-              <div class="key-item"><kbd>Ctrl/⌘ + Click</kbd><span>多选项目</span></div>
-              <div class="key-item"><kbd>Shift + Click</kbd><span>范围选择</span></div>
-              <div class="key-item"><kbd>右键点击</kbd><span>打开操作菜单</span></div>
-            </div>
-          </div>
 
-          <!-- 搜索语法 - 完整版 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
-              </svg>
-            </div>
-            <h3>搜索语法</h3>
-            <div class="syntax-list">
-              <div class="syntax-item">
-                <code>关键字1 关键字2</code>
-                <span>多关键字同时匹配 (AND)</span>
-              </div>
-              <div class="syntax-item">
-                <code>"精确词组"</code>
-                <span>引号内作为整体精确匹配</span>
-              </div>
-              <div class="syntax-item">
-                <code>-排除词</code>
-                <span>排除包含该关键字的结果</span>
-              </div>
-              <div class="syntax-item">
-                <code>-词1,词2,词3</code>
-                <span>逗号分隔，一次排除多个关键字</span>
-              </div>
-              <div class="syntax-item">
-                <code>-"词组1,词组2"</code>
-                <span>逗号分隔，排除多个精确词组</span>
-              </div>
-              <div class="syntax-item">
-                <code>site:github.com</code>
-                <span>限定网站搜索</span>
-              </div>
-              <div class="syntax-item">
-                <code>in:title / in:url</code>
-                <span>限定仅搜索标题或网址</span>
-              </div>
-              <div class="syntax-item">
-                <code>after:2024-01</code>
-                <span>指定日期之后的结果</span>
-              </div>
-              <div class="syntax-item">
-                <code>before:2024-06</code>
-                <span>指定日期之前的结果</span>
-              </div>
-              <div class="syntax-item">
-                <code>type:pdf</code>
-                <span>下载模式中按文件类型过滤</span>
+            <!-- Chapter 4 -->
+            <div id="guide-ch-shortcuts" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 4</div>
+              <h2>快捷键</h2>
+              <p class="guide-chapter-desc">掌握快捷键，让你的操作效率翻倍。</p>
+              <div class="guide-keyboard-grid">
+                <div class="guide-key-row"><kbd>Alt + B</kbd> <span>打开/关闭搜索</span></div>
+                <div class="guide-key-row"><kbd>↑ ↓</kbd> <span>上下选择结果</span></div>
+                <div class="guide-key-row"><kbd>Tab</kbd> <span>切换搜索模式</span></div>
+                <div class="guide-key-row"><kbd>Enter</kbd> <span>打开选中项</span></div>
+                <div class="guide-key-row"><kbd>Esc</kbd> <span>关闭搜索窗口</span></div>
+                <div class="guide-key-row"><kbd>Ctrl/⌘ + Click</kbd> <span>多选项目</span></div>
+                <div class="guide-key-row"><kbd>Shift + Click</kbd> <span>范围选择</span></div>
+                <div class="guide-key-row"><kbd>右键点击</kbd> <span>打开操作菜单</span></div>
               </div>
             </div>
-          </div>
 
-          <!-- 搜索引擎跳转 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-              </svg>
+            <!-- Chapter 5 -->
+            <div id="guide-ch-platforms" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 5</div>
+              <h2>多平台搜索</h2>
+              <p class="guide-chapter-desc">输入平台前缀 + 冒号即可快捷跳转到其他搜索平台。</p>
+              <div class="guide-section">
+                <p>在搜索框中输入前缀后跟关键词，按 Enter 即可跳转。</p>
+                <table class="guide-syntax-table">
+                  <thead><tr><th>前缀</th><th>平台</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>g:</code></td><td>Google</td></tr>
+                    <tr><td><code>gh:</code></td><td>GitHub</td></tr>
+                    <tr><td><code>yt:</code></td><td>YouTube</td></tr>
+                    <tr><td><code>bd:</code></td><td>百度</td></tr>
+                    <tr><td><code>zh:</code></td><td>知乎</td></tr>
+                    <tr><td><code>npm:</code></td><td>NPM</td></tr>
+                  </tbody>
+                </table>
+                <p style="margin-top:12px;">支持 12 个内置平台，还可在多平台搜索设置中自定义添加。</p>
+              </div>
             </div>
-            <h3>搜索引擎跳转</h3>
-            <p>当本地搜索没有结果时，可以一键跳转到外部搜索引擎继续搜索：</p>
-            <ul class="style-list">
-              <li><strong>有结果时</strong> - 搜索结果底部显示"使用 Google/百度 搜索"跳转项</li>
-              <li><strong>无结果时</strong> - 顶部醒目显示搜索引擎跳转入口</li>
-              <li><strong>URL 识别</strong> - 输入网址格式的文字（如 <code>github.com</code>），顶部出现"打开链接"选项，可直接在新标签页打开</li>
-              <li><strong>可配置</strong> - 在常规设置中选择默认搜索引擎（Google / 百度 / Bing / DuckDuckGo）</li>
-            </ul>
-          </div>
 
-          <!-- 批量操作 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 11l3 3L22 4"/>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-              </svg>
+            <!-- Chapter 6 -->
+            <div id="guide-ch-batch" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 6</div>
+              <h2>批量操作</h2>
+              <p class="guide-chapter-desc">使用多选功能批量处理搜索结果。</p>
+              <div class="guide-section">
+                <p>按住 <kbd>Ctrl</kbd> / <kbd>⌘</kbd> 点击可多选结果，使用 <kbd>Shift + Click</kbd> 可范围选择。选中后工具栏支持批量打开、批量复制链接。右键点击可编辑或删除书签。</p>
+              </div>
             </div>
-            <h3>批量操作</h3>
-            <p>选中多个结果后可执行批量操作：</p>
-            <ul class="style-list">
-              <li><kbd>Ctrl/⌘ + 点击</kbd> 逐一多选，<kbd>Shift + 点击</kbd> 范围选择</li>
-              <li>选中后弹出工具栏，支持<strong>批量打开</strong>、<strong>批量复制链接</strong></li>
-              <li>在书签模式下右键点击可<strong>编辑</strong>或<strong>删除</strong>书签</li>
-              <li>在历史/下载模式下右键可<strong>删除</strong>对应记录</li>
-            </ul>
-          </div>
 
-          <!-- 界面风格 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
+            <!-- Chapter 7 -->
+            <div id="guide-ch-tags" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 7</div>
+              <h2>书签标签</h2>
+              <p class="guide-chapter-desc">为书签添加自定义标签，实现更灵活的分类管理。</p>
+              <div class="guide-section">
+                <h3>添加标签</h3>
+                <p>在书签搜索模式下，右键点击书签选择"管理标签"，可以添加、删除标签。也可以从预设的标签调色板中快速选择。</p>
+              </div>
+              <div class="guide-section">
+                <h3>按标签搜索</h3>
+                <p>使用 <code>tag:标签名</code> 语法过滤书签。<code>tag:*</code> 查找有标签的书签，<code>tag:!</code> 查找无标签的书签。</p>
+              </div>
+              <div class="guide-section">
+                <h3>管理标签调色板</h3>
+                <p>在配置中心的"书签整理"页面可以管理标签调色板、查看标签使用统计。</p>
+              </div>
             </div>
-            <h3>界面风格</h3>
-            <p>点击搜索窗口右下角的调色盘按钮切换风格，或在外观设置中选择：</p>
-            <ul class="style-list">
-              <li><strong>Spotlight</strong> - macOS 风格，毛玻璃效果，简约优雅</li>
-              <li><strong>Raycast</strong> - 命令面板风格，深色主题，开发者最爱</li>
-              <li><strong>Fluent</strong> - Windows 11 风格，亚克力效果，现代感</li>
-            </ul>
-            <p style="margin-top: 8px; color: var(--text-secondary);">还可以切换字体：点击搜索窗口右下角的 <strong>Aa</strong> 按钮循环切换系统默认、苹方、Inter、Noto 等字体。</p>
-          </div>
 
-          <!-- 书签状态 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
-              </svg>
+            <!-- Chapter 8 -->
+            <div id="guide-ch-organize" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 8</div>
+              <h2>智能整理</h2>
+              <p class="guide-chapter-desc">自动分析并整理书签到合适的文件夹中。</p>
+              <div class="guide-section">
+                <h3>分析与预览</h3>
+                <p>在配置中心点击"分析并预览"，系统会根据域名和关键词分析书签，生成整理方案供预览。确认无误后再执行。</p>
+              </div>
+              <div class="guide-section">
+                <h3>自定义域名映射</h3>
+                <p>在"域名分类映射"中添加自定义规则，例如将 github.com 归类到"开发工具"文件夹。</p>
+              </div>
+              <div class="guide-section">
+                <h3>备份与撤销</h3>
+                <p>每次整理前会自动备份当前书签结构，支持一键撤销恢复。</p>
+              </div>
             </div>
-            <h3>书签状态智能分析</h3>
-            <p>扩展会根据浏览历史自动分析每个书签的使用状态：</p>
-            <ul class="status-list">
-              <li><span class="status-dot warning"></span><strong>未使用</strong> - 从未访问过的书签，可能是过时链接</li>
-              <li><span class="status-dot success"></span><strong>很少使用</strong> - 访问次数少于 3 次</li>
-              <li><span class="status-dot danger"></span><strong>休眠</strong> - 超过 180 天未访问，建议清理或归档</li>
-              <li><span class="status-dot primary"></span><strong>活跃</strong> - 正常使用的书签</li>
-            </ul>
-            <p style="margin-top: 8px; color: var(--text-secondary);">在书签搜索模式中，可以通过筛选按钮快速过滤出不同状态的书签。</p>
-          </div>
 
-          <!-- 搜索窗口模式 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8M12 17v4"/>
-              </svg>
+            <!-- Chapter 9 -->
+            <div id="guide-ch-ai" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 9</div>
+              <h2>AI 智能搜索</h2>
+              <p class="guide-chapter-desc">使用自然语言搜索书签，无需精确关键字。</p>
+              <div class="guide-section">
+                <p>启用 AI 搜索后，支持语义理解搜索。首次使用需构建向量索引，之后搜索速度极快。支持 Gemini、OpenAI、SiliconFlow 等多个服务商，使用你自己的 API Key，数据不经第三方。</p>
+              </div>
             </div>
-            <h3>搜索窗口模式</h3>
-            <p>在常规设置中可以切换两种搜索窗口模式：</p>
-            <ul class="style-list">
-              <li><strong>独立窗口</strong>（默认） — 搜索窗口居中显示，支持自由调整大小和位置，关闭后不影响当前页面</li>
-              <li><strong>弹出面板</strong> — 点击扩展图标在下方弹出面板，失去焦点时自动关闭，适合快速查找</li>
-            </ul>
-            <p style="margin-top: 8px; color: var(--text-secondary);">切换模式后，下次点击扩展图标或按快捷键时立即生效。</p>
-          </div>
 
-          <!-- AI 智能搜索 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
-                <path d="M11 8v6M8 11h6"/>
-              </svg>
+            <!-- Chapter 10 -->
+            <div id="guide-ch-tips" class="guide-chapter">
+              <div class="guide-chapter-num">Chapter 10</div>
+              <h2>实用技巧</h2>
+              <p class="guide-chapter-desc">一些能让你事半功倍的使用技巧。</p>
+              <div class="guide-section">
+                <p><strong>智能排序</strong> — 结合标题相关度、访问频率和最近访问时间综合排序。</p>
+                <p><strong>界面风格</strong> — 支持 Spotlight / Raycast / Fluent 三种风格，可切换字体。</p>
+                <p><strong>搜索窗口模式</strong> — 独立窗口或弹出面板，在常规设置中切换。</p>
+                <p><strong>组合语法</strong> — 多种搜索语法可组合，如 <code>site:github.com after:2024-01 -fork tag:收藏</code>。</p>
+                <p><strong>友情链接</strong> — 自定义搜索窗口底部的快捷链接，方便一键访问。</p>
+              </div>
             </div>
-            <h3>AI 智能搜索</h3>
-            <p>启用 AI 搜索后，可以使用自然语言搜索书签：</p>
-            <ul class="style-list">
-              <li><strong>语义理解</strong> — 不需要精确关键字，用自然语言描述即可找到相关书签</li>
-              <li><strong>向量索引</strong> — 首次使用需构建向量索引，之后搜索速度极快</li>
-              <li><strong>多服务商</strong> — 支持 Gemini、OpenAI、SiliconFlow 和自定义 API</li>
-              <li><strong>自带 Key</strong> — 使用你自己的 API Key，数据不经第三方服务器</li>
-            </ul>
-            <p style="margin-top: 8px; color: var(--text-secondary);">在 AI 智能搜索设置中配置服务商和 API Key 后即可使用。</p>
-          </div>
-
-          <!-- 实用技巧 -->
-          <div class="guide-card">
-            <div class="guide-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-              </svg>
-            </div>
-            <h3>实用技巧</h3>
-            <ul class="style-list">
-              <li><strong>智能排序</strong> — 结合标题相关度、访问频率和最近访问时间综合排序，最可能需要的结果排在前面</li>
-              <li><strong>最近访问提示</strong> — 在书签/标签页模式下搜索时，底部会自动补充匹配的最近浏览历史</li>
-              <li><strong>组合语法</strong> — 多种语法可组合使用，例如 <code>site:github.com after:2024-01 -fork</code></li>
-              <li><strong>友情链接</strong> — 在设置中自定义搜索窗口底部的快捷链接，方便一键访问常用网站</li>
-              <li><strong>配置中心</strong> — 右键扩展图标 → 选项，可以配置所有搜索行为、外观和 AI 设置</li>
-            </ul>
           </div>
         </div>
       </section>
 
-      <!-- Pro 会员 -->
-      <section id="pro" class="content-section">
+      <!-- Pro 会员（付费功能未上线，暂时隐藏） -->
+      <section id="pro" class="content-section" style="display:none">
         <div class="section-header">
           <h1>Pro 会员</h1>
           <p>解锁全部高级功能，获得开箱即用的 AI 搜索体验</p>
@@ -1502,6 +1693,7 @@
     </div>
   </div>
 
+  <script src="js/settings.js"></script>
   <script src="js/pro.js"></script>
   <script src="js/options.js"></script>
 </body>

@@ -6,6 +6,7 @@
  * - in:title             (搜索范围)
  * - after:2024-01        (时间过滤)
  * - before:2024-02       (时间过滤)
+ * - tag:工作              (按标签过滤)
  * - 空格分隔多关键字      (AND 逻辑)
  * - "精确匹配"           (引号内作为整体匹配)
  * - -keyword             (排除包含该关键字的结果)
@@ -62,6 +63,16 @@ class SearchParser {
         const date = new Date(value);
         const itemDate = new Date(item.lastVisit || item.startTime || 0);
         return itemDate <= date;
+      }
+    },
+    tag: {
+      regex: /tag:([^\s]+)/,
+      process: (value, item) => {
+        const tags = item._tags || [];
+        if (value === '*') return tags.length > 0;
+        if (value === '!') return tags.length === 0;
+        const searchTags = value.split(',').map(t => t.toLowerCase());
+        return searchTags.some(st => tags.some(t => t.toLowerCase().includes(st)));
       }
     }
   };
@@ -155,6 +166,53 @@ class SearchParser {
     }
     
     return true;
+  }
+
+  /**
+   * 解析平台前缀搜索（如 gh: react hooks）
+   * @param {string} searchText 搜索文本
+   * @returns {{platform: Object, query: string} | null} 平台信息和查询词，或 null
+   */
+  static parsePlatformSearch(searchText) {
+    const text = searchText.trim();
+    const platforms = window.SEARCH_PLATFORMS || {};
+    for (const [prefix, config] of Object.entries(platforms)) {
+      const pattern = prefix + ':';
+      if (text.startsWith(pattern)) {
+        return {
+          prefix,
+          platform: config,
+          query: text.slice(pattern.length).trim()
+        };
+      }
+    }
+    // 支持用户自定义平台
+    return null;
+  }
+
+  /**
+   * 获取所有可用平台（内置 + 自定义）
+   * @param {Object} settings 当前设置
+   * @returns {Object[]} 平台列表
+   */
+  static getAvailablePlatforms(settings) {
+    const platforms = window.SEARCH_PLATFORMS || {};
+    const spSettings = settings?.searchPlatforms || {};
+    const enabled = spSettings.enabledPlatforms || Object.keys(platforms);
+    const custom = spSettings.customPlatforms || [];
+
+    const result = [];
+    for (const prefix of enabled) {
+      if (platforms[prefix]) {
+        result.push({ prefix, ...platforms[prefix] });
+      }
+    }
+    for (const cp of custom) {
+      if (cp.prefix && cp.url) {
+        result.push(cp);
+      }
+    }
+    return result;
   }
 
   /**

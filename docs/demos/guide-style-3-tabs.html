@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用说明 - 风格 3: 标签卡片</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #f5f5f7;
+      padding: 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .page-header p {
+      color: #a1a1a6;
+      font-size: 14px;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      background: #2c2c2e;
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: #a1a1a6;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      color: #f5f5f7;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: #0a84ff;
+      color: white;
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-card {
+      background: linear-gradient(135deg, #1a3a5c, #2a1a4a);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    .hero-card h2 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .hero-card p {
+      color: #a1a1a6;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .steps-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .step-card {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .step-card .num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #0a84ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .step-card h4 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .step-card p {
+      font-size: 12px;
+      color: #a1a1a6;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .info-card {
+      background: #2c2c2e;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #3d3d3f;
+    }
+
+    .info-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card h3 .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .info-card p {
+      font-size: 13px;
+      color: #a1a1a6;
+      line-height: 1.6;
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: "SF Mono", Monaco, monospace;
+      background: #3a3a3c;
+      border: 1px solid #48484a;
+      border-radius: 4px;
+      color: #f5f5f7;
+    }
+
+    code {
+      font-family: "SF Mono", Monaco, monospace;
+      background: rgba(10, 132, 255, 0.1);
+      color: #64d2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .syntax-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .syntax-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 14px;
+      background: #2c2c2e;
+      border-radius: 8px;
+    }
+
+    .syntax-row code {
+      min-width: 140px;
+    }
+
+    .syntax-row span {
+      font-size: 13px;
+      color: #a1a1a6;
+    }
+
+    .keys-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .key-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #2c2c2e;
+      border-radius: 8px;
+    }
+
+    .key-item span {
+      font-size: 13px;
+      color: #a1a1a6;
+    }
+
+    .platform-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #2c2c2e;
+      border-radius: 20px;
+      font-size: 13px;
+      border: 1px solid #3d3d3f;
+    }
+
+    .chip code {
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>使用说明</h1>
+    <p>全面了解 Chrome Bookmarks Search 的功能和使用技巧</p>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('start')">快速开始</button>
+    <button class="tab-btn" onclick="switchTab('modes')">搜索模式</button>
+    <button class="tab-btn" onclick="switchTab('syntax')">搜索语法</button>
+    <button class="tab-btn" onclick="switchTab('shortcuts')">快捷键</button>
+    <button class="tab-btn" onclick="switchTab('platforms')">多平台</button>
+  </div>
+
+  <div id="tab-start" class="tab-content active">
+    <div class="hero-card">
+      <h2>三步开始搜索</h2>
+      <p>Chrome Bookmarks Search 让你以最快的速度找到书签、标签页、历史记录和下载文件。</p>
+      <div class="steps-row">
+        <div class="step-card">
+          <div class="num">1</div>
+          <h4>唤起搜索</h4>
+          <p>按下 <kbd>Alt + B</kbd></p>
+        </div>
+        <div class="step-card">
+          <div class="num">2</div>
+          <h4>输入关键字</h4>
+          <p>结果实时过滤</p>
+        </div>
+        <div class="step-card">
+          <div class="num">3</div>
+          <h4>打开结果</h4>
+          <p><kbd>Enter</kbd> 或点击</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-modes" class="tab-content">
+    <div class="cards-grid">
+      <div class="info-card">
+        <h3><span class="dot" style="background:#0a84ff"></span>书签搜索</h3>
+        <p>搜索所有保存的书签。结果包含访问统计（未使用、很少使用、休眠等状态标签）。</p>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot" style="background:#30d158"></span>标签页搜索</h3>
+        <p>搜索当前打开的所有标签页。点击结果可切换到对应标签。</p>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot" style="background:#ff9500"></span>历史记录</h3>
+        <p>搜索最近的浏览历史。时间范围可在设置中调整。</p>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot" style="background:#bf5af2"></span>下载搜索</h3>
+        <p>搜索下载的文件，按文件类型显示不同图标。</p>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot" style="background:#ff453a"></span>AI 搜索</h3>
+        <p>语义搜索，理解你的搜索意图，不仅匹配关键词。</p>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot" style="background:#64d2ff"></span>分组搜索</h3>
+        <p>搜索 Chrome 标签页分组（需在设置中开启）。</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-syntax" class="tab-content">
+    <div class="syntax-list">
+      <div class="syntax-row"><code>site:github.com</code><span>限定特定网站</span></div>
+      <div class="syntax-row"><code>type:pdf</code><span>按文件类型过滤</span></div>
+      <div class="syntax-row"><code>in:title 会议</code><span>仅搜索标题</span></div>
+      <div class="syntax-row"><code>in:url github</code><span>仅搜索 URL</span></div>
+      <div class="syntax-row"><code>after:2024-01</code><span>某日期之后的结果</span></div>
+      <div class="syntax-row"><code>before:2024-06</code><span>某日期之前的结果</span></div>
+      <div class="syntax-row"><code>"精确词组"</code><span>引号内作为整体匹配</span></div>
+      <div class="syntax-row"><code>-排除词</code><span>排除包含该词的结果</span></div>
+    </div>
+  </div>
+
+  <div id="tab-shortcuts" class="tab-content">
+    <div class="keys-list">
+      <div class="key-item"><kbd>Alt + B</kbd> <span>打开/关闭搜索</span></div>
+      <div class="key-item"><kbd>↑ ↓</kbd> <span>上下选择结果</span></div>
+      <div class="key-item"><kbd>Tab</kbd> <span>切换搜索模式</span></div>
+      <div class="key-item"><kbd>Enter</kbd> <span>打开选中项</span></div>
+      <div class="key-item"><kbd>Esc</kbd> <span>关闭搜索窗口</span></div>
+      <div class="key-item"><kbd>Ctrl/⌘ + Click</kbd> <span>多选项目</span></div>
+      <div class="key-item"><kbd>Shift + Click</kbd> <span>范围选择</span></div>
+      <div class="key-item"><kbd>右键点击</kbd> <span>打开操作菜单</span></div>
+    </div>
+  </div>
+
+  <div id="tab-platforms" class="tab-content">
+    <div class="info-card" style="margin-bottom:16px">
+      <h3>多平台快捷跳转</h3>
+      <p>在搜索框输入 <code>前缀:</code> + 关键词，按 Enter 即可跳转到对应平台搜索。</p>
+    </div>
+    <div class="platform-chips">
+      <div class="chip"><code>g:</code> Google</div>
+      <div class="chip"><code>gh:</code> GitHub</div>
+      <div class="chip"><code>yt:</code> YouTube</div>
+      <div class="chip"><code>bd:</code> 百度</div>
+      <div class="chip"><code>zh:</code> 知乎</div>
+      <div class="chip"><code>bl:</code> 哔哩哔哩</div>
+      <div class="chip"><code>npm:</code> NPM</div>
+      <div class="chip"><code>mdn:</code> MDN</div>
+      <div class="chip"><code>so:</code> Stack Overflow</div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

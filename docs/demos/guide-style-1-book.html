@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用说明 - 风格 1: 书籍目录</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #f5f5f7;
+      display: flex;
+      height: 100vh;
+    }
+
+    .toc-sidebar {
+      width: 260px;
+      background: #2c2c2e;
+      border-right: 1px solid #3d3d3f;
+      overflow-y: auto;
+      flex-shrink: 0;
+      padding: 20px 0;
+    }
+
+    .toc-title {
+      padding: 8px 24px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #a1a1a6;
+    }
+
+    .toc-group {
+      margin-bottom: 8px;
+    }
+
+    .toc-group-title {
+      padding: 6px 24px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6e6e73;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .toc-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 24px;
+      font-size: 13px;
+      color: #a1a1a6;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      border-left: 3px solid transparent;
+    }
+
+    .toc-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f5f5f7;
+    }
+
+    .toc-item.active {
+      color: #0a84ff;
+      border-left-color: #0a84ff;
+      background: rgba(10, 132, 255, 0.08);
+    }
+
+    .toc-item .toc-num {
+      font-size: 11px;
+      font-weight: 600;
+      font-family: "SF Mono", Monaco, monospace;
+      min-width: 24px;
+      color: inherit;
+      opacity: 0.6;
+    }
+
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px 60px;
+    }
+
+    .chapter {
+      margin-bottom: 56px;
+      scroll-margin-top: 20px;
+    }
+
+    .chapter-num {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0a84ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .chapter h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .chapter-desc {
+      font-size: 15px;
+      color: #a1a1a6;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .section {
+      margin-bottom: 32px;
+    }
+
+    .section h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #f5f5f7;
+    }
+
+    .section p {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #c7c7cc;
+      margin-bottom: 12px;
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-family: "SF Mono", Monaco, monospace;
+      background: #3a3a3c;
+      border: 1px solid #48484a;
+      border-radius: 4px;
+      color: #f5f5f7;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+      background: #2c2c2e;
+      border-radius: 12px;
+      border: 1px solid #3d3d3f;
+    }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #0a84ff, #5e5ce6);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .step-body strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .step-body p {
+      font-size: 13px;
+      color: #a1a1a6;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .syntax-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    .syntax-table th,
+    .syntax-table td {
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid #3d3d3f;
+      font-size: 13px;
+    }
+
+    .syntax-table th {
+      color: #a1a1a6;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .syntax-table code {
+      font-family: "SF Mono", Monaco, monospace;
+      background: rgba(10, 132, 255, 0.12);
+      color: #64d2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .keyboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #2c2c2e;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .key-row span { color: #a1a1a6; }
+
+    .tip-box {
+      background: rgba(10, 132, 255, 0.08);
+      border-left: 3px solid #0a84ff;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 12px;
+    }
+
+    .tip-box strong {
+      color: #0a84ff;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tip-box p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: #c7c7cc;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc-sidebar">
+    <div class="toc-title">使用说明</div>
+
+    <div class="toc-group">
+      <div class="toc-group-title">入门</div>
+      <a href="#quick-start" class="toc-item active">
+        <span class="toc-num">1</span>
+        <span>快速开始</span>
+      </a>
+      <a href="#modes" class="toc-item">
+        <span class="toc-num">2</span>
+        <span>搜索模式</span>
+      </a>
+    </div>
+
+    <div class="toc-group">
+      <div class="toc-group-title">进阶</div>
+      <a href="#syntax" class="toc-item">
+        <span class="toc-num">3</span>
+        <span>搜索语法</span>
+      </a>
+      <a href="#shortcuts" class="toc-item">
+        <span class="toc-num">4</span>
+        <span>快捷键</span>
+      </a>
+    </div>
+
+    <div class="toc-group">
+      <div class="toc-group-title">高级</div>
+      <a href="#platforms" class="toc-item">
+        <span class="toc-num">5</span>
+        <span>多平台搜索</span>
+      </a>
+      <a href="#batch" class="toc-item">
+        <span class="toc-num">6</span>
+        <span>批量操作</span>
+      </a>
+    </div>
+  </nav>
+
+  <main class="content-area">
+    <div id="quick-start" class="chapter">
+      <div class="chapter-num">Chapter 1</div>
+      <h2>快速开始</h2>
+      <p class="chapter-desc">三步即可开始使用 Chrome Bookmarks Search 高效管理你的浏览数据。</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>唤起搜索</strong>
+            <p>按下 <kbd>Alt + B</kbd>（可自定义快捷键），搜索窗口即刻弹出。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>输入关键字</strong>
+            <p>直接输入搜索词，结果实时过滤。支持多关键字、高级语法和排除语法。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>选择并打开</strong>
+            <p>用 <kbd>↑</kbd> <kbd>↓</kbd> 选择结果，<kbd>Enter</kbd> 打开。也可直接鼠标点击。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modes" class="chapter">
+      <div class="chapter-num">Chapter 2</div>
+      <h2>搜索模式</h2>
+      <p class="chapter-desc">使用 <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> 在五种模式间快速切换。</p>
+
+      <div class="section">
+        <h3>书签搜索</h3>
+        <p>搜索所有保存的书签。结果包含访问统计（未使用、很少使用、休眠等状态标签）。支持按文件夹路径、站点等过滤。</p>
+      </div>
+
+      <div class="section">
+        <h3>标签页搜索</h3>
+        <p>搜索当前打开的所有标签页。点击结果可切换到对应标签，避免重复打开相同网页。</p>
+      </div>
+
+      <div class="section">
+        <h3>历史记录</h3>
+        <p>搜索最近的浏览历史。时间范围可在设置中调整（默认 30 天）。</p>
+      </div>
+
+      <div class="section">
+        <h3>下载搜索</h3>
+        <p>搜索下载的文件，按文件类型显示不同图标。支持 type: 语法按格式过滤。</p>
+      </div>
+    </div>
+
+    <div id="syntax" class="chapter">
+      <div class="chapter-num">Chapter 3</div>
+      <h2>搜索语法</h2>
+      <p class="chapter-desc">使用高级搜索语法精确定位你需要的内容。</p>
+
+      <table class="syntax-table">
+        <thead>
+          <tr><th>语法</th><th>说明</th><th>示例</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>site:域名</code></td><td>限定特定网站</td><td><code>site:github.com react</code></td></tr>
+          <tr><td><code>type:类型</code></td><td>按文件类型过滤</td><td><code>type:pdf 报告</code></td></tr>
+          <tr><td><code>in:title</code></td><td>仅搜索标题</td><td><code>in:title 会议纪要</code></td></tr>
+          <tr><td><code>in:url</code></td><td>仅搜索 URL</td><td><code>in:url github</code></td></tr>
+          <tr><td><code>after:日期</code></td><td>某日期之后</td><td><code>after:2024-01</code></td></tr>
+          <tr><td><code>before:日期</code></td><td>某日期之前</td><td><code>before:2024-06</code></td></tr>
+          <tr><td><code>"精确词组"</code></td><td>引号内整体匹配</td><td><code>"machine learning"</code></td></tr>
+          <tr><td><code>-排除词</code></td><td>排除包含该词的结果</td><td><code>react -native</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="tip-box">
+        <strong>提示</strong>
+        <p>语法可以组合使用，例如 <code>site:github.com type:pdf after:2024-01 报告</code></p>
+      </div>
+    </div>
+
+    <div id="shortcuts" class="chapter">
+      <div class="chapter-num">Chapter 4</div>
+      <h2>快捷键</h2>
+      <p class="chapter-desc">掌握快捷键，让你的操作效率翻倍。</p>
+
+      <div class="keyboard-grid">
+        <div class="key-row"><kbd>Alt + B</kbd> <span>打开/关闭搜索</span></div>
+        <div class="key-row"><kbd>↑ ↓</kbd> <span>上下选择结果</span></div>
+        <div class="key-row"><kbd>Tab</kbd> <span>切换搜索模式</span></div>
+        <div class="key-row"><kbd>Enter</kbd> <span>打开选中项</span></div>
+        <div class="key-row"><kbd>Esc</kbd> <span>关闭搜索窗口</span></div>
+        <div class="key-row"><kbd>Ctrl/⌘ + Click</kbd> <span>多选项目</span></div>
+        <div class="key-row"><kbd>Shift + Click</kbd> <span>范围选择</span></div>
+        <div class="key-row"><kbd>右键点击</kbd> <span>打开操作菜单</span></div>
+      </div>
+    </div>
+
+    <div id="platforms" class="chapter">
+      <div class="chapter-num">Chapter 5</div>
+      <h2>多平台搜索</h2>
+      <p class="chapter-desc">输入平台前缀 + 冒号即可快捷跳转到其他搜索平台。</p>
+
+      <div class="section">
+        <p>在搜索框中输入前缀（如 <code>gh:</code>）后跟关键词，按 Enter 即可跳转到对应平台搜索。</p>
+        <table class="syntax-table">
+          <thead><tr><th>前缀</th><th>平台</th></tr></thead>
+          <tbody>
+            <tr><td><code>g:</code></td><td>Google</td></tr>
+            <tr><td><code>gh:</code></td><td>GitHub</td></tr>
+            <tr><td><code>yt:</code></td><td>YouTube</td></tr>
+            <tr><td><code>bd:</code></td><td>百度</td></tr>
+            <tr><td><code>zh:</code></td><td>知乎</td></tr>
+            <tr><td><code>npm:</code></td><td>NPM</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="batch" class="chapter">
+      <div class="chapter-num">Chapter 6</div>
+      <h2>批量操作</h2>
+      <p class="chapter-desc">使用多选功能批量处理搜索结果。</p>
+      <div class="section">
+        <p>按住 <kbd>Ctrl</kbd> / <kbd>⌘</kbd> 点击可多选结果，选中后可批量打开链接或复制 URL。使用 <kbd>Shift + Click</kbd> 可进行范围选择。</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const tocItems = document.querySelectorAll('.toc-item');
+    const chapters = document.querySelectorAll('.chapter');
+    const contentArea = document.querySelector('.content-area');
+
+    tocItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.querySelector(item.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+
+    contentArea.addEventListener('scroll', () => {
+      let current = '';
+      chapters.forEach(ch => {
+        const rect = ch.getBoundingClientRect();
+        if (rect.top <= 100) current = ch.id;
+      });
+      tocItems.forEach(item => {
+        item.classList.toggle('active', item.getAttribute('href') === '#' + current);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>书签智能整理 - 交互 Demo</title>
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --surface: #282840;
+    --surface-hover: #32324e;
+    --border: #3b3b5c;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --primary: #7c6af6;
+    --primary-hover: #8f80f8;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --tag-bg: rgba(124, 106, 246, 0.15);
+    --tag-border: rgba(124, 106, 246, 0.3);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--primary), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .demo-tabs {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  .demo-tab {
+    padding: 8px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .demo-tab:hover { background: var(--surface-hover); color: var(--text); }
+  .demo-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+
+  .demo-section { display: none; max-width: 700px; margin: 0 auto; }
+  .demo-section.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .btn-outline:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  .btn-success {
+    background: var(--success);
+    color: #1e1e2e;
+  }
+
+  .btn-danger {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+  }
+
+  .bookmark-tree {
+    font-size: 13px;
+    line-height: 1.8;
+    padding-left: 0;
+  }
+
+  .tree-folder {
+    list-style: none;
+    padding-left: 20px;
+  }
+
+  .tree-folder > li { position: relative; }
+
+  .folder-name {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .folder-name:hover { background: var(--surface-hover); }
+
+  .folder-icon { font-size: 16px; }
+
+  .bookmark-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+    cursor: default;
+  }
+
+  .bookmark-item:hover { background: var(--surface-hover); }
+
+  .bookmark-item .favicon {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .bookmark-item .bm-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bookmark-item .bm-domain {
+    color: var(--text-dim);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--primary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tag:hover {
+    background: rgba(124, 106, 246, 0.25);
+  }
+
+  .tag .tag-remove {
+    font-size: 13px;
+    opacity: 0.5;
+    cursor: pointer;
+  }
+  .tag .tag-remove:hover { opacity: 1; }
+
+  .tag-input-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+  }
+
+  .tag-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface-hover);
+    border: 1px dashed var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tag-add-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--tag-bg);
+  }
+
+  .tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    margin-top: 2px;
+  }
+
+  .move-arrow {
+    color: var(--success);
+    font-size: 12px;
+    margin: 0 4px;
+  }
+
+  .from-folder {
+    color: var(--text-dim);
+    text-decoration: line-through;
+    font-size: 11px;
+  }
+
+  .to-folder {
+    color: var(--success);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .preview-stats {
+    display: flex;
+    gap: 16px;
+    padding: 12px;
+    background: rgba(124, 106, 246, 0.05);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+
+  .preview-stats .stat-label { color: var(--text-dim); }
+  .preview-stats .stat-value { font-weight: 600; color: var(--primary); }
+
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 8px 0;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--success));
+    border-radius: 2px;
+    transition: width 0.8s ease;
+    width: 0;
+  }
+
+  .result-summary {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px;
+    background: rgba(74, 222, 128, 0.05);
+    border: 1px solid rgba(74, 222, 128, 0.15);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+  }
+
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    z-index: 100;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .toast.show { transform: translateX(0); }
+  .toast.success { background: var(--success); color: #1e1e2e; }
+  .toast.info { background: var(--primary); color: #fff; }
+
+  .tag-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    min-width: 150px;
+    z-index: 50;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  .tag-dropdown.show { display: block; }
+
+  .tag-option {
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.1s;
+  }
+
+  .tag-option:hover { background: var(--surface-hover); }
+
+  .context-menu {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    min-width: 160px;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  .context-menu.show { display: block; }
+
+  .ctx-item {
+    padding: 7px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+
+  .ctx-item:hover { background: var(--surface-hover); }
+
+  .ctx-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 8px;
+  }
+
+  .backup-list {
+    font-size: 12px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .backup-list th, .backup-list td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .backup-list th {
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+
+  .note {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    background: rgba(251, 191, 36, 0.05);
+    border-left: 3px solid var(--warning);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+  <h1>书签智能整理 — 交互 Demo</h1>
+  <p class="subtitle">模拟真实交互流程，点击按钮体验各步骤</p>
+
+  <div class="demo-tabs">
+    <div class="demo-tab active" data-tab="organize">智能归类</div>
+    <div class="demo-tab" data-tab="tags">标签系统</div>
+    <div class="demo-tab" data-tab="backup">备份恢复</div>
+  </div>
+
+  <!-- 智能归类 Demo -->
+  <div id="organize" class="demo-section active">
+    <!-- Step 1: 扫描 -->
+    <div class="card">
+      <div class="card-title"><span class="step-badge">1</span> 扫描分析</div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">
+        扫描所有书签，找出未分类的书签并自动生成整理建议
+      </p>
+      <button class="btn btn-primary" id="scanBtn" onclick="startScan()">开始扫描书签</button>
+      <div id="scanResult" style="display:none;margin-top:12px">
+        <div class="progress-bar"><div class="progress-fill" id="scanProgress"></div></div>
+        <div class="preview-stats" id="scanStats" style="display:none">
+          <div><span class="stat-label">总书签：</span><span class="stat-value">342</span></div>
+          <div><span class="stat-label">已分类：</span><span class="stat-value">198</span></div>
+          <div><span class="stat-label">未分类：</span><span class="stat-value" style="color:var(--warning)">144</span></div>
+          <div><span class="stat-label">建议分组：</span><span class="stat-value">8</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: 预览方案 -->
+    <div class="card" id="previewCard" style="display:none">
+      <div class="card-title"><span class="step-badge">2</span> 整理方案预览</div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+        以下是 AI 建议的整理方案。你可以拖拽调整、重命名文件夹、或取消某个书签的移动。
+      </p>
+
+      <div class="bookmark-tree">
+        <ul class="tree-folder" style="padding-left:0">
+          <li>
+            <div class="folder-name"><span class="folder-icon">📁</span> <strong>开发工具</strong> <span style="color:var(--text-dim);font-size:11px">(12 个书签)</span></div>
+            <ul class="tree-folder">
+              <li><div class="bookmark-item"><span class="favicon">🐱</span><span class="bm-title">GitHub: Where the world builds software</span><span class="bm-domain">github.com</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">📦</span><span class="bm-title">npm | build amazing things</span><span class="bm-domain">npmjs.com</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">VS</span><span class="bm-title">Visual Studio Code - Code Editing</span><span class="bm-domain">code.visualstudio.com</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">🔧</span><span class="bm-title">Vercel: Develop. Preview. Ship.</span><span class="bm-domain">vercel.com</span></div></li>
+            </ul>
+          </li>
+          <li>
+            <div class="folder-name"><span class="folder-icon">📁</span> <strong>技术文档</strong> <span style="color:var(--text-dim);font-size:11px">(8 个书签)</span></div>
+            <ul class="tree-folder">
+              <li><div class="bookmark-item"><span class="favicon">📘</span><span class="bm-title">MDN Web Docs</span><span class="bm-domain">developer.mozilla.org</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">⚛</span><span class="bm-title">React – A JavaScript library for UI</span><span class="bm-domain">react.dev</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">📗</span><span class="bm-title">Vue.js - The Progressive Framework</span><span class="bm-domain">vuejs.org</span></div></li>
+            </ul>
+          </li>
+          <li>
+            <div class="folder-name"><span class="folder-icon">📁</span> <strong>视频娱乐</strong> <span style="color:var(--text-dim);font-size:11px">(6 个书签)</span></div>
+            <ul class="tree-folder">
+              <li><div class="bookmark-item"><span class="favicon">▶</span><span class="bm-title">哔哩哔哩 - 干杯</span><span class="bm-domain">bilibili.com</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">🎬</span><span class="bm-title">YouTube</span><span class="bm-domain">youtube.com</span></div></li>
+            </ul>
+          </li>
+          <li>
+            <div class="folder-name"><span class="folder-icon">📁</span> <strong>AI 与机器学习</strong> <span style="color:var(--text-dim);font-size:11px">(5 个书签)</span></div>
+            <ul class="tree-folder">
+              <li><div class="bookmark-item"><span class="favicon">🤖</span><span class="bm-title">ChatGPT</span><span class="bm-domain">chatgpt.com</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">🧠</span><span class="bm-title">Hugging Face – AI community</span><span class="bm-domain">huggingface.co</span></div></li>
+              <li><div class="bookmark-item"><span class="favicon">📊</span><span class="bm-title">Kaggle: Machine Learning</span><span class="bm-domain">kaggle.com</span></div></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <div class="note">
+        已分类的 198 个书签不会被移动。如需整理已分类书签，请在设置中开启"重新整理已分类书签"。
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-success" onclick="executeOrganize()">确认执行整理</button>
+        <button class="btn btn-outline" onclick="showToast('已取消整理','info')">取消</button>
+      </div>
+    </div>
+
+    <!-- Step 3: 执行结果 -->
+    <div class="card" id="resultCard" style="display:none">
+      <div class="card-title"><span class="step-badge">3</span> 整理完成</div>
+      <div class="progress-bar"><div class="progress-fill" id="execProgress"></div></div>
+      <div class="result-summary" id="resultSummary" style="display:none">
+        <div>✅ 移动了 <strong>144</strong> 个书签</div>
+        <div>📁 创建了 <strong>8</strong> 个文件夹</div>
+        <div>🔄 合并了 <strong>2</strong> 个同名文件夹</div>
+        <div>💾 已自动备份</div>
+      </div>
+      <div style="margin-top:12px;display:none" id="undoArea">
+        <button class="btn btn-danger" onclick="showToast('已撤销整理，书签已恢复原位','success')">撤销整理</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标签系统 Demo -->
+  <div id="tags" class="demo-section">
+    <div class="card">
+      <div class="card-title">书签标签 — 搜索结果中添加标签</div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">
+        在搜索结果中右键书签可添加标签，或使用 tag: 语法搜索。
+      </p>
+
+      <div style="margin-bottom:16px">
+        <input type="text" placeholder='试试输入 tag:前端  或  tag:工作' id="tagSearchInput"
+          style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none"
+          oninput="filterByTag(this.value)">
+      </div>
+
+      <div id="taggedBookmarks">
+        <div class="bookmark-item" oncontextmenu="showContextMenu(event, this)" style="padding:8px">
+          <span class="favicon">🐱</span>
+          <div style="flex:1">
+            <div class="bm-title">GitHub: Where the world builds software</div>
+            <div class="tags-row">
+              <span class="tag">开发 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag">工具 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag-add-btn" onclick="event.stopPropagation();toggleTagDropdown(this)">+</span>
+              <div class="tag-dropdown">
+                <div class="tag-option" onclick="addTag(this, '前端')">前端</div>
+                <div class="tag-option" onclick="addTag(this, '后端')">后端</div>
+                <div class="tag-option" onclick="addTag(this, '待读')">待读</div>
+                <div class="tag-option" onclick="addTag(this, '收藏')">收藏</div>
+                <div class="tag-option" onclick="addTag(this, '工作')">工作</div>
+              </div>
+            </div>
+          </div>
+          <span class="bm-domain">github.com</span>
+        </div>
+
+        <div class="bookmark-item" oncontextmenu="showContextMenu(event, this)" style="padding:8px">
+          <span class="favicon">📘</span>
+          <div style="flex:1">
+            <div class="bm-title">MDN Web Docs</div>
+            <div class="tags-row">
+              <span class="tag">前端 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag">文档 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag-add-btn" onclick="event.stopPropagation();toggleTagDropdown(this)">+</span>
+              <div class="tag-dropdown">
+                <div class="tag-option" onclick="addTag(this, '待读')">待读</div>
+                <div class="tag-option" onclick="addTag(this, '收藏')">收藏</div>
+                <div class="tag-option" onclick="addTag(this, '工作')">工作</div>
+                <div class="tag-option" onclick="addTag(this, '学习')">学习</div>
+              </div>
+            </div>
+          </div>
+          <span class="bm-domain">developer.mozilla.org</span>
+        </div>
+
+        <div class="bookmark-item" oncontextmenu="showContextMenu(event, this)" style="padding:8px">
+          <span class="favicon">⚛</span>
+          <div style="flex:1">
+            <div class="bm-title">React – A JavaScript library for building UIs</div>
+            <div class="tags-row">
+              <span class="tag">前端 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag">工作 <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag-add-btn" onclick="event.stopPropagation();toggleTagDropdown(this)">+</span>
+              <div class="tag-dropdown">
+                <div class="tag-option" onclick="addTag(this, '待读')">待读</div>
+                <div class="tag-option" onclick="addTag(this, '收藏')">收藏</div>
+                <div class="tag-option" onclick="addTag(this, '学习')">学习</div>
+              </div>
+            </div>
+          </div>
+          <span class="bm-domain">react.dev</span>
+        </div>
+
+        <div class="bookmark-item" oncontextmenu="showContextMenu(event, this)" style="padding:8px">
+          <span class="favicon">🤖</span>
+          <div style="flex:1">
+            <div class="bm-title">ChatGPT</div>
+            <div class="tags-row">
+              <span class="tag">AI <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span></span>
+              <span class="tag-add-btn" onclick="event.stopPropagation();toggleTagDropdown(this)">+</span>
+              <div class="tag-dropdown">
+                <div class="tag-option" onclick="addTag(this, '工作')">工作</div>
+                <div class="tag-option" onclick="addTag(this, '工具')">工具</div>
+                <div class="tag-option" onclick="addTag(this, '收藏')">收藏</div>
+              </div>
+            </div>
+          </div>
+          <span class="bm-domain">chatgpt.com</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 备份恢复 Demo -->
+  <div id="backup" class="demo-section">
+    <div class="card">
+      <div class="card-title">备份与恢复</div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">
+        每次整理前自动备份，保留最近 5 次备份记录。
+      </p>
+
+      <table class="backup-list">
+        <thead>
+          <tr><th>时间</th><th>操作</th><th>移动书签数</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026-05-06 20:30</td>
+            <td>智能归类</td>
+            <td>144</td>
+            <td>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已恢复到此备份','success')">恢复</button>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已导出 bookmarks-backup-20260506.json','info')">导出</button>
+            </td>
+          </tr>
+          <tr>
+            <td>2026-04-28 15:10</td>
+            <td>智能归类</td>
+            <td>87</td>
+            <td>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已恢复到此备份','success')">恢复</button>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已导出','info')">导出</button>
+            </td>
+          </tr>
+          <tr>
+            <td>2026-04-15 09:45</td>
+            <td>手动移动</td>
+            <td>23</td>
+            <td>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已恢复到此备份','success')">恢复</button>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="showToast('已导出','info')">导出</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div class="context-menu" id="contextMenu">
+    <div class="ctx-item" onclick="hideContextMenu();showToast('已打开标签选择器','info')">🏷️ 添加标签</div>
+    <div class="ctx-item" onclick="hideContextMenu()">✏️ 编辑书签</div>
+    <div class="ctx-item" onclick="hideContextMenu()">📋 复制链接</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item" onclick="hideContextMenu()">🗂️ 移动到文件夹...</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item" style="color:var(--danger)" onclick="hideContextMenu()">🗑️ 删除书签</div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+<script>
+  document.querySelectorAll('.demo-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.demo-section').forEach(s => s.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  function startScan() {
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = true;
+    btn.textContent = '扫描中...';
+    document.getElementById('scanResult').style.display = 'block';
+
+    const progress = document.getElementById('scanProgress');
+    let p = 0;
+    const interval = setInterval(() => {
+      p += Math.random() * 15;
+      if (p >= 100) {
+        p = 100;
+        clearInterval(interval);
+        progress.style.width = '100%';
+        document.getElementById('scanStats').style.display = 'flex';
+        document.getElementById('previewCard').style.display = 'block';
+        btn.textContent = '重新扫描';
+        btn.disabled = false;
+        showToast('扫描完成，发现 144 个未分类书签', 'info');
+      }
+      progress.style.width = p + '%';
+    }, 120);
+  }
+
+  function executeOrganize() {
+    document.getElementById('resultCard').style.display = 'block';
+    const progress = document.getElementById('execProgress');
+    let p = 0;
+    const interval = setInterval(() => {
+      p += Math.random() * 8;
+      if (p >= 100) {
+        p = 100;
+        clearInterval(interval);
+        progress.style.width = '100%';
+        document.getElementById('resultSummary').style.display = 'flex';
+        document.getElementById('undoArea').style.display = 'block';
+        showToast('整理完成！已移动 144 个书签', 'success');
+      }
+      progress.style.width = p + '%';
+    }, 80);
+
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function showToast(msg, type) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast ' + type;
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  function toggleTagDropdown(btn) {
+    const dropdown = btn.nextElementSibling;
+    document.querySelectorAll('.tag-dropdown.show').forEach(d => {
+      if (d !== dropdown) d.classList.remove('show');
+    });
+    dropdown.classList.toggle('show');
+  }
+
+  function addTag(option, tagName) {
+    const dropdown = option.parentElement;
+    const tagsRow = dropdown.parentElement;
+    const addBtn = dropdown.previousElementSibling;
+
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = tagName + ' <span class="tag-remove" onclick="event.stopPropagation();this.parentElement.remove()">×</span>';
+    tagsRow.insertBefore(tag, addBtn);
+
+    dropdown.classList.remove('show');
+    option.remove();
+    showToast('已添加标签: ' + tagName, 'success');
+  }
+
+  function showContextMenu(e, el) {
+    e.preventDefault();
+    const menu = document.getElementById('contextMenu');
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    menu.classList.add('show');
+  }
+
+  function hideContextMenu() {
+    document.getElementById('contextMenu').classList.remove('show');
+  }
+
+  document.addEventListener('click', () => {
+    hideContextMenu();
+    document.querySelectorAll('.tag-dropdown.show').forEach(d => d.classList.remove('show'));
+  });
+
+  function filterByTag(value) {
+    const match = value.match(/^tag:(\S+)/);
+    const items = document.querySelectorAll('#taggedBookmarks .bookmark-item');
+    if (!match) {
+      items.forEach(item => item.style.display = 'flex');
+      return;
+    }
+    const tagName = match[1];
+    items.forEach(item => {
+      const tags = Array.from(item.querySelectorAll('.tag')).map(t => t.textContent.trim().replace('×', '').trim());
+      item.style.display = tags.some(t => t.includes(tagName)) ? 'flex' : 'none';
+    });
+  }
+</script>
+</body>
+</html>

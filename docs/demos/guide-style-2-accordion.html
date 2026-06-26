@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用说明 - 风格 2: 手风琴折叠</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #f5f5f7;
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #0a84ff, #bf5af2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: #a1a1a6;
+      font-size: 15px;
+    }
+
+    .accordion-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .accordion {
+      background: #2c2c2e;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #3d3d3f;
+      transition: border-color 0.2s;
+    }
+
+    .accordion.open {
+      border-color: #0a84ff;
+    }
+
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .accordion-header:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .accordion-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .accordion-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .accordion-icon.blue { background: rgba(10, 132, 255, 0.15); color: #0a84ff; }
+    .accordion-icon.purple { background: rgba(191, 90, 242, 0.15); color: #bf5af2; }
+    .accordion-icon.green { background: rgba(48, 209, 88, 0.15); color: #30d158; }
+    .accordion-icon.orange { background: rgba(255, 149, 0, 0.15); color: #ff9500; }
+    .accordion-icon.red { background: rgba(255, 69, 58, 0.15); color: #ff453a; }
+
+    .accordion-title {
+      flex: 1;
+    }
+
+    .accordion-title h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .accordion-title span {
+      font-size: 12px;
+      color: #6e6e73;
+    }
+
+    .accordion-arrow {
+      width: 20px;
+      height: 20px;
+      color: #6e6e73;
+      transition: transform 0.25s;
+      flex-shrink: 0;
+    }
+
+    .accordion.open .accordion-arrow {
+      transform: rotate(180deg);
+    }
+
+    .accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+
+    .accordion.open .accordion-body {
+      max-height: 1000px;
+    }
+
+    .accordion-content {
+      padding: 0 20px 20px;
+      border-top: 1px solid #3d3d3f;
+      padding-top: 16px;
+    }
+
+    .accordion-content p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #c7c7cc;
+      margin-bottom: 12px;
+    }
+
+    .accordion-content ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .accordion-content li {
+      padding: 8px 0;
+      padding-left: 20px;
+      position: relative;
+      font-size: 14px;
+      color: #c7c7cc;
+      line-height: 1.5;
+    }
+
+    .accordion-content li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #0a84ff;
+    }
+
+    .accordion-content li strong {
+      color: #f5f5f7;
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: "SF Mono", Monaco, monospace;
+      background: #3a3a3c;
+      border: 1px solid #48484a;
+      border-radius: 4px;
+      color: #f5f5f7;
+    }
+
+    code {
+      font-family: "SF Mono", Monaco, monospace;
+      background: rgba(10, 132, 255, 0.1);
+      color: #64d2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .syntax-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .syntax-card {
+      background: #1c1c1e;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .syntax-card code {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .syntax-card span {
+      font-size: 12px;
+      color: #6e6e73;
+    }
+
+    .keys-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .key-pair {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #1c1c1e;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .key-pair span {
+      color: #a1a1a6;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Chrome Bookmarks Search</h1>
+    <p>全面了解扩展的功能和使用技巧</p>
+  </div>
+
+  <div class="accordion-group">
+    <div class="accordion open">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <div class="accordion-title">
+          <h3>快速开始</h3>
+          <span>3 个步骤即可上手</span>
+        </div>
+        <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <ul>
+            <li><strong>唤起搜索</strong> — 按下 <kbd>Alt + B</kbd>，搜索窗口即刻弹出</li>
+            <li><strong>输入关键字</strong> — 输入搜索词，结果实时过滤，支持多关键字和高级语法</li>
+            <li><strong>选择并打开</strong> — 用 <kbd>↑</kbd> <kbd>↓</kbd> 选择，<kbd>Enter</kbd> 打开</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </div>
+        <div class="accordion-title">
+          <h3>搜索模式</h3>
+          <span>5 种模式满足不同需求</span>
+        </div>
+        <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p>使用 <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> 在模式间快速切换：</p>
+          <ul>
+            <li><strong>书签</strong> — 搜索所有保存的书签，显示访问统计和状态标签</li>
+            <li><strong>标签页</strong> — 搜索当前打开的标签页，点击可切换过去</li>
+            <li><strong>历史记录</strong> — 搜索最近浏览历史（可调时间范围）</li>
+            <li><strong>下载</strong> — 搜索下载的文件，按类型显示图标</li>
+            <li><strong>AI</strong> — 语义搜索，理解你的意图</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </div>
+        <div class="accordion-title">
+          <h3>搜索语法</h3>
+          <span>8 种高级过滤语法</span>
+        </div>
+        <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <div class="syntax-grid">
+            <div class="syntax-card"><code>site:github.com</code><span>限定特定网站</span></div>
+            <div class="syntax-card"><code>type:pdf</code><span>按文件类型过滤</span></div>
+            <div class="syntax-card"><code>in:title</code><span>仅搜索标题</span></div>
+            <div class="syntax-card"><code>in:url</code><span>仅搜索 URL</span></div>
+            <div class="syntax-card"><code>after:2024-01</code><span>某日期之后</span></div>
+            <div class="syntax-card"><code>before:2024-06</code><span>某日期之前</span></div>
+            <div class="syntax-card"><code>"精确词组"</code><span>引号内整体匹配</span></div>
+            <div class="syntax-card"><code>-排除词</code><span>排除含该词的结果</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h4M14 8h4M6 12h12"/></svg>
+        </div>
+        <div class="accordion-title">
+          <h3>快捷键</h3>
+          <span>键盘操作效率更高</span>
+        </div>
+        <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <div class="keys-grid">
+            <div class="key-pair"><kbd>Alt + B</kbd> <span>打开/关闭</span></div>
+            <div class="key-pair"><kbd>↑ ↓</kbd> <span>选择结果</span></div>
+            <div class="key-pair"><kbd>Tab</kbd> <span>切换模式</span></div>
+            <div class="key-pair"><kbd>Enter</kbd> <span>打开选中</span></div>
+            <div class="key-pair"><kbd>Esc</kbd> <span>关闭窗口</span></div>
+            <div class="key-pair"><kbd>Ctrl+Click</kbd> <span>多选</span></div>
+            <div class="key-pair"><kbd>Shift+Click</kbd> <span>范围选择</span></div>
+            <div class="key-pair"><kbd>右键</kbd> <span>操作菜单</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-icon red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <div class="accordion-title">
+          <h3>多平台搜索</h3>
+          <span>一键跳转外部平台</span>
+        </div>
+        <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          <p>输入 <code>前缀:</code> + 关键词，按 Enter 即可跳转。</p>
+          <div class="syntax-grid">
+            <div class="syntax-card"><code>g:</code><span>Google</span></div>
+            <div class="syntax-card"><code>gh:</code><span>GitHub</span></div>
+            <div class="syntax-card"><code>yt:</code><span>YouTube</span></div>
+            <div class="syntax-card"><code>bd:</code><span>百度</span></div>
+            <div class="syntax-card"><code>zh:</code><span>知乎</span></div>
+            <div class="syntax-card"><code>npm:</code><span>NPM</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleAccordion(header) {
+      const accordion = header.parentElement;
+      accordion.classList.toggle('open');
+    }
+  </script>
+</body>
+</html>

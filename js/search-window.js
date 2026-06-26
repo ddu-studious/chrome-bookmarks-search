@@ -150,6 +150,7 @@
   function bindEvents() {
     // 搜索输入（debounce 防抖，减少高频 DOM 重建导致的抖动）
     searchInput.addEventListener('input', (e) => {
+      updatePlatformPlaceholderSW(e.target.value);
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(async () => {
         if (dataLoadPromise) {
@@ -285,22 +286,46 @@
     });
   }
 
+  // ==================== 多选状态 ====================
+  let selectedItems = new Set();
+
+  function clearMultiSelection() {
+    selectedItems.clear();
+    document.querySelectorAll('.result-item.selected').forEach(el => {
+      el.classList.remove('selected');
+    });
+  }
+
+  function updateMultiSelectionUI() {
+    const items = document.querySelectorAll('.result-item');
+    items.forEach((item, index) => {
+      item.classList.toggle('selected', selectedItems.has(index));
+    });
+  }
+
+  function openMultiSelectedItems() {
+    const sortedIndices = Array.from(selectedItems).sort((a, b) => a - b);
+    sortedIndices.forEach(idx => {
+      const item = currentResults[idx];
+      if (item && item.url) {
+        safeSendMessage({ type: 'OPEN_URL', url: item.url });
+      }
+    });
+    clearMultiSelection();
+    window.close();
+  }
+
   // ==================== 键盘导航 ====================
   function handleKeydown(e) {
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
+    // Tab / Shift+Tab 切换搜索模式
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) {
         switchModePrev();
-        return;
-
-      case 'ArrowRight':
-        e.preventDefault();
+      } else {
         switchModeNext();
-        return;
-
-      case 'Tab':
-        e.preventDefault();
-        return;
+      }
+      return;
     }
 
     // 分组模式下不使用上下键/Enter 选中
@@ -311,39 +336,97 @@
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        if (selectedIndex < items.length - 1) {
-          selectedIndex++;
+        if (items.length === 0) break;
+        if (e.shiftKey) {
+          // Shift+↓: 扩展多选
+          if (selectedIndex < items.length - 1) {
+            if (selectedItems.size === 0 && selectedIndex >= 0) {
+              selectedItems.add(selectedIndex);
+            }
+            selectedIndex++;
+            selectedItems.add(selectedIndex);
+            updateSelection();
+            updateMultiSelectionUI();
+          }
+        } else {
+          if (selectedItems.size > 0) clearMultiSelection();
+          if (selectedIndex < items.length - 1) {
+            selectedIndex++;
+          } else if (selectedIndex === -1) {
+            selectedIndex = 0;
+          }
           updateSelection();
         }
         break;
 
       case 'ArrowUp':
         e.preventDefault();
-        if (selectedIndex > 0) {
-          selectedIndex--;
+        if (items.length === 0) break;
+        if (e.shiftKey) {
+          // Shift+↑: 扩展多选
+          if (selectedIndex > 0) {
+            if (selectedItems.size === 0 && selectedIndex >= 0) {
+              selectedItems.add(selectedIndex);
+            }
+            selectedIndex--;
+            selectedItems.add(selectedIndex);
+            updateSelection();
+            updateMultiSelectionUI();
+          }
+        } else {
+          if (selectedItems.size > 0) clearMultiSelection();
+          if (selectedIndex > 0) {
+            selectedIndex--;
+          } else if (selectedIndex === -1) {
+            selectedIndex = items.length - 1;
+          }
           updateSelection();
         }
         break;
 
-      case 'Enter':
+      case 'Enter': {
         e.preventDefault();
+        let handled = false;
+
+        // 有多选项时，批量打开
+        if (selectedItems.size > 1) {
+          openMultiSelectedItems();
+          return;
+        }
+
         if (selectedIndex >= 0) {
           const allItems = document.querySelectorAll('.result-item');
           const selectedEl = allItems[selectedIndex];
           if (selectedEl?.dataset?.specialAction && selectedEl.dataset.url) {
             safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
-            window.close();
-            break;
-          }
-          const targetItem = currentResults[selectedIndex];
-          if (targetItem) {
-            openResult(selectedIndex);
-          } else if (selectedEl?.dataset?.url) {
-            safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
-            window.close();
+            handled = true;
+          } else {
+            const targetItem = currentResults[selectedIndex];
+            if (targetItem) {
+              openResult(selectedIndex);
+              return;
+            } else if (selectedEl?.dataset?.url) {
+              safeSendMessage({ type: 'OPEN_URL', url: selectedEl.dataset.url });
+              handled = true;
+            }
           }
         }
+
+        if (!handled) {
+          const query = searchInput.value.trim();
+          if (query) {
+            getSearchEngine().then(engine => {
+              const searchUrl = engine.url.replace('{query}', encodeURIComponent(query));
+              safeSendMessage({ type: 'OPEN_URL', url: searchUrl });
+              window.close();
+            });
+            return;
+          }
+        }
+
+        window.close();
         break;
+      }
     }
   }
 
@@ -351,6 +434,7 @@
   function switchMode(mode) {
     currentMode = mode;
     selectedIndex = -1;
+    clearMultiSelection();
 
     document.querySelectorAll('.mode-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.mode === mode);
@@ -410,6 +494,11 @@
               allBookmarks = response.data || [];
               document.getElementById('bookmarksCount').textContent = allBookmarks.length;
               updateFilterCounts();
+              BookmarkTags.getAll().then(tagData => {
+                for (const bm of allBookmarks) {
+                  bm._tags = tagData.tags[bm.id] || [];
+                }
+              }).catch(() => {});
               break;
             case 'tabs':
               allTabs = response.data || [];
@@ -646,6 +735,18 @@
 
   // ==================== 搜索 ====================
   function search(query) {
+    // 搜索时清除多选状态
+    clearMultiSelection();
+
+    // 平台前缀搜索拦截
+    if (typeof SearchParser !== 'undefined' && SearchParser.parsePlatformSearch) {
+      const platformResult = SearchParser.parsePlatformSearch(query);
+      if (platformResult) {
+        displayPlatformSearch(platformResult);
+        return;
+      }
+    }
+
     if (currentMode === 'groups') {
       const filtered = searchGroups(query, allGroups);
       displayGroupResults(filtered);
@@ -849,12 +950,7 @@
       const fromSettings = settingsResult.settings?.intelligentSearch || {};
       const fromOptions = settingsResult.optionsSettings?.intelligentSearch || {};
       const hasApiKey = !!(fromSettings.aiApiKey || fromOptions.aiApiKey);
-      if (hasApiKey) return true;
-
-      if (!cachedProStatus && window.ProModule) {
-        cachedProStatus = await window.ProModule.checkProAccess();
-      }
-      return cachedProStatus?.isPro || false;
+      return hasApiKey;
     } catch (e) {
       return false;
     }
@@ -862,29 +958,28 @@
 
   function showSearchWindowAiUpgradePrompt() {
     resultsList.innerHTML = `
-      <div class="pro-upgrade-inline">
+      <div class="ai-config-prompt">
         <div class="pro-upgrade-inline-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
           </svg>
         </div>
         <div class="pro-upgrade-inline-text">
-          <strong>AI 智能搜索</strong> 需要配置 API Key 或升级 Pro<br>
-          <span style="font-size:12px;opacity:0.7">自带 API Key 可免费使用，或升级 Pro 享受开箱即用体验</span>
+          <strong>AI 智能搜索</strong> 需要配置 API Key<br>
+          <span style="font-size:12px;opacity:0.7">支持 Gemini、OpenAI、DeepSeek 等多种 AI 服务商</span>
         </div>
         <div class="pro-upgrade-inline-actions">
-          <button class="btn-pro-upgrade" id="swAiUpgradeBtn">升级 Pro</button>
-          <button class="btn-pro-trial" id="swAiTrialBtn">免费试用 7 天</button>
+          <button class="btn-pro-upgrade" id="swAiConfigBtn" style="background:var(--color-primary,#1a73e8);">前往配置</button>
         </div>
         <div style="font-size:11px;color:var(--text-secondary,#5f6368);margin-top:4px;">
-          或在配置中心配置自己的 API Key（永久免费）
+          在配置中心中配置 API Key 即可使用
         </div>
       </div>
     `;
-    const upgradeBtn = document.getElementById('swAiUpgradeBtn');
-    const trialBtn = document.getElementById('swAiTrialBtn');
-    if (upgradeBtn) upgradeBtn.addEventListener('click', () => window.ProModule?.openPaymentPage());
-    if (trialBtn) trialBtn.addEventListener('click', () => window.ProModule?.openTrialPage());
+    const configBtn = document.getElementById('swAiConfigBtn');
+    if (configBtn) configBtn.addEventListener('click', () => {
+      chrome.runtime.openOptionsPage();
+    });
   }
 
   function loadSearchWindowRecommendations() {
@@ -1061,6 +1156,113 @@
     return null;
   }
 
+  let swOriginalPlaceholder = '';
+  function updatePlatformPlaceholderSW(value) {
+    if (!swOriginalPlaceholder) {
+      swOriginalPlaceholder = searchInput.placeholder;
+    }
+    if (typeof SearchParser !== 'undefined' && SearchParser.parsePlatformSearch) {
+      const platformResult = SearchParser.parsePlatformSearch(value);
+      if (platformResult && !platformResult.query) {
+        searchInput.placeholder = `在 ${platformResult.platform.name} 中搜索...`;
+      } else if (!platformResult) {
+        searchInput.placeholder = swOriginalPlaceholder;
+      }
+    }
+  }
+
+  function displayPlatformSearch(platformResult) {
+    const { prefix, platform, query } = platformResult;
+    resultsList.innerHTML = '';
+
+    if (!query) {
+      searchStats.textContent = `在 ${platform.name} 中搜索`;
+      resultsList.innerHTML = `<div class="platform-search-hint">
+        <div class="platform-hint-icon">${getPlatformIconSW(platform.icon)}</div>
+        <div class="platform-hint-text">在 <strong>${escapeHtml(platform.name)}</strong> 中搜索</div>
+        <div class="platform-hint-example">输入关键词后按 Enter 跳转</div>
+      </div>`;
+      selectedIndex = -1;
+      return;
+    }
+
+    const searchUrl = platform.url.replace('{query}', encodeURIComponent(query));
+    searchStats.textContent = `在 ${platform.name} 搜索`;
+    resultsList.innerHTML = `
+      <div class="result-item special-item platform-search-item active" data-special-action="platform-search" data-url="${escapeHtml(searchUrl)}">
+        <div class="result-icon special-icon platform-icon">${getPlatformIconSW(platform.icon)}</div>
+        <div class="result-content">
+          <div class="result-title">在 ${escapeHtml(platform.name)} 搜索 "<strong>${escapeHtml(query)}</strong>"</div>
+          <div class="result-url">${escapeHtml(searchUrl)}</div>
+        </div>
+      </div>
+    `;
+    selectedIndex = 0;
+    currentResults = [{ url: searchUrl, title: `${platform.name}: ${query}` }];
+  }
+
+  function appendPlatformSearchItems(query) {
+    getSettings().then(settings => {
+      const spSettings = settings?.searchPlatforms || {};
+      if (!spSettings.showInResults) return;
+
+      const platforms = (typeof SearchParser !== 'undefined' && SearchParser.getAvailablePlatforms)
+        ? SearchParser.getAvailablePlatforms(settings)
+        : [];
+      const defaultEngine = settings?.defaultSearchEngine || getDefaultSearchEngine();
+      const shown = platforms.filter(p => {
+        if (defaultEngine === 'google' && p.prefix === 'g') return false;
+        if (defaultEngine === 'baidu' && p.prefix === 'bd') return false;
+        return true;
+      }).slice(0, 5);
+
+      if (shown.length === 0) return;
+
+      let html = '<div class="platform-divider"><span>在其他平台搜索</span></div>';
+      shown.forEach(p => {
+        const searchUrl = p.url.replace('{query}', encodeURIComponent(query));
+        html += `
+          <div class="result-item special-item platform-jump-item" data-special-action="platform-search" data-url="${escapeHtml(searchUrl)}">
+            <div class="result-icon special-icon platform-icon">${getPlatformIconSW(p.icon)}</div>
+            <div class="result-content">
+              <div class="result-title">${escapeHtml(p.name)} 搜索 "<strong>${escapeHtml(query)}</strong>"</div>
+              <div class="result-url">${escapeHtml(p.prefix)}:${escapeHtml(query)}</div>
+            </div>
+          </div>
+        `;
+      });
+      resultsList.insertAdjacentHTML('beforeend', html);
+    });
+  }
+
+  function getPlatformIconSW(iconName) {
+    const icons = {
+      google: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>',
+      baidu: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#2319DC" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm4 0h-2v-6h2v6zm-2-8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>',
+      github: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>',
+      stackoverflow: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#F48024" d="M15.725 0l-1.72 1.277 6.39 8.588 1.72-1.277L15.725 0zm-3.94 3.418l-1.369 1.644 8.225 6.85 1.369-1.644-8.225-6.85zm-3.15 4.465l-.905 1.94 9.702 4.517.905-1.94-9.702-4.517zm-1.85 4.86l-.44 2.093 10.473 2.2.44-2.092-10.473-2.2zM1.89 21.906v2.094h13.97v-2.094H1.89zm1.046-4.08v2.094h11.878V17.83H2.935z"/></svg>',
+      zhihu: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#0066FF" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3 14h-2l-1-3H8v-2h4V9H8V7h8v2h-2l1 3h2l-2 4z"/></svg>',
+      bilibili: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#00A1D6" d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.124.929.373.258.249.383.553.383.907 0 .355-.138.657-.413.906l-1.126 1.147zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773H5.333zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+      npm: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#CB3837" d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331z"/></svg>',
+      mdn: '<svg viewBox="0 0 24 24" width="16" height="16"><rect fill="#000" width="24" height="24" rx="4"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="9" font-weight="bold">MDN</text></svg>',
+      x: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+      reddit: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#FF4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
+      producthunt: '<svg viewBox="0 0 24 24" width="16" height="16"><circle fill="#DA552F" cx="12" cy="12" r="12"/><path fill="white" d="M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.806-1.799-1.801-1.799zM13.604 13.8H10.2v3.6H8.399V6.6h5.205c1.99 0 3.6 1.611 3.6 3.6 0 1.99-1.611 3.6-3.6 3.6z"/></svg>'
+    };
+    return icons[iconName] || '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  }
+
+  async function getSettings() {
+    try {
+      const result = await new Promise(resolve => {
+        chrome.storage.sync.get(['settings', 'optionsSettings'], resolve);
+      });
+      const source = result.optionsSettings || result.settings || {};
+      return { ...source };
+    } catch { return {}; }
+  }
+
   function createSpecialItemHtml(type, title, subtitle, url) {
     const iconSvg = type === 'url'
       ? '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>'
@@ -1143,6 +1345,7 @@
           createSpecialItemHtml('search', `使用 ${escapeHtml(engine.name)} 搜索 "<strong>${escapeHtml(trimmedQuery)}</strong>"`, '在新标签页中搜索', searchUrl)
         );
       });
+      appendPlatformSearchItems(trimmedQuery);
     }
 
     searchStats.textContent = `找到 ${items.length} 个结果`;
@@ -1165,6 +1368,10 @@
         item.classList.remove('active');
       }
     });
+
+    if (selectedItems.size > 1) {
+      searchStats.textContent = `已选择 ${selectedItems.size} 项 (Enter 批量打开)`;
+    }
   }
 
   // ==================== 打开结果 ====================
@@ -1176,10 +1383,13 @@
       type: 'OPEN_RESULT',
       mode: currentMode,
       item: item
+    }, () => {
+      try { window.close(); } catch (e) {}
     });
 
-    // 打开后关闭搜索窗口
-    window.close();
+    setTimeout(() => {
+      try { window.close(); } catch (e) {}
+    }, 300);
   }
 
   // ==================== 样式与字体 ====================
@@ -1270,10 +1480,13 @@
     const editAction = contextMenu.querySelector('.edit-action');
     const deleteAction = contextMenu.querySelector('.delete-action');
 
+    const tagAction = contextMenu.querySelector('.tag-action');
+
     if (currentMode === 'bookmarks') {
       editAction.style.display = 'flex';
       deleteAction.style.display = 'flex';
       deleteAction.querySelector('.delete-text').textContent = '删除书签';
+      if (tagAction) tagAction.style.display = 'flex';
     } else if (currentMode === 'history') {
       editAction.style.display = 'none';
       deleteAction.style.display = 'flex';
@@ -1285,6 +1498,7 @@
     } else {
       editAction.style.display = 'none';
       deleteAction.style.display = 'none';
+      if (tagAction) tagAction.style.display = 'none';
     }
 
     // 先显示获取尺寸
@@ -1358,6 +1572,12 @@
 
       case 'edit':
         showEditModal(contextMenuTarget);
+        break;
+
+      case 'manage-tags':
+        if (contextMenuTarget && contextMenuTarget.id) {
+          openTagModal(contextMenuTarget.id);
+        }
         break;
 
       case 'delete':
@@ -1463,6 +1683,83 @@
     }
   }
 
+  // ==================== 标签管理弹窗 ====================
+  let tagModalBookmarkId = null;
+
+  function openTagModal(bookmarkId) {
+    tagModalBookmarkId = bookmarkId;
+    const modal = document.getElementById('tagModal');
+    modal.classList.add('show');
+    refreshTagModal();
+    document.getElementById('tagInput').focus();
+  }
+
+  function closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    modal.classList.remove('show');
+    tagModalBookmarkId = null;
+    document.getElementById('tagInput').value = '';
+  }
+
+  async function refreshTagModal() {
+    if (!tagModalBookmarkId) return;
+    const currentTags = await BookmarkTags.getTagsForBookmark(tagModalBookmarkId);
+    const palette = await BookmarkTags.getPalette();
+
+    const currentList = document.getElementById('tagCurrentList');
+    currentList.innerHTML = currentTags.length === 0
+      ? '<span class="tag-empty">暂无标签</span>'
+      : currentTags.map(t =>
+        `<span class="tag-chip">${escapeHtml(t)}<span class="tag-chip-remove" data-tag="${t}">&times;</span></span>`
+      ).join('');
+
+    currentList.querySelectorAll('.tag-chip-remove').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await BookmarkTags.removeTag(tagModalBookmarkId, btn.dataset.tag);
+        const bm = allBookmarks.find(b => b.id === tagModalBookmarkId);
+        if (bm) bm._tags = await BookmarkTags.getTagsForBookmark(tagModalBookmarkId);
+        refreshTagModal();
+      });
+    });
+
+    const paletteList = document.getElementById('tagPaletteList');
+    paletteList.innerHTML = palette.filter(t => !currentTags.includes(t)).map(t =>
+      `<span class="tag-palette-item" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`
+    ).join('');
+
+    paletteList.querySelectorAll('.tag-palette-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        await BookmarkTags.addTag(tagModalBookmarkId, el.dataset.tag);
+        const bm = allBookmarks.find(b => b.id === tagModalBookmarkId);
+        if (bm) bm._tags = await BookmarkTags.getTagsForBookmark(tagModalBookmarkId);
+        refreshTagModal();
+      });
+    });
+  }
+
+  async function addTagFromInput() {
+    const input = document.getElementById('tagInput');
+    const tag = input.value.trim();
+    if (!tag || !tagModalBookmarkId) return;
+    await BookmarkTags.addTag(tagModalBookmarkId, tag);
+    input.value = '';
+    const bm = allBookmarks.find(b => b.id === tagModalBookmarkId);
+    if (bm) bm._tags = await BookmarkTags.getTagsForBookmark(tagModalBookmarkId);
+    refreshTagModal();
+  }
+
+  (function initTagModal() {
+    document.getElementById('tagModalClose').addEventListener('click', closeTagModal);
+    document.getElementById('tagModal').addEventListener('click', e => {
+      if (e.target.id === 'tagModal') closeTagModal();
+    });
+    document.getElementById('tagAddBtn').addEventListener('click', addTagFromInput);
+    document.getElementById('tagInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addTagFromInput(); }
+      if (e.key === 'Escape') { e.stopPropagation(); closeTagModal(); }
+    });
+  })();
+
   // ==================== 友情链接 ====================
   async function loadFriendLinks() {
     try {
@@ -1540,6 +1837,10 @@
       if (status) {
         html = `<span class="status-tag ${status.class}">${status.text}</span>` + html;
       }
+    }
+
+    if (item._tags && item._tags.length > 0) {
+      html += item._tags.map(t => `<span class="bookmark-tag">${escapeHtml(t)}</span>`).join('');
     }
 
     return html;

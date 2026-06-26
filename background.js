@@ -686,6 +686,181 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // ==================== 书签标签系统 ====================
+
+  if (request.type === 'GET_BOOKMARK_TAGS') {
+    (async () => {
+      try {
+        const tags = await BookmarkTags.getTagsForBookmark(request.bookmarkId);
+        sendResponse({ ok: true, tags });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'SET_BOOKMARK_TAGS') {
+    (async () => {
+      try {
+        await BookmarkTags.setTagsForBookmark(request.bookmarkId, request.tags);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'ADD_BOOKMARK_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.addTag(request.bookmarkId, request.tag);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'REMOVE_BOOKMARK_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.removeTag(request.bookmarkId, request.tag);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'BATCH_ADD_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.batchAddTag(request.bookmarkIds, request.tag);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'BATCH_REMOVE_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.batchRemoveTag(request.bookmarkIds, request.tag);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_TAG_PALETTE') {
+    (async () => {
+      try {
+        const palette = await BookmarkTags.getPalette();
+        sendResponse({ ok: true, palette });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'SET_TAG_PALETTE') {
+    (async () => {
+      try {
+        await BookmarkTags.setPalette(request.palette);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'RENAME_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.renameTag(request.oldName, request.newName);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'DELETE_TAG') {
+    (async () => {
+      try {
+        await BookmarkTags.deleteTagFromAll(request.tag);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_TAG_STATS') {
+    (async () => {
+      try {
+        const stats = await BookmarkTags.getTagStats();
+        sendResponse({ ok: true, stats });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  // ==================== 书签智能整理 ====================
+
+  if (request.type === 'ANALYZE_BOOKMARKS') {
+    (async () => {
+      try {
+        const result = await BookmarkOrganizer.analyzeBookmarks(request.options || {});
+        sendResponse({ ok: true, ...result });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'EXECUTE_ORGANIZE_PLAN') {
+    (async () => {
+      try {
+        const backupTimestamp = await BookmarkOrganizer.backup();
+        const result = await BookmarkOrganizer.executePlan(request.plan, request.targetParentId);
+        sendResponse({ ok: true, backupTimestamp, ...result });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'UNDO_ORGANIZE') {
+    (async () => {
+      try {
+        const result = await BookmarkOrganizer.undoLastOrganize();
+        sendResponse({ ok: true, ...result });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_ORGANIZE_BACKUPS') {
+    (async () => {
+      try {
+        const backups = await BookmarkOrganizer.getBackups();
+        sendResponse({ ok: true, backups });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'GET_DOMAIN_CATEGORIES') {
+    (async () => {
+      try {
+        const categories = await BookmarkOrganizer.getDomainCategories();
+        sendResponse({ ok: true, categories });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
+  if (request.type === 'SET_CUSTOM_DOMAIN_CATEGORIES') {
+    (async () => {
+      try {
+        await BookmarkOrganizer.setCustomDomainCategories(request.categories);
+        sendResponse({ ok: true });
+      } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
+  }
+
   // ==================== 书签健康检测 ====================
 
   if (request.type === 'BOOKMARK_HEALTH_CHECK') {
@@ -693,25 +868,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       try {
         let bookmarks = await loadBookmarks();
 
-        // Pro Feature Gating: 免费用户限制 50 个书签
         let isLimited = false;
         let totalBeforeLimit = bookmarks.length;
-        try {
-          const user = await extpay.getUser();
-          if (!user.paid) {
-            const FREE_LIMIT = 50;
-            if (bookmarks.length > FREE_LIMIT) {
-              isLimited = true;
-              bookmarks = bookmarks.slice(0, FREE_LIMIT);
-            }
-          }
-        } catch (e) {
-          const FREE_LIMIT = 50;
-          if (bookmarks.length > FREE_LIMIT) {
-            isLimited = true;
-            bookmarks = bookmarks.slice(0, FREE_LIMIT);
-          }
-        }
 
         const result = await BookmarkHealth.runBatchCheck(
           bookmarks,
@@ -792,12 +950,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'RUN_BOOKMARK_ANALYSIS') {
     (async () => {
       try {
-        const user = await extpay.getUser().catch(() => null);
-        if (!user?.paid) {
-          sendResponse({ ok: false, error: 'Pro 专属功能' });
-          return;
-        }
-
         const bookmarks = await loadBookmarks();
 
         const urlMap = new Map();
@@ -1331,8 +1483,6 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'syncTabGroups') syncAllGroups();
   if (alarm.name === 'autoHealthCheck') {
     try {
-      const user = await extpay.getUser().catch(() => null);
-      if (!user?.paid) return;
       console.log('[BookmarkSearch] Running auto health check...');
       const bookmarks = await loadBookmarks();
       const result = await BookmarkHealth.runBatchCheck(bookmarks, { concurrency: 3, timeout: 10000 }, () => {});
@@ -1444,6 +1594,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ==================== 独立搜索窗口 ====================
+async function findExistingSearchWindow() {
+  const searchUrl = chrome.runtime.getURL('search-window.html');
+  const allWindows = await chrome.windows.getAll({ populate: true, windowTypes: ['popup'] });
+  for (const win of allWindows) {
+    if (win.tabs && win.tabs.some(tab => tab.url && tab.url.startsWith(searchUrl))) {
+      return win;
+    }
+  }
+  return null;
+}
+
 async function openSearchWindow() {
   const currentWindow = await chrome.windows.getCurrent();
   const w = 640, h = 540;
@@ -1470,20 +1631,31 @@ chrome.windows.onRemoved.addListener((windowId) => {
 });
 
 async function toggleSearchWindow() {
+  let existingWin = null;
+
   if (searchWindowId) {
     try {
-      const win = await chrome.windows.get(searchWindowId);
-      if (win.focused) {
-        await chrome.windows.remove(searchWindowId);
-        searchWindowId = null;
-      } else {
-        await chrome.windows.update(searchWindowId, { focused: true });
-      }
-      return;
+      existingWin = await chrome.windows.get(searchWindowId);
     } catch (e) {
       searchWindowId = null;
     }
   }
+
+  if (!existingWin) {
+    existingWin = await findExistingSearchWindow();
+    if (existingWin) searchWindowId = existingWin.id;
+  }
+
+  if (existingWin) {
+    if (existingWin.focused) {
+      await chrome.windows.remove(existingWin.id);
+      searchWindowId = null;
+    } else {
+      await chrome.windows.update(existingWin.id, { focused: true });
+    }
+    return;
+  }
+
   await openSearchWindow();
 }
 

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用说明 - 风格 5: 交互式卡片流</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #f5f5f7;
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #6e6e73;
+      margin-bottom: 24px;
+    }
+
+    .breadcrumb a {
+      color: #0a84ff;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+
+    .breadcrumb .sep {
+      color: #48484a;
+    }
+
+    .category-view, .detail-view {
+      display: none;
+    }
+
+    .category-view.active, .detail-view.active {
+      display: block;
+      animation: fadeSlide 0.25s ease;
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateX(16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      color: #a1a1a6;
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .category-card {
+      background: #2c2c2e;
+      border: 1px solid #3d3d3f;
+      border-radius: 14px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .category-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .category-card:nth-child(1)::before { background: #0a84ff; }
+    .category-card:nth-child(2)::before { background: #30d158; }
+    .category-card:nth-child(3)::before { background: #ff9500; }
+    .category-card:nth-child(4)::before { background: #bf5af2; }
+    .category-card:nth-child(5)::before { background: #ff453a; }
+    .category-card:nth-child(6)::before { background: #64d2ff; }
+
+    .category-card:hover {
+      background: #3a3a3c;
+      border-color: #5a5a5e;
+      transform: translateY(-2px);
+    }
+
+    .category-card .icon-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 22px;
+    }
+
+    .category-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .category-card p {
+      font-size: 12px;
+      color: #6e6e73;
+      line-height: 1.5;
+    }
+
+    .category-card .arrow {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #48484a;
+      font-size: 16px;
+      transition: transform 0.2s;
+    }
+
+    .category-card:hover .arrow {
+      transform: translateY(-50%) translateX(4px);
+      color: #6e6e73;
+    }
+
+    .detail-header {
+      margin-bottom: 24px;
+    }
+
+    .detail-header h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .detail-header p {
+      color: #6e6e73;
+      font-size: 13px;
+    }
+
+    .detail-block {
+      background: #2c2c2e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 1px solid #3d3d3f;
+    }
+
+    .detail-block h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #f5f5f7;
+    }
+
+    .detail-block p, .detail-block li {
+      font-size: 13px;
+      color: #a1a1a6;
+      line-height: 1.7;
+    }
+
+    .detail-block ul {
+      padding-left: 18px;
+    }
+
+    .detail-block li {
+      margin-bottom: 6px;
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: "SF Mono", Monaco, monospace;
+      background: #3a3a3c;
+      border: 1px solid #48484a;
+      border-radius: 4px;
+      color: #f5f5f7;
+    }
+
+    code {
+      font-family: "SF Mono", Monaco, monospace;
+      background: rgba(10, 132, 255, 0.1);
+      color: #64d2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .key-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #1c1c1e;
+      border-radius: 8px;
+    }
+
+    .key-row span {
+      font-size: 12px;
+      color: #6e6e73;
+    }
+
+    .syntax-table {
+      width: 100%;
+    }
+
+    .syntax-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: #1c1c1e;
+      border-radius: 8px;
+      margin-bottom: 4px;
+    }
+
+    .syntax-row code {
+      min-width: 130px;
+    }
+
+    .syntax-row span {
+      font-size: 12px;
+      color: #6e6e73;
+    }
+
+    .try-box {
+      background: #1c1c1e;
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .try-box label {
+      display: block;
+      font-size: 11px;
+      color: #6e6e73;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .try-box input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #2c2c2e;
+      border: 1px solid #3d3d3f;
+      border-radius: 6px;
+      color: #f5f5f7;
+      font-size: 13px;
+      font-family: "SF Mono", Monaco, monospace;
+      outline: none;
+    }
+
+    .try-box input:focus {
+      border-color: #0a84ff;
+    }
+
+    .try-result {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #30d158;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="breadcrumb" id="breadcrumb">
+    <a onclick="showHome()">使用说明</a>
+    <span class="sep" id="breadSep" style="display:none">›</span>
+    <span id="breadDetail" style="display:none"></span>
+  </div>
+
+  <div class="category-view active" id="homeView">
+    <h1 class="page-title">使用说明</h1>
+    <p class="page-subtitle">点击分类卡片，了解详细用法</p>
+
+    <div class="category-grid">
+      <div class="category-card" onclick="showDetail('quickstart')">
+        <div class="icon-circle" style="background:rgba(10,132,255,0.15)">&#9889;</div>
+        <h3>快速开始</h3>
+        <p>三步开始搜索</p>
+        <span class="arrow">›</span>
+      </div>
+      <div class="category-card" onclick="showDetail('modes')">
+        <div class="icon-circle" style="background:rgba(48,209,88,0.15)">&#9632;</div>
+        <h3>搜索模式</h3>
+        <p>书签、标签页、历史、下载</p>
+        <span class="arrow">›</span>
+      </div>
+      <div class="category-card" onclick="showDetail('shortcuts')">
+        <div class="icon-circle" style="background:rgba(255,149,0,0.15)">&#9000;</div>
+        <h3>快捷键</h3>
+        <p>键盘操作一览</p>
+        <span class="arrow">›</span>
+      </div>
+      <div class="category-card" onclick="showDetail('syntax')">
+        <div class="icon-circle" style="background:rgba(191,90,242,0.15)">&#128269;</div>
+        <h3>搜索语法</h3>
+        <p>site: type: in: 等过滤</p>
+        <span class="arrow">›</span>
+      </div>
+      <div class="category-card" onclick="showDetail('platforms')">
+        <div class="icon-circle" style="background:rgba(255,69,58,0.15)">&#127760;</div>
+        <h3>多平台搜索</h3>
+        <p>g: gh: yt: 等前缀跳转</p>
+        <span class="arrow">›</span>
+      </div>
+      <div class="category-card" onclick="showDetail('batch')">
+        <div class="icon-circle" style="background:rgba(100,210,255,0.15)">&#10003;</div>
+        <h3>批量操作</h3>
+        <p>多选打开、复制、右键菜单</p>
+        <span class="arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-quickstart">
+    <div class="detail-header">
+      <h2>快速开始</h2>
+      <p>三步开始使用 Chrome Bookmarks Search</p>
+    </div>
+    <div class="detail-block">
+      <h4>步骤</h4>
+      <ul>
+        <li><strong>唤起搜索</strong> — 按下 <kbd>Alt + B</kbd>（macOS: <kbd>Option + B</kbd>）</li>
+        <li><strong>输入关键字</strong> — 结果实时过滤，支持中英文混合</li>
+        <li><strong>打开结果</strong> — <kbd>↑</kbd><kbd>↓</kbd> 选择，<kbd>Enter</kbd> 打开</li>
+      </ul>
+    </div>
+    <div class="detail-block">
+      <h4>窗口模式</h4>
+      <p>在配置中心可选择「独立窗口模式」或「弹出面板模式」。独立窗口支持调整大小和位置记忆。</p>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-modes">
+    <div class="detail-header">
+      <h2>搜索模式</h2>
+      <p>按 <kbd>Tab</kbd> 切换模式</p>
+    </div>
+    <div class="detail-block">
+      <h4>书签搜索</h4>
+      <p>搜索浏览器保存的所有书签，支持健康检测标签（未使用、很少使用、休眠）。</p>
+    </div>
+    <div class="detail-block">
+      <h4>标签页搜索</h4>
+      <p>搜索当前打开的所有标签页。点击结果可直接切换到对应标签。</p>
+    </div>
+    <div class="detail-block">
+      <h4>历史记录</h4>
+      <p>搜索最近浏览历史，默认 30 天。时间范围可在设置中调整。</p>
+    </div>
+    <div class="detail-block">
+      <h4>下载搜索</h4>
+      <p>搜索已下载的文件，支持按文件类型（PDF、图片、文档等）显示不同图标。</p>
+    </div>
+    <div class="detail-block">
+      <h4>AI 搜索</h4>
+      <p>语义搜索模式，理解你的搜索意图而非仅匹配关键词。需在设置中配置 API Key。</p>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-shortcuts">
+    <div class="detail-header">
+      <h2>快捷键</h2>
+      <p>提高效率的键盘操作</p>
+    </div>
+    <div class="detail-block">
+      <div class="key-grid">
+        <div class="key-row"><kbd>Alt + B</kbd> <span>打开/关闭搜索</span></div>
+        <div class="key-row"><kbd>↑ ↓</kbd> <span>上下选择结果</span></div>
+        <div class="key-row"><kbd>Tab</kbd> <span>下一个模式</span></div>
+        <div class="key-row"><kbd>Shift+Tab</kbd> <span>上一个模式</span></div>
+        <div class="key-row"><kbd>Enter</kbd> <span>打开选中项</span></div>
+        <div class="key-row"><kbd>Esc</kbd> <span>关闭窗口</span></div>
+        <div class="key-row"><kbd>Ctrl/⌘ + Click</kbd> <span>多选</span></div>
+        <div class="key-row"><kbd>Shift + Click</kbd> <span>范围选择</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-syntax">
+    <div class="detail-header">
+      <h2>搜索语法</h2>
+      <p>使用高级语法精确过滤结果</p>
+    </div>
+    <div class="detail-block">
+      <div class="syntax-table">
+        <div class="syntax-row"><code>site:github.com</code> <span>限定特定网站</span></div>
+        <div class="syntax-row"><code>type:pdf</code> <span>按文件类型过滤</span></div>
+        <div class="syntax-row"><code>in:title 关键词</code> <span>仅搜索标题</span></div>
+        <div class="syntax-row"><code>in:url 关键词</code> <span>仅搜索 URL</span></div>
+        <div class="syntax-row"><code>after:2024-01</code> <span>某日期之后</span></div>
+        <div class="syntax-row"><code>before:2024-06</code> <span>某日期之前</span></div>
+        <div class="syntax-row"><code>"精确词组"</code> <span>引号内整体匹配</span></div>
+        <div class="syntax-row"><code>-排除词</code> <span>排除包含该词的结果</span></div>
+      </div>
+    </div>
+    <div class="detail-block">
+      <h4>试一试</h4>
+      <p>输入组合语法，查看解析结果：</p>
+      <div class="try-box">
+        <label>搜索语法</label>
+        <input type="text" placeholder='site:github.com type:pdf react' oninput="parseSyntax(this.value)">
+        <div class="try-result" id="syntaxResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-platforms">
+    <div class="detail-header">
+      <h2>多平台搜索</h2>
+      <p>输入前缀 + 关键词，Enter 跳转</p>
+    </div>
+    <div class="detail-block">
+      <div class="syntax-table">
+        <div class="syntax-row"><code>g: 关键词</code> <span>Google 搜索</span></div>
+        <div class="syntax-row"><code>gh: 关键词</code> <span>GitHub 搜索</span></div>
+        <div class="syntax-row"><code>yt: 关键词</code> <span>YouTube 搜索</span></div>
+        <div class="syntax-row"><code>bd: 关键词</code> <span>百度搜索</span></div>
+        <div class="syntax-row"><code>zh: 关键词</code> <span>知乎搜索</span></div>
+        <div class="syntax-row"><code>bl: 关键词</code> <span>哔哩哔哩搜索</span></div>
+        <div class="syntax-row"><code>npm: 关键词</code> <span>NPM 搜索</span></div>
+        <div class="syntax-row"><code>mdn: 关键词</code> <span>MDN Web Docs</span></div>
+        <div class="syntax-row"><code>so: 关键词</code> <span>Stack Overflow</span></div>
+      </div>
+    </div>
+    <div class="detail-block">
+      <h4>自定义平台</h4>
+      <p>在配置中心 → 多平台搜索中，可以添加自定义搜索平台。设置前缀、名称和搜索 URL（使用 <code>{query}</code> 作为关键词占位符）。</p>
+    </div>
+  </div>
+
+  <div class="detail-view" id="detail-batch">
+    <div class="detail-header">
+      <h2>批量操作</h2>
+      <p>高效管理多个搜索结果</p>
+    </div>
+    <div class="detail-block">
+      <h4>多选</h4>
+      <ul>
+        <li><kbd>Ctrl/⌘ + Click</kbd> — 逐个选择/取消选择</li>
+        <li><kbd>Shift + Click</kbd> — 范围选择（从上次选中到当前点击之间的所有项）</li>
+      </ul>
+    </div>
+    <div class="detail-block">
+      <h4>批量操作</h4>
+      <ul>
+        <li><strong>批量打开</strong> — 在新标签页中打开所有选中的书签</li>
+        <li><strong>复制链接</strong> — 将所有选中项的 URL 复制到剪贴板</li>
+      </ul>
+    </div>
+    <div class="detail-block">
+      <h4>右键菜单</h4>
+      <p>右键点击搜索结果可打开上下文菜单，提供「打开」「复制链接」「复制标题」「在新窗口打开」等操作。</p>
+    </div>
+  </div>
+
+  <script>
+    const detailNames = {
+      quickstart: '快速开始',
+      modes: '搜索模式',
+      shortcuts: '快捷键',
+      syntax: '搜索语法',
+      platforms: '多平台搜索',
+      batch: '批量操作'
+    };
+
+    function showHome() {
+      document.getElementById('homeView').classList.add('active');
+      document.querySelectorAll('.detail-view').forEach(v => v.classList.remove('active'));
+      document.getElementById('breadSep').style.display = 'none';
+      document.getElementById('breadDetail').style.display = 'none';
+    }
+
+    function showDetail(name) {
+      document.getElementById('homeView').classList.remove('active');
+      document.querySelectorAll('.detail-view').forEach(v => v.classList.remove('active'));
+      document.getElementById('detail-' + name).classList.add('active');
+      document.getElementById('breadSep').style.display = '';
+      const bd = document.getElementById('breadDetail');
+      bd.style.display = '';
+      bd.textContent = detailNames[name] || name;
+    }
+
+    function parseSyntax(input) {
+      const result = document.getElementById('syntaxResult');
+      if (!input.trim()) { result.textContent = ''; return; }
+
+      const parts = [];
+      const siteMatch = input.match(/site:(\S+)/);
+      const typeMatch = input.match(/type:(\S+)/);
+      const inMatch = input.match(/in:(title|url)/);
+      const afterMatch = input.match(/after:(\S+)/);
+      const beforeMatch = input.match(/before:(\S+)/);
+
+      if (siteMatch) parts.push('网站: ' + siteMatch[1]);
+      if (typeMatch) parts.push('类型: ' + typeMatch[1]);
+      if (inMatch) parts.push('范围: ' + (inMatch[1] === 'title' ? '标题' : 'URL'));
+      if (afterMatch) parts.push('开始: ' + afterMatch[1]);
+      if (beforeMatch) parts.push('截止: ' + beforeMatch[1]);
+
+      let keywords = input
+        .replace(/site:\S+/g, '')
+        .replace(/type:\S+/g, '')
+        .replace(/in:\S+/g, '')
+        .replace(/after:\S+/g, '')
+        .replace(/before:\S+/g, '')
+        .trim();
+      if (keywords) parts.push('关键词: ' + keywords);
+
+      result.textContent = parts.length ? '解析: ' + parts.join(' | ') : '未识别语法';
+    }
+  </script>
+</body>
+</html>
