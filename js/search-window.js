@@ -82,6 +82,12 @@
 
   // ==================== 初始化 ====================
   async function init() {
+    if (window.settings?.get) {
+      try {
+        window.__BOOKMARK_SEARCH_SETTINGS = await window.settings.get();
+      } catch (_) {}
+    }
+
     // 加载保存的样式
     safeSendMessage({ type: 'GET_STYLE' }, (response) => {
       if (response && response.style) {
@@ -1259,6 +1265,7 @@
         chrome.storage.sync.get(['settings', 'optionsSettings'], resolve);
       });
       const source = result.optionsSettings || result.settings || {};
+      window.__BOOKMARK_SEARCH_SETTINGS = { ...source };
       return { ...source };
     } catch { return {}; }
   }

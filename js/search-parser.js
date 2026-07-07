@@ -173,10 +173,20 @@ class SearchParser {
    * @param {string} searchText 搜索文本
    * @returns {{platform: Object, query: string} | null} 平台信息和查询词，或 null
    */
-  static parsePlatformSearch(searchText) {
+  static parsePlatformSearch(searchText, settings = null) {
     const text = searchText.trim();
-    const platforms = window.SEARCH_PLATFORMS || {};
-    for (const [prefix, config] of Object.entries(platforms)) {
+    const activeSettings = settings || window.__BOOKMARK_SEARCH_SETTINGS || {};
+    const spSettings = activeSettings.searchPlatforms || {};
+    if (spSettings.enabled === false || spSettings.prefixEnabled === false) {
+      return null;
+    }
+
+    const platforms = this.getAvailablePlatforms(activeSettings)
+      .slice()
+      .sort((a, b) => b.prefix.length - a.prefix.length);
+
+    for (const config of platforms) {
+      const { prefix } = config;
       const pattern = prefix + ':';
       if (text.startsWith(pattern)) {
         return {
@@ -198,6 +208,8 @@ class SearchParser {
   static getAvailablePlatforms(settings) {
     const platforms = window.SEARCH_PLATFORMS || {};
     const spSettings = settings?.searchPlatforms || {};
+    if (spSettings.enabled === false) return [];
+
     const enabled = spSettings.enabledPlatforms || Object.keys(platforms);
     const custom = spSettings.customPlatforms || [];
 
@@ -209,7 +221,10 @@ class SearchParser {
     }
     for (const cp of custom) {
       if (cp.prefix && cp.url) {
-        result.push(cp);
+        result.push({
+          icon: 'search',
+          ...cp
+        });
       }
     }
     return result;

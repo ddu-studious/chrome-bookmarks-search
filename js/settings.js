@@ -134,6 +134,10 @@ async function getSettings() {
     }
   }
 
+  if (typeof window !== 'undefined') {
+    window.__BOOKMARK_SEARCH_SETTINGS = merged;
+  }
+
   return merged;
 }
 

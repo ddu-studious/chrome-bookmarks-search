@@ -2336,10 +2336,10 @@ function bindOrganizeEvents() {
     const tagName = prompt('输入新标签名称：');
     if (!tagName || !tagName.trim()) return;
     try {
-      const palette = await BookmarkTags.getTagPalette();
+      const palette = await BookmarkTags.getPalette();
       if (!palette.includes(tagName.trim())) {
         palette.push(tagName.trim());
-        await BookmarkTags.setTagPalette(palette);
+        await BookmarkTags.setPalette(palette);
       }
       renderPaletteTagList();
       showToast('标签已添加');
@@ -2420,7 +2420,7 @@ async function renderPaletteTagList() {
   const container = document.getElementById('paletteTagList');
   if (!container) return;
   try {
-    const palette = await BookmarkTags.getTagPalette();
+    const palette = await BookmarkTags.getPalette();
     if (palette.length === 0) {
       container.innerHTML = '<p class="setting-desc">暂无标签，点击"添加标签"创建</p>';
       return;
@@ -2434,8 +2434,8 @@ async function renderPaletteTagList() {
     container.querySelectorAll('.tag-remove').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const tagName = e.target.dataset.tag;
-        const p = await BookmarkTags.getTagPalette();
-        await BookmarkTags.setTagPalette(p.filter(t => t !== tagName));
+        const p = await BookmarkTags.getPalette();
+        await BookmarkTags.setPalette(p.filter(t => t !== tagName));
         renderPaletteTagList();
         showToast('标签已移除');
       });
