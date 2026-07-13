@@ -800,9 +800,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       
       const title = document.createElement('div');
       title.className = 'result-title';
-      title.textContent = currentMode === 'downloads' 
+      const rawTitle = currentMode === 'downloads' 
         ? item.filename.split('/').pop() || '未命名文件'
         : item.title || '无标题';
+      if (trimmedQuery && currentMode !== 'downloads') {
+        title.innerHTML = highlightTitle(rawTitle, trimmedQuery);
+      } else {
+        title.textContent = rawTitle;
+      }
       
       const url = document.createElement('div');
       url.className = 'result-url';
@@ -957,6 +962,55 @@ document.addEventListener('DOMContentLoaded', async function() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  /**
+   * 高亮标题中匹配的文本（支持文本匹配和拼音匹配）
+   * @param {string} title 原始标题
+   * @param {string} query 搜索关键字（已去除命令部分）
+   * @returns {string} 带 <mark> 标签的 HTML
+   */
+  function highlightTitle(title, query) {
+    if (!query || !title) return escapeHtml(title || '');
+
+    const { keywords } = window.SearchParser.parseKeywords(query);
+    if (keywords.length === 0) return escapeHtml(title);
+
+    const ranges = [];
+    for (const kw of keywords) {
+      const idx = title.toLowerCase().indexOf(kw.toLowerCase());
+      if (idx !== -1) {
+        ranges.push([idx, idx + kw.length - 1]);
+      } else if (window.PinyinMatch) {
+        const pinyinResult = window.PinyinMatch.match(title, kw);
+        if (pinyinResult) {
+          ranges.push([pinyinResult[0], pinyinResult[1]]);
+        }
+      }
+    }
+
+    if (ranges.length === 0) return escapeHtml(title);
+
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [ranges[0]];
+    for (let i = 1; i < ranges.length; i++) {
+      const prev = merged[merged.length - 1];
+      if (ranges[i][0] <= prev[1] + 1) {
+        prev[1] = Math.max(prev[1], ranges[i][1]);
+      } else {
+        merged.push(ranges[i]);
+      }
+    }
+
+    let result = '';
+    let cursor = 0;
+    for (const [start, end] of merged) {
+      result += escapeHtml(title.substring(cursor, start));
+      result += '<mark class="highlight">' + escapeHtml(title.substring(start, end + 1)) + '</mark>';
+      cursor = end + 1;
+    }
+    result += escapeHtml(title.substring(cursor));
+    return result;
   }
 
   function getVisibleModes() {
@@ -1501,64 +1555,84 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     chrome.history.search({
       text: query,
-      maxResults: 8,
+      maxResults: 20,
       startTime: Date.now() - (30 * 24 * 60 * 60 * 1000)
     }, (results) => {
-      if (!results || results.length === 0) return;
-      // 搜索词可能已变，检查是否仍然匹配
       if (document.getElementById('searchInput').value.trim() !== query.trim()) return;
 
-      const suggestions = results
+      let suggestions = (results || [])
         .filter(item => item.url && !existingUrls.has(item.url))
         .slice(0, 5);
 
-      if (suggestions.length === 0) return;
-
-      const resultsList = document.getElementById('resultsList');
-
-      // 分隔标题
-      const divider = document.createElement('div');
-      divider.className = 'suggestion-divider';
-      divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
-      resultsList.appendChild(divider);
-
-      suggestions.forEach((item, idx) => {
-        const el = document.createElement('div');
-        el.className = 'result-item suggestion-item';
-        el.dataset.url = item.url;
-
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'result-icon';
-        const icon = document.createElement('img');
-        icon.width = 16; icon.height = 16;
-        try {
-          const host = new URL(item.url).hostname;
-          icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
-        } catch { icon.src = 'icons/icon16.png'; }
-        icon.onerror = () => { icon.src = 'icons/icon16.png'; };
-        iconWrap.appendChild(icon);
-
-        const content = document.createElement('div');
-        content.className = 'result-item-content';
-        const title = document.createElement('div');
-        title.className = 'result-title';
-        title.textContent = item.title || '无标题';
-        const url = document.createElement('div');
-        url.className = 'result-url';
-        url.textContent = item.url;
-        content.appendChild(title);
-        content.appendChild(url);
-
-        el.appendChild(iconWrap);
-        el.appendChild(content);
-
-        el.addEventListener('click', () => {
-          chrome.tabs.create({ url: item.url });
-          window.close();
+      // Chrome API 文本搜索无结果时，用拼音匹配做 fallback
+      if (suggestions.length === 0 && window.PinyinMatch) {
+        chrome.history.search({
+          text: '',
+          maxResults: 200,
+          startTime: Date.now() - (30 * 24 * 60 * 60 * 1000)
+        }, (allRecent) => {
+          if (document.getElementById('searchInput').value.trim() !== query.trim()) return;
+          const pinyinMatched = (allRecent || []).filter(item => {
+            if (!item.url || existingUrls.has(item.url)) return false;
+            if (!item.title) return false;
+            return window.PinyinMatch.match(item.title, query);
+          }).slice(0, 5);
+          if (pinyinMatched.length > 0) {
+            renderHistorySuggestions(pinyinMatched, query);
+          }
         });
+        return;
+      }
 
-        resultsList.appendChild(el);
+      if (suggestions.length === 0) return;
+      renderHistorySuggestions(suggestions, query);
+    });
+  }
+
+  function renderHistorySuggestions(suggestions, query) {
+    const resultsList = document.getElementById('resultsList');
+
+    const divider = document.createElement('div');
+    divider.className = 'suggestion-divider';
+    divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
+    resultsList.appendChild(divider);
+
+    suggestions.forEach((item) => {
+      const el = document.createElement('div');
+      el.className = 'result-item suggestion-item';
+      el.dataset.url = item.url;
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'result-icon';
+      const icon = document.createElement('img');
+      icon.width = 16; icon.height = 16;
+      try {
+        const host = new URL(item.url).hostname;
+        icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
+      } catch { icon.src = 'icons/icon16.png'; }
+      icon.onerror = () => { icon.src = 'icons/icon16.png'; };
+      iconWrap.appendChild(icon);
+
+      const content = document.createElement('div');
+      content.className = 'result-item-content';
+      const title = document.createElement('div');
+      title.className = 'result-title';
+      title.innerHTML = highlightTitle(item.title || '无标题', query);
+      const url = document.createElement('div');
+      url.className = 'result-url';
+      url.textContent = item.url;
+      content.appendChild(title);
+      content.appendChild(url);
+
+      el.appendChild(iconWrap);
+      el.appendChild(content);
+
+      el.addEventListener('click', () => {
+        chrome.tabs.create({ url: item.url });
+        window.close();
       });
+
+      resultsList.appendChild(el);
     });
   }
 

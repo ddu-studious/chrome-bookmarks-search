@@ -1,4 +1,6 @@
 // Background script for handling extension events
+importScripts('js/bookmark-tags.js');
+importScripts('js/bookmark-organizer.js');
 importScripts('js/intelligent-search.js');
 importScripts('js/bookmark-health.js');
 importScripts('ExtPay.js');
@@ -814,7 +816,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const backupTimestamp = await BookmarkOrganizer.backup();
-        const result = await BookmarkOrganizer.executePlan(request.plan, request.targetParentId);
+        const result = await BookmarkOrganizer.executePlan(request.plan, request.targetParentId, request.subfolderPlans);
         sendResponse({ ok: true, backupTimestamp, ...result });
       } catch (e) { sendResponse({ ok: false, error: e.message }); }
     })();

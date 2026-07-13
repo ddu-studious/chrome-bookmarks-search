@@ -13,6 +13,7 @@
  * - -kw1,kw2,kw3        (逗号分隔，一次排除多个关键字)
  * - -"精确排除"          (排除包含该精确词组的结果)
  * - -"词组1,词组2"       (逗号分隔，一次排除多个精确词组)
+ * - 拼音搜索             (自动 fallback：首字母/全拼/混合匹配中文标题)
  */
 
 class SearchParser {
@@ -137,6 +138,8 @@ class SearchParser {
       ].join(' ').toLowerCase();
     }
     
+    const title = item.title || '';
+
     // 排除精确词组：包含任一则排除
     for (const exact of excludeExact) {
       if (searchable.includes(exact.toLowerCase())) {
@@ -144,9 +147,12 @@ class SearchParser {
       }
     }
     
-    // 排除关键字：包含任一则排除
+    // 排除关键字：文本匹配或拼音匹配均排除
     for (const kw of excludeKeywords) {
       if (searchable.includes(kw.toLowerCase())) {
+        return false;
+      }
+      if (window.PinyinMatch?.match(title, kw)) {
         return false;
       }
     }
@@ -158,10 +164,13 @@ class SearchParser {
       }
     }
     
-    // 检查所有关键字（AND 逻辑）
+    // 检查所有关键字（AND 逻辑）：文本匹配优先，失败时 fallback 拼音匹配 title
     for (const kw of keywords) {
       if (!searchable.includes(kw.toLowerCase())) {
-        return false;
+        const pinyinResult = window.PinyinMatch?.match(title, kw);
+        if (!pinyinResult) {
+          return false;
+        }
       }
     }
     

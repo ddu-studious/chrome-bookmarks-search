@@ -24,6 +24,17 @@ class SmartSort {
       if (titleLower === searchLower) score += 1;
       else if (titleLower.startsWith(searchLower)) score += 0.8;
       else if (titleLower.includes(searchLower)) score += 0.6;
+      else if (window.PinyinMatch) {
+        const pinyinResult = window.PinyinMatch.match(item.title, searchText);
+        if (pinyinResult) {
+          const [start, end] = pinyinResult;
+          const matchLen = end - start + 1;
+          const titleLen = item.title.length;
+          if (start === 0 && matchLen === titleLen) score += 0.7;
+          else if (start === 0) score += 0.55;
+          else score += 0.4;
+        }
+      }
     }
     
     // URL匹配权重

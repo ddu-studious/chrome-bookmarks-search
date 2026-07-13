@@ -2383,17 +2383,21 @@ function bindOrganizeEvents() {
   });
 
   document.getElementById('executeOrganizeBtn')?.addEventListener('click', async () => {
-    if (!confirm('确定执行整理？操作前会自动备份，可在下方撤销。')) return;
+    const result = window._currentOrganizeResult;
+    if (!result || !result.plan) return;
+    const reviewedPlan = BookmarkOrganizer.buildReviewedPlan(result);
+    const moveCount = Object.values(reviewedPlan).flat().length;
+    if (moveCount === 0) { showToast('没有选中任何书签'); return; }
+    if (!confirm(`将移动 ${moveCount} 个书签，操作前会自动备份。确定执行？`)) return;
     try {
       showToast('正在执行整理...');
       await BookmarkOrganizer.backup();
-      const result = window._currentOrganizeResult;
-      if (result && result.plan) {
-        await BookmarkOrganizer.executePlan(result.plan, '1', result.subfolderPlans);
-        showToast('整理完成！');
-        document.getElementById('organizePreview').style.display = 'none';
-        window._currentOrganizeResult = null;
-      }
+      const edits = collectUserEdits(result);
+      await BookmarkOrganizer.executePlan(reviewedPlan, '1', result.subfolderPlans);
+      if (edits.length > 0) await BookmarkOrganizer.learnFromUserEdits(edits);
+      showToast(`整理完成！已移动 ${moveCount} 个书签`);
+      document.getElementById('organizePreview').style.display = 'none';
+      window._currentOrganizeResult = null;
     } catch (e) { showToast('执行失败: ' + e.message, 'error'); }
   });
 
@@ -2408,6 +2412,37 @@ function bindOrganizeEvents() {
       await BookmarkOrganizer.undoLastOrganize();
       showToast('撤销成功！');
     } catch (e) { showToast('撤销失败: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('selectAllOrganize')?.addEventListener('click', () => {
+    const result = window._currentOrganizeResult;
+    if (!result) return;
+    for (const bookmarks of Object.values(result.plan)) {
+      for (const bm of bookmarks) bm.checked = true;
+    }
+    renderOrganizePreviewList(result);
+    updateOrganizeSummary(result);
+  });
+
+  document.getElementById('deselectAllOrganize')?.addEventListener('click', () => {
+    const result = window._currentOrganizeResult;
+    if (!result) return;
+    for (const bookmarks of Object.values(result.plan)) {
+      for (const bm of bookmarks) bm.checked = false;
+    }
+    renderOrganizePreviewList(result);
+    updateOrganizeSummary(result);
+  });
+
+  document.querySelectorAll('.organize-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.organize-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      window._organizeFilter = filter;
+      const result = window._currentOrganizeResult;
+      if (result) renderOrganizePreviewList(result);
+    });
   });
 
   document.getElementById('refreshBackupsBtn')?.addEventListener('click', renderBackupList);
@@ -2495,11 +2530,7 @@ async function renderDomainMapList() {
 
 function renderOrganizePreview(result) {
   const previewDiv = document.getElementById('organizePreview');
-  const listDiv = document.getElementById('organizePreviewList');
-  const countBadge = document.getElementById('organizePreviewCount');
-  const ruleBadge = document.getElementById('ruleClassifiedBadge');
-  const aiBadge = document.getElementById('aiClassifiedBadge');
-  if (!previewDiv || !listDiv) return;
+  if (!previewDiv) return;
 
   const plan = result.plan || {};
   const totalToMove = Object.entries(plan).filter(([k]) => k !== '未分类').reduce((sum, [, v]) => sum + v.length, 0);
@@ -2511,40 +2542,176 @@ function renderOrganizePreview(result) {
   }
 
   window._currentOrganizeResult = result;
-  countBadge.textContent = `${totalToMove} 个书签将被移动`;
+  window._organizeFilter = 'all';
 
-  if (result.ruleClassifiedCount > 0 && ruleBadge) {
-    ruleBadge.textContent = `规则: ${result.ruleClassifiedCount}`;
-    ruleBadge.style.display = 'inline';
-  } else if (ruleBadge) ruleBadge.style.display = 'none';
+  const lowCount = result.lowConfidenceCount || 0;
+  const filterLowBtn = document.getElementById('filterLow');
+  if (filterLowBtn) filterLowBtn.style.display = lowCount > 0 ? '' : 'none';
 
-  if (result.aiClassifiedCount > 0 && aiBadge) {
-    aiBadge.textContent = `AI: ${result.aiClassifiedCount}`;
-    aiBadge.style.display = 'inline';
-  } else if (aiBadge) aiBadge.style.display = 'none';
+  const statLowCard = document.getElementById('organizeStatLowCard');
+  if (statLowCard) statLowCard.style.display = lowCount > 0 ? '' : 'none';
+
+  const statAiCard = document.getElementById('organizeStatAiCard');
+  if (statAiCard) statAiCard.style.display = (result.aiClassifiedCount || 0) > 0 ? '' : 'none';
+
+  document.querySelectorAll('.organize-filter-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('filterAll')?.classList.add('active');
+
+  renderOrganizePreviewList(result);
+  updateOrganizeSummary(result);
+  previewDiv.style.display = 'block';
+}
+
+function updateOrganizeSummary(result) {
+  const plan = result.plan || {};
+  let checkedCount = 0;
+  let totalCount = 0;
+  for (const [cat, bookmarks] of Object.entries(plan)) {
+    if (cat === '未分类') continue;
+    for (const bm of bookmarks) {
+      totalCount++;
+      if (bm.checked !== false) checkedCount++;
+    }
+  }
+  const skippedCount = totalCount - checkedCount;
+  const newFolders = new Set();
+  for (const [cat, bookmarks] of Object.entries(plan)) {
+    if (cat === '未分类') continue;
+    if (bookmarks.some(b => b.checked !== false)) newFolders.add(cat);
+  }
+
+  const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  el('organizeStatTotal', result.toOrganizeCount || totalCount);
+  el('organizeStatMove', checkedCount);
+  el('organizeStatLow', result.lowConfidenceCount || 0);
+  el('organizeStatRule', result.ruleClassifiedCount || 0);
+  el('organizeStatAi', result.aiClassifiedCount || 0);
+
+  const summaryEl = document.getElementById('organizeConfirmSummary');
+  if (summaryEl) {
+    summaryEl.innerHTML = `将移动 <strong>${checkedCount}</strong> 个书签到 <strong>${newFolders.size}</strong> 个文件夹` +
+      (skippedCount > 0 ? `，<span class="organize-skipped-hint">${skippedCount} 个已跳过</span>` : '');
+  }
+}
+
+function renderOrganizePreviewList(result) {
+  const listDiv = document.getElementById('organizePreviewList');
+  if (!listDiv) return;
+
+  const plan = result.plan || {};
+  const filter = window._organizeFilter || 'all';
+  const allCategories = result.allCategories || Object.keys(plan).filter(k => k !== '未分类');
 
   let html = '';
   for (const [category, bookmarks] of Object.entries(plan)) {
+    if (category === '未分类') continue;
+
+    const filtered = bookmarks.filter(bm => {
+      if (filter === 'low') return bm.confidence === 'low';
+      if (filter === 'unchecked') return bm.checked === false;
+      return true;
+    });
+
+    if (filtered.length === 0) continue;
+
+    const checkedInGroup = bookmarks.filter(b => b.checked !== false).length;
     html += `<div class="organize-category-group">
       <div class="organize-category-header">
-        <span class="organize-category-name">${category}</span>
-        <span class="organize-category-count">${bookmarks.length} 个</span>
+        <span class="organize-category-name">${escapeHtml(category)}</span>
+        <span class="organize-category-count">${checkedInGroup}/${bookmarks.length} 个</span>
       </div>`;
-    for (const bm of bookmarks) {
+
+    for (const bm of filtered) {
+      const isChecked = bm.checked !== false;
+      const confidenceClass = bm.confidence === 'low' ? 'confidence-low' : bm.confidence === 'medium' ? 'confidence-medium' : '';
+      const reasonLabel = { domain: '域名', path: '路径', title: '标题', ai: 'AI' }[bm.reason] || '';
       const sourceBadge = bm.source === 'ai'
-        ? `<span class="ai-source-badge ${bm.confidence === 'low' ? 'confidence-low' : bm.confidence === 'medium' ? 'confidence-medium' : 'confidence-high'}">AI${bm.confidence ? ' · ' + ({high:'高',medium:'中',low:'低'}[bm.confidence]) : ''}</span>`
-        : '';
-      html += `<div class="organize-preview-item">
-        <span class="preview-title" title="${bm.title || ''}">${bm.title || '(无标题)'}</span>
+        ? `<span class="organize-source-badge organize-badge-ai ${confidenceClass}">AI${bm.confidence ? ' · ' + ({high:'高',medium:'中',low:'低'}[bm.confidence]) : ''}</span>`
+        : (reasonLabel ? `<span class="organize-source-badge organize-badge-rule">${reasonLabel}</span>` : '');
+
+      const categoryOptions = allCategories.map(c =>
+        `<option value="${escapeHtml(c)}"${c === category ? ' selected' : ''}>${escapeHtml(c)}</option>`
+      ).join('');
+
+      let domain = '';
+      try { domain = new URL(bm.url).hostname.replace(/^www\./, ''); } catch {}
+
+      html += `<div class="organize-preview-item${isChecked ? '' : ' organize-item-skipped'}" data-bm-id="${bm.id}" data-category="${escapeHtml(category)}">
+        <label class="organize-item-check">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} data-action="toggle-check" data-bm-id="${bm.id}" data-category="${escapeHtml(category)}">
+        </label>
+        <div class="organize-item-info">
+          <span class="organize-item-title" title="${escapeHtml(bm.title || '')}">${escapeHtml(bm.title || '(无标题)')}</span>
+          <span class="organize-item-domain">${escapeHtml(domain)}</span>
+        </div>
         ${sourceBadge}
-        <span class="preview-arrow">→</span>
-        <span class="preview-folder">${category}</span>
+        <select class="organize-target-select" data-action="change-target" data-bm-id="${bm.id}" data-category="${escapeHtml(category)}">
+          ${categoryOptions}
+        </select>
       </div>`;
     }
     html += '</div>';
   }
+
+  if (!html) {
+    html = '<div class="organize-empty-hint">没有匹配的条目</div>';
+  }
+
   listDiv.innerHTML = html;
-  previewDiv.style.display = 'block';
+
+  listDiv.querySelectorAll('[data-action="toggle-check"]').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const bmId = e.target.dataset.bmId;
+      const cat = e.target.dataset.category;
+      const bm = findBookmarkInPlan(result.plan, cat, bmId);
+      if (bm) bm.checked = e.target.checked;
+      updateOrganizeSummary(result);
+      const row = e.target.closest('.organize-preview-item');
+      if (row) row.classList.toggle('organize-item-skipped', !e.target.checked);
+    });
+  });
+
+  listDiv.querySelectorAll('[data-action="change-target"]').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const bmId = e.target.dataset.bmId;
+      const oldCat = e.target.dataset.category;
+      const newCat = e.target.value;
+      if (newCat === oldCat) return;
+      moveBookmarkBetweenCategories(result.plan, oldCat, newCat, bmId);
+      renderOrganizePreviewList(result);
+      updateOrganizeSummary(result);
+    });
+  });
+}
+
+function findBookmarkInPlan(plan, category, bmId) {
+  const list = plan[category];
+  if (!list) return null;
+  return list.find(b => b.id === bmId) || null;
+}
+
+function moveBookmarkBetweenCategories(plan, oldCat, newCat, bmId) {
+  const list = plan[oldCat];
+  if (!list) return;
+  const idx = list.findIndex(b => b.id === bmId);
+  if (idx === -1) return;
+  const bm = list.splice(idx, 1)[0];
+  bm._userEdited = true;
+  if (list.length === 0) delete plan[oldCat];
+  if (!plan[newCat]) plan[newCat] = [];
+  plan[newCat].push(bm);
+}
+
+function collectUserEdits(result) {
+  const edits = [];
+  for (const [category, bookmarks] of Object.entries(result.plan || {})) {
+    for (const bm of bookmarks) {
+      if (bm._userEdited && bm.checked !== false) {
+        edits.push({ url: bm.url, title: bm.title, newCategory: category });
+      }
+    }
+  }
+  return edits;
 }
 
 async function renderBackupList() {

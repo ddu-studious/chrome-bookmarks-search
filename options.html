@@ -826,22 +826,50 @@
               </button>
             </div>
 
-            <!-- 整理预览区域 -->
+            <!-- 整理预览工作台 -->
             <div id="organizePreview" style="display:none; margin-top:16px;">
-              <div class="organize-preview-header">
-                <h4>整理预览</h4>
-                <div class="organize-preview-badges">
-                  <span class="card-badge" id="organizePreviewCount">0 个书签将被移动</span>
-                  <span class="card-badge badge-rule" id="ruleClassifiedBadge" style="display:none">规则: 0</span>
-                  <span class="card-badge badge-ai" id="aiClassifiedBadge" style="display:none">AI: 0</span>
+              <div class="organize-workbench-summary">
+                <div class="organize-stat-card">
+                  <span class="organize-stat-label">待整理</span>
+                  <span class="organize-stat-value" id="organizeStatTotal">0</span>
+                </div>
+                <div class="organize-stat-card">
+                  <span class="organize-stat-label">将移动</span>
+                  <span class="organize-stat-value organize-stat-primary" id="organizeStatMove">0</span>
+                </div>
+                <div class="organize-stat-card" id="organizeStatLowCard" style="display:none">
+                  <span class="organize-stat-label">低置信度</span>
+                  <span class="organize-stat-value organize-stat-warning" id="organizeStatLow">0</span>
+                </div>
+                <div class="organize-stat-card">
+                  <span class="organize-stat-label">规则分类</span>
+                  <span class="organize-stat-value" id="organizeStatRule">0</span>
+                </div>
+                <div class="organize-stat-card" id="organizeStatAiCard" style="display:none">
+                  <span class="organize-stat-label">AI 分类</span>
+                  <span class="organize-stat-value" id="organizeStatAi">0</span>
                 </div>
               </div>
+
+              <div class="organize-workbench-toolbar">
+                <button class="btn btn-sm organize-filter-btn active" data-filter="all" id="filterAll">全部</button>
+                <button class="btn btn-sm organize-filter-btn" data-filter="low" id="filterLow" style="display:none">低置信度</button>
+                <button class="btn btn-sm organize-filter-btn" data-filter="unchecked" id="filterSkipped">已跳过</button>
+                <span class="organize-toolbar-divider"></span>
+                <button class="btn btn-sm btn-secondary" id="selectAllOrganize">全选</button>
+                <button class="btn btn-sm btn-secondary" id="deselectAllOrganize">全不选</button>
+              </div>
+
               <div id="organizePreviewList" class="organize-preview-list">
                 <!-- 动态生成 -->
               </div>
-              <div style="display:flex; gap:12px; margin-top:12px;">
-                <button class="btn btn-primary" id="executeOrganizeBtn">确认执行</button>
-                <button class="btn btn-secondary" id="cancelOrganizeBtn">取消</button>
+
+              <div class="organize-workbench-footer">
+                <div class="organize-confirm-summary" id="organizeConfirmSummary"></div>
+                <div class="organize-footer-actions">
+                  <button class="btn btn-primary" id="executeOrganizeBtn">确认执行</button>
+                  <button class="btn btn-secondary" id="cancelOrganizeBtn">取消</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1693,6 +1721,8 @@
     </div>
   </div>
 
+  <script src="js/bookmark-tags.js"></script>
+  <script src="js/bookmark-organizer.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/pro.js"></script>
   <script src="js/options.js"></script>

@@ -1039,59 +1039,77 @@
   function appendHistorySuggestions(query, existingResults) {
     const existingUrls = new Set(existingResults.map(r => r.url).filter(Boolean));
 
-    safeSendMessage({ type: 'SUGGEST_HISTORY', query: query, maxResults: 8 }, (response) => {
-      if (!response || !response.suggestions || response.suggestions.length === 0) return;
+    safeSendMessage({ type: 'SUGGEST_HISTORY', query: query, maxResults: 20 }, (response) => {
       if (searchInput.value.trim() !== query.trim()) return;
 
-      const suggestions = response.suggestions
+      let suggestions = (response?.suggestions || [])
         .filter(item => item.url && !existingUrls.has(item.url))
         .slice(0, 5);
-      if (suggestions.length === 0) return;
 
-      const resultsList = document.getElementById('resultsList');
-
-      const divider = document.createElement('div');
-      divider.className = 'suggestion-divider';
-      divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
-      resultsList.appendChild(divider);
-
-      suggestions.forEach((item) => {
-        const el = document.createElement('div');
-        el.className = 'result-item suggestion-item';
-        el.dataset.url = item.url;
-
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'result-icon';
-        const icon = document.createElement('img');
-        icon.width = 16; icon.height = 16;
-        try {
-          const host = new URL(item.url).hostname;
-          icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.url)}&size=16`;
-          icon.onerror = () => { icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`; };
-        } catch { icon.src = 'icons/icon16.png'; }
-        iconWrap.appendChild(icon);
-
-        const content = document.createElement('div');
-        content.className = 'result-item-content';
-        const title = document.createElement('div');
-        title.className = 'result-title';
-        title.textContent = item.title || '无标题';
-        const url = document.createElement('div');
-        url.className = 'result-url';
-        url.textContent = item.url;
-        content.appendChild(title);
-        content.appendChild(url);
-
-        el.appendChild(iconWrap);
-        el.appendChild(content);
-
-        el.addEventListener('click', () => {
-          safeSendMessage({ type: 'OPEN_RESULT', mode: 'history', item: { url: item.url } });
-          window.close();
+      if (suggestions.length === 0 && window.PinyinMatch) {
+        safeSendMessage({ type: 'SUGGEST_HISTORY', query: '', maxResults: 200 }, (fallbackResp) => {
+          if (searchInput.value.trim() !== query.trim()) return;
+          const pinyinMatched = (fallbackResp?.suggestions || []).filter(item => {
+            if (!item.url || existingUrls.has(item.url)) return false;
+            if (!item.title) return false;
+            return window.PinyinMatch.match(item.title, query);
+          }).slice(0, 5);
+          if (pinyinMatched.length > 0) {
+            renderHistorySuggestions(pinyinMatched, query);
+          }
         });
+        return;
+      }
 
-        resultsList.appendChild(el);
+      if (suggestions.length === 0) return;
+      renderHistorySuggestions(suggestions, query);
+    });
+  }
+
+  function renderHistorySuggestions(suggestions, query) {
+    const resultsList = document.getElementById('resultsList');
+
+    const divider = document.createElement('div');
+    divider.className = 'suggestion-divider';
+    divider.innerHTML = '<span class="suggestion-divider-text">最近访问</span>';
+    resultsList.appendChild(divider);
+
+    suggestions.forEach((item) => {
+      const el = document.createElement('div');
+      el.className = 'result-item suggestion-item';
+      el.dataset.url = item.url;
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'result-icon';
+      const icon = document.createElement('img');
+      icon.width = 16; icon.height = 16;
+      try {
+        const host = new URL(item.url).hostname;
+        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.url)}&size=16`;
+        icon.onerror = () => { icon.src = `https://www.google.com/s2/favicons?domain=${host}&sz=32`; };
+      } catch { icon.src = 'icons/icon16.png'; }
+      iconWrap.appendChild(icon);
+
+      const content = document.createElement('div');
+      content.className = 'result-item-content';
+      const title = document.createElement('div');
+      title.className = 'result-title';
+      title.innerHTML = highlightTitle(item.title || '无标题', query);
+      const url = document.createElement('div');
+      url.className = 'result-url';
+      url.textContent = item.url;
+      content.appendChild(title);
+      content.appendChild(url);
+
+      el.appendChild(iconWrap);
+      el.appendChild(content);
+
+      el.addEventListener('click', () => {
+        safeSendMessage({ type: 'OPEN_RESULT', mode: 'history', item: { url: item.url } });
+        window.close();
       });
+
+      resultsList.appendChild(el);
     });
   }
 
@@ -1322,6 +1340,8 @@
       const isActive = index === selectedIndex ? 'active' : '';
       const faviconUrl = getFaviconUrl(item);
       const meta = getMetaInfo(item);
+      const rawTitle = item.title || item.filename?.split('/').pop() || '无标题';
+      const titleHtml = trimmedQuery ? highlightTitle(rawTitle, trimmedQuery) : escapeHtml(rawTitle);
 
       return `
         <div class="result-item ${isActive}" data-index="${index}">
@@ -1329,7 +1349,7 @@
             <img src="${faviconUrl}" data-fallback="true">
           </div>
           <div class="result-content">
-            <div class="result-title">${escapeHtml(item.title || item.filename?.split('/').pop() || '无标题')}</div>
+            <div class="result-title">${titleHtml}</div>
             <div class="result-url">${escapeHtml(item.url || '')}</div>
           </div>
           <div class="result-meta">${meta}</div>
@@ -1869,6 +1889,49 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function highlightTitle(title, query) {
+    if (!query || !title) return escapeHtml(title || '');
+
+    const { keywords } = window.SearchParser.parseKeywords(query);
+    if (keywords.length === 0) return escapeHtml(title);
+
+    const ranges = [];
+    for (const kw of keywords) {
+      const idx = title.toLowerCase().indexOf(kw.toLowerCase());
+      if (idx !== -1) {
+        ranges.push([idx, idx + kw.length - 1]);
+      } else if (window.PinyinMatch) {
+        const pinyinResult = window.PinyinMatch.match(title, kw);
+        if (pinyinResult) {
+          ranges.push([pinyinResult[0], pinyinResult[1]]);
+        }
+      }
+    }
+
+    if (ranges.length === 0) return escapeHtml(title);
+
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [ranges[0]];
+    for (let i = 1; i < ranges.length; i++) {
+      const prev = merged[merged.length - 1];
+      if (ranges[i][0] <= prev[1] + 1) {
+        prev[1] = Math.max(prev[1], ranges[i][1]);
+      } else {
+        merged.push(ranges[i]);
+      }
+    }
+
+    let result = '';
+    let cursor = 0;
+    for (const [start, end] of merged) {
+      result += escapeHtml(title.substring(cursor, start));
+      result += '<mark class="highlight">' + escapeHtml(title.substring(start, end + 1)) + '</mark>';
+      cursor = end + 1;
+    }
+    result += escapeHtml(title.substring(cursor));
+    return result;
   }
 
   function copyToClipboard(text) {

@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>书签整理工作台 V2 — 交互 Demo</title>
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --surface: #282840;
+    --surface-hover: #32324e;
+    --border: #3b3b5c;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --primary: #7c6af6;
+    --primary-hover: #8f80f8;
+    --primary-bg: rgba(124,106,246,0.08);
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, var(--primary), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .demo-tabs {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .demo-tab {
+    padding: 8px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .demo-tab:hover { background: var(--surface-hover); color: var(--text); }
+  .demo-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  .demo-section { display: none; max-width: 780px; margin: 0 auto; }
+  .demo-section.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+  .btn-outline:hover { background: var(--surface-hover); color: var(--text); }
+  .btn-success { background: var(--success); color: #1e1e2e; }
+  .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: rgba(248,113,113,0.1); }
+
+  /* Summary stats */
+  .wb-summary {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .wb-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    min-width: 80px;
+  }
+  .wb-stat-label { font-size: 11px; color: var(--text-dim); margin-bottom: 3px; }
+  .wb-stat-value { font-size: 22px; font-weight: 700; }
+  .wb-stat-value.primary { color: var(--primary); }
+  .wb-stat-value.warn { color: var(--warning); }
+
+  /* Toolbar */
+  .wb-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .wb-filter {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .wb-filter.active { border-color: var(--primary); color: var(--primary); background: var(--primary-bg); }
+  .wb-filter:hover { color: var(--text); }
+  .wb-divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+  /* Plan list */
+  .wb-plan {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 420px;
+    overflow-y: auto;
+  }
+  .wb-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(124,106,246,0.06);
+    font-size: 13px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .wb-group-name { color: var(--primary); }
+  .wb-group-count { color: var(--text-dim); font-size: 12px; font-weight: 400; }
+
+  .wb-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(59,59,92,0.5);
+    font-size: 13px;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .wb-row:last-child { border-bottom: none; }
+  .wb-row.skipped { opacity: 0.4; background: rgba(0,0,0,0.15); }
+  .wb-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; accent-color: var(--primary); }
+  .wb-row-info { flex: 1; min-width: 0; }
+  .wb-row-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wb-row-domain { font-size: 11px; color: var(--text-dim); }
+
+  .wb-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+  }
+  .wb-badge-rule { background: rgba(74,222,128,0.12); color: #4ade80; }
+  .wb-badge-ai { background: rgba(100,210,255,0.15); color: #64d2ff; }
+  .wb-badge-ai-low { background: rgba(248,113,113,0.12); color: #f87171; }
+  .wb-badge-ai-med { background: rgba(251,191,36,0.12); color: #fbbf24; }
+
+  .wb-target {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+    max-width: 140px;
+    cursor: pointer;
+  }
+
+  /* Footer */
+  .wb-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .wb-footer-summary { font-size: 13px; color: var(--text-dim); }
+  .wb-footer-summary strong { color: var(--primary); }
+  .wb-footer-actions { display: flex; gap: 10px; }
+
+  /* Execution result */
+  .wb-result {
+    padding: 16px;
+    background: rgba(74,222,128,0.06);
+    border: 1px solid rgba(74,222,128,0.18);
+    border-radius: var(--radius);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .wb-result strong { color: var(--success); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    z-index: 100;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .toast.show { transform: translateX(0); }
+  .toast.success { background: var(--success); color: #1e1e2e; }
+  .toast.info { background: var(--primary); color: #fff; }
+
+  .note {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    background: rgba(251,191,36,0.05);
+    border-left: 3px solid var(--warning);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-top: 10px;
+  }
+
+  .wb-empty { text-align: center; padding: 32px; color: var(--text-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+  <h1>书签整理工作台 V2</h1>
+  <p class="subtitle">可编辑整理方案 &mdash; 支持逐条审阅、改目标、跳过、低置信度筛选</p>
+
+  <div class="demo-tabs">
+    <div class="demo-tab active" data-tab="workbench">整理工作台</div>
+    <div class="demo-tab" data-tab="confirm">确认执行</div>
+    <div class="demo-tab" data-tab="done">执行完成</div>
+  </div>
+
+  <!-- State 1: 可编辑工作台 -->
+  <div id="workbench" class="demo-section active">
+    <div class="wb-summary" id="summaryBar">
+      <div class="wb-stat"><span class="wb-stat-label">待整理</span><span class="wb-stat-value" id="statTotal">144</span></div>
+      <div class="wb-stat"><span class="wb-stat-label">将移动</span><span class="wb-stat-value primary" id="statMove">126</span></div>
+      <div class="wb-stat"><span class="wb-stat-label">低置信度</span><span class="wb-stat-value warn" id="statLow">18</span></div>
+      <div class="wb-stat"><span class="wb-stat-label">规则分类</span><span class="wb-stat-value">108</span></div>
+      <div class="wb-stat"><span class="wb-stat-label">AI 分类</span><span class="wb-stat-value">36</span></div>
+    </div>
+
+    <div class="wb-toolbar">
+      <button class="wb-filter active" data-filter="all" onclick="setFilter(this)">全部</button>
+      <button class="wb-filter" data-filter="low" onclick="setFilter(this)">低置信度</button>
+      <button class="wb-filter" data-filter="skipped" onclick="setFilter(this)">已跳过</button>
+      <span class="wb-divider"></span>
+      <button class="btn btn-sm btn-outline" onclick="toggleAll(true)">全选</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleAll(false)">全不选</button>
+    </div>
+
+    <div class="wb-plan" id="planList"></div>
+
+    <div class="wb-footer">
+      <div class="wb-footer-summary" id="footerSummary"></div>
+      <div class="wb-footer-actions">
+        <button class="btn btn-primary" onclick="switchTab('confirm')">下一步：确认执行</button>
+        <button class="btn btn-outline" onclick="showToast('已取消','info')">取消</button>
+      </div>
+    </div>
+
+    <div class="note">低置信度 AI 建议默认未勾选，需手动确认才会移动。用户改过目标的书签，其域名规则会在执行后自动学习。</div>
+  </div>
+
+  <!-- State 2: 确认执行 -->
+  <div id="confirm" class="demo-section">
+    <div class="card">
+      <div class="card-title"><span class="step-badge">2</span> 确认执行</div>
+      <div class="wb-result" id="confirmDetail"></div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn btn-success" onclick="doExecute()">确认执行整理</button>
+        <button class="btn btn-outline" onclick="switchTab('workbench')">返回修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- State 3: 执行完成 -->
+  <div id="done" class="demo-section">
+    <div class="card">
+      <div class="card-title"><span class="step-badge">3</span> 整理完成</div>
+      <div class="wb-result" id="doneDetail"></div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn btn-danger" onclick="showToast('已撤销整理，书签已恢复原位','success')">撤销整理</button>
+        <button class="btn btn-outline" onclick="switchTab('workbench');resetDemo()">重新整理</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+const CATEGORIES = ['开发工具','开发文档','视频娱乐','知识社区','技术社区','在线教育','设计工具','AI 与机器学习'];
+const MOCK_DATA = [
+  { cat: '开发工具', items: [
+    { id:'1', title:'GitHub: Where the world builds software', domain:'github.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'2', title:'npm | build amazing things', domain:'npmjs.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'3', title:'Visual Studio Code', domain:'code.visualstudio.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'4', title:'Vercel: Develop. Preview. Ship.', domain:'vercel.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'5', title:'Replit - Build software collaboratively', domain:'replit.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: '开发文档', items: [
+    { id:'6', title:'MDN Web Docs', domain:'developer.mozilla.org', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'7', title:'React Documentation', domain:'react.dev', source:'ai', reason:'ai', confidence:'low', checked:false },
+    { id:'8', title:'Vue.js Guide', domain:'vuejs.org', source:'ai', reason:'ai', confidence:'medium', checked:true },
+    { id:'9', title:'Python Official Docs', domain:'docs.python.org', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: '视频娱乐', items: [
+    { id:'10', title:'哔哩哔哩 - 干杯', domain:'bilibili.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'11', title:'YouTube', domain:'youtube.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: '知识社区', items: [
+    { id:'12', title:'知乎 - 有问题，就会有答案', domain:'zhihu.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'13', title:'Reddit', domain:'reddit.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: 'AI 与机器学习', items: [
+    { id:'14', title:'ChatGPT', domain:'chatgpt.com', source:'ai', reason:'ai', confidence:'high', checked:true },
+    { id:'15', title:'Hugging Face - AI community', domain:'huggingface.co', source:'ai', reason:'ai', confidence:'medium', checked:true },
+    { id:'16', title:'Kaggle: Machine Learning', domain:'kaggle.com', source:'ai', reason:'ai', confidence:'low', checked:false },
+    { id:'17', title:'Papers With Code', domain:'paperswithcode.com', source:'ai', reason:'ai', confidence:'low', checked:false },
+  ]},
+  { cat: '技术社区', items: [
+    { id:'18', title:'稀土掘金', domain:'juejin.cn', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'19', title:'Medium', domain:'medium.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'20', title:'Dev.to', domain:'dev.to', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: '在线教育', items: [
+    { id:'21', title:'Coursera', domain:'coursera.org', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'22', title:'Udemy Online Courses', domain:'udemy.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+  { cat: '设计工具', items: [
+    { id:'23', title:'Figma', domain:'figma.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+    { id:'24', title:'Dribbble - Discover the world\'s top designers', domain:'dribbble.com', source:'rule', reason:'domain', confidence:'high', checked:true },
+  ]},
+];
+
+let currentFilter = 'all';
+
+function getAllItems() { return MOCK_DATA.flatMap(g => g.items); }
+
+function render() {
+  const list = document.getElementById('planList');
+  const all = getAllItems();
+  const checkedCount = all.filter(i => i.checked).length;
+  const lowCount = all.filter(i => i.confidence === 'low').length;
+
+  document.getElementById('statMove').textContent = checkedCount;
+  document.getElementById('statLow').textContent = lowCount;
+
+  let html = '';
+  for (const group of MOCK_DATA) {
+    const filtered = group.items.filter(i => {
+      if (currentFilter === 'low') return i.confidence === 'low';
+      if (currentFilter === 'skipped') return !i.checked;
+      return true;
+    });
+    if (filtered.length === 0) continue;
+
+    const gc = group.items.filter(i => i.checked).length;
+    html += `<div class="wb-group-header"><span class="wb-group-name">${esc(group.cat)}</span><span class="wb-group-count">${gc}/${group.items.length} 个</span></div>`;
+
+    for (const item of filtered) {
+      const badgeCls = item.source === 'rule' ? 'wb-badge-rule' :
+        item.confidence === 'low' ? 'wb-badge-ai-low' :
+        item.confidence === 'medium' ? 'wb-badge-ai-med' : 'wb-badge-ai';
+      const reasonLabel = { domain:'域名', path:'路径', title:'标题', ai:'AI' }[item.reason] || '';
+      const confLabel = item.source === 'ai' ? ` \u00b7 ${{high:'高',medium:'中',low:'低'}[item.confidence]}` : '';
+
+      const opts = CATEGORIES.map(c =>
+        `<option value="${esc(c)}"${c === group.cat ? ' selected':''}>${esc(c)}</option>`
+      ).join('');
+
+      html += `<div class="wb-row${item.checked ? '' : ' skipped'}" data-id="${item.id}">
+        <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleItem('${item.id}',this.checked)">
+        <div class="wb-row-info">
+          <div class="wb-row-title">${esc(item.title)}</div>
+          <div class="wb-row-domain">${esc(item.domain)}</div>
+        </div>
+        <span class="wb-badge ${badgeCls}">${reasonLabel}${confLabel}</span>
+        <select class="wb-target" onchange="changeTarget('${item.id}','${esc(group.cat)}',this.value)">${opts}</select>
+      </div>`;
+    }
+  }
+
+  if (!html) html = '<div class="wb-empty">没有匹配的条目</div>';
+  list.innerHTML = html;
+
+  const skippedCount = all.length - checkedCount;
+  const folders = new Set();
+  MOCK_DATA.forEach(g => { if (g.items.some(i => i.checked)) folders.add(g.cat); });
+  document.getElementById('footerSummary').innerHTML =
+    `将移动 <strong>${checkedCount}</strong> 个书签到 <strong>${folders.size}</strong> 个文件夹` +
+    (skippedCount > 0 ? `，<span style="color:var(--text-dim)">${skippedCount} 个已跳过</span>` : '');
+}
+
+function toggleItem(id, checked) {
+  const item = getAllItems().find(i => i.id === id);
+  if (item) item.checked = checked;
+  render();
+}
+
+function toggleAll(val) {
+  getAllItems().forEach(i => i.checked = val);
+  render();
+}
+
+function setFilter(btn) {
+  document.querySelectorAll('.wb-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.filter;
+  render();
+}
+
+function changeTarget(id, oldCat, newCat) {
+  if (oldCat === newCat) return;
+  const oldGroup = MOCK_DATA.find(g => g.cat === oldCat);
+  if (!oldGroup) return;
+  const idx = oldGroup.items.findIndex(i => i.id === id);
+  if (idx === -1) return;
+  const item = oldGroup.items.splice(idx, 1)[0];
+  item._userEdited = true;
+  let newGroup = MOCK_DATA.find(g => g.cat === newCat);
+  if (!newGroup) {
+    newGroup = { cat: newCat, items: [] };
+    MOCK_DATA.push(newGroup);
+  }
+  newGroup.items.push(item);
+  render();
+  showToast(`已移到「${newCat}」`, 'info');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.demo-section').forEach(s => s.classList.remove('active'));
+  document.querySelector(`.demo-tab[data-tab="${name}"]`).classList.add('active');
+  document.getElementById(name).classList.add('active');
+
+  if (name === 'confirm') buildConfirm();
+}
+
+function buildConfirm() {
+  const all = getAllItems();
+  const checked = all.filter(i => i.checked);
+  const folders = new Set();
+  MOCK_DATA.forEach(g => { if (g.items.some(i => i.checked)) folders.add(g.cat); });
+  const skipped = all.length - checked.length;
+  const edited = all.filter(i => i._userEdited).length;
+
+  let html = `<div>将移动 <strong>${checked.length}</strong> 个书签到 <strong>${folders.size}</strong> 个文件夹</div>`;
+  if (skipped > 0) html += `<div>跳过 <strong>${skipped}</strong> 个书签</div>`;
+  if (edited > 0) html += `<div>用户调整了 <strong>${edited}</strong> 个书签的目标文件夹（域名规则将自动学习）</div>`;
+  html += `<div style="margin-top:8px;color:var(--text-dim)">操作前会自动备份，可一键撤销</div>`;
+  document.getElementById('confirmDetail').innerHTML = html;
+}
+
+function doExecute() {
+  const all = getAllItems();
+  const checked = all.filter(i => i.checked);
+  const folders = new Set();
+  MOCK_DATA.forEach(g => { if (g.items.some(i => i.checked)) folders.add(g.cat); });
+
+  document.getElementById('doneDetail').innerHTML =
+    `<div>已移动 <strong>${checked.length}</strong> 个书签</div>` +
+    `<div>创建/使用了 <strong>${folders.size}</strong> 个文件夹</div>` +
+    `<div>已自动备份</div>`;
+  switchTab('done');
+  showToast(`整理完成！已移动 ${checked.length} 个书签`, 'success');
+}
+
+function resetDemo() {
+  location.reload();
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+document.querySelectorAll('.demo-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+render();
+</script>
+</body>
+</html>

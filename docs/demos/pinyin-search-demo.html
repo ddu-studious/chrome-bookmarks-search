@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>拼音搜索方案对比 Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f5f7fa;
+      color: #1f2937;
+      line-height: 1.6;
+      padding: 24px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #6b7280; margin-bottom: 32px; }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; } }
+
+    .demo-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e5e7eb;
+    }
+    .demo-card h2 {
+      font-size: 18px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .demo-card .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+
+    .demo-card .desc { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+    .demo-card .stats { font-size: 12px; color: #9ca3af; margin-bottom: 12px; }
+    .demo-card .stats span { margin-right: 12px; }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+    }
+    .results {
+      margin-top: 12px;
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #f3f4f6;
+      border-radius: 8px;
+    }
+    .result-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background: #f9fafb; }
+    .result-title { font-weight: 500; }
+    .result-url { color: #9ca3af; font-size: 12px; margin-top: 2px; }
+    .highlight { background: #fef08a; border-radius: 2px; padding: 0 1px; }
+    .no-results { padding: 20px; text-align: center; color: #9ca3af; font-size: 13px; }
+    .match-info { font-size: 11px; color: #667eea; margin-left: auto; white-space: nowrap; }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .comparison-table th, .comparison-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+    }
+    .comparison-table th {
+      background: #f9fafb;
+      font-weight: 600;
+      font-size: 12px;
+      color: #6b7280;
+      text-transform: uppercase;
+    }
+    .comparison-table tr:last-child td { border-bottom: none; }
+
+    .section-title {
+      font-size: 20px;
+      margin: 40px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .test-cases {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-top: 16px;
+    }
+    .test-case {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+    }
+    .test-case:last-child { border-bottom: none; }
+    .test-input { font-family: 'SF Mono', Monaco, monospace; background: #f3f4f6; padding: 2px 8px; border-radius: 4px; margin-right: 12px; min-width: 120px; }
+    .test-expect { color: #059669; }
+    .test-arrow { color: #9ca3af; margin: 0 8px; }
+
+    .recommendation {
+      background: linear-gradient(135deg, #667eea11, #764ba211);
+      border: 1.5px solid #667eea33;
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 32px;
+    }
+    .recommendation h3 { color: #667eea; margin-bottom: 8px; }
+    .recommendation ul { padding-left: 20px; }
+    .recommendation li { margin-bottom: 6px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>拼音搜索方案对比 Demo</h1>
+    <p class="subtitle">为 Chrome Bookmarks Search 扩展设计的中文拼音模糊搜索能力</p>
+
+    <!-- 方案对比表 -->
+    <h2 class="section-title">方案对比</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>方案A: pinyin-match</th>
+          <th>方案B: pinyin-pro</th>
+          <th>方案C: 自建轻量字典</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>体积</strong></td>
+          <td>~27KB (gzip ~19KB)</td>
+          <td>~315KB (gzip ~90KB)</td>
+          <td>~25KB (首字母) / ~28KB (全拼)</td>
+        </tr>
+        <tr>
+          <td><strong>功能范围</strong></td>
+          <td>拼音匹配 + 位置返回</td>
+          <td>拼音转换 + 匹配 + 声调 + 分词</td>
+          <td>按需：首字母/全拼/模糊</td>
+        </tr>
+        <tr>
+          <td><strong>多音字</strong></td>
+          <td>支持</td>
+          <td>支持（准确率 99.8%）</td>
+          <td>基础支持（常见多音字）</td>
+        </tr>
+        <tr>
+          <td><strong>匹配方式</strong></td>
+          <td>首字母 + 全拼 + 混合</td>
+          <td>首字母 + 全拼 + 混合</td>
+          <td>首字母 + 全拼</td>
+        </tr>
+        <tr>
+          <td><strong>高亮位置</strong></td>
+          <td>返回 [start, end] 索引</td>
+          <td>返回匹配索引数组</td>
+          <td>需自行计算</td>
+        </tr>
+        <tr>
+          <td><strong>依赖</strong></td>
+          <td>0 依赖</td>
+          <td>0 依赖</td>
+          <td>无</td>
+        </tr>
+        <tr>
+          <td><strong>维护状态</strong></td>
+          <td>活跃（2025.12 更新）</td>
+          <td>非常活跃（2026.04 更新，47万周下载）</td>
+          <td>自维护</td>
+        </tr>
+        <tr>
+          <td><strong>适合场景</strong></td>
+          <td>纯搜索匹配，体积敏感</td>
+          <td>需要完整拼音能力</td>
+          <td>极致体积控制</td>
+        </tr>
+        <tr>
+          <td><strong>浏览器使用</strong></td>
+          <td>dist/main.js 直接引入</td>
+          <td>script 标签引入 CDN/本地</td>
+          <td>script 标签引入</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 交互演示 -->
+    <h2 class="section-title">交互演示</h2>
+    <p style="color:#6b7280;font-size:13px;margin-bottom:16px;">下面是基于<strong>方案A (pinyin-match)</strong> 的模拟效果演示，展示各种搜索场景：</p>
+
+    <div class="demo-grid">
+      <!-- Demo 1: 首字母搜索 -->
+      <div class="demo-card">
+        <h2>首字母搜索 <span class="badge badge-green">核心</span></h2>
+        <p class="desc">输入拼音首字母即可匹配中文书签名</p>
+        <div class="stats"><span>字典: 6763 常用汉字</span><span>匹配: O(n)</span></div>
+        <input type="text" class="search-input" id="demo1-input" placeholder="试试输入: pzzx, iqy, wy...">
+        <div class="results" id="demo1-results"></div>
+      </div>
+
+      <!-- Demo 2: 全拼搜索 -->
+      <div class="demo-card">
+        <h2>全拼搜索 <span class="badge badge-blue">增强</span></h2>
+        <p class="desc">输入完整拼音或部分拼音匹配</p>
+        <div class="stats"><span>支持混合拼音</span><span>如 "peizhi" 匹配 "配置中心"</span></div>
+        <input type="text" class="search-input" id="demo2-input" placeholder="试试输入: peizhi, huiyuan, youku...">
+        <div class="results" id="demo2-results"></div>
+      </div>
+
+      <!-- Demo 3: 混合搜索 -->
+      <div class="demo-card">
+        <h2>混合搜索 <span class="badge badge-yellow">推荐</span></h2>
+        <p class="desc">中英混合 + 拼音 + 原文，一个输入框搞定</p>
+        <div class="stats"><span>自动识别输入类型</span><span>兼容现有搜索逻辑</span></div>
+        <input type="text" class="search-input" id="demo3-input" placeholder="试试: pzzx, 配置, config, bilibil...">
+        <div class="results" id="demo3-results"></div>
+      </div>
+
+      <!-- Demo 4: 模糊容错 -->
+      <div class="demo-card">
+        <h2>模糊容错 <span class="badge badge-red">可选</span></h2>
+        <p class="desc">允许少量拼错，如 "peizi" 仍匹配 "配置"</p>
+        <div class="stats"><span>编辑距离 ≤ 1</span><span>性能开销较大</span></div>
+        <input type="text" class="search-input" id="demo4-input" placeholder="试试故意打错: peizi, huiyan, bilbil...">
+        <div class="results" id="demo4-results"></div>
+      </div>
+    </div>
+
+    <!-- 测试用例 -->
+    <h2 class="section-title">典型搜索场景</h2>
+    <div class="test-cases">
+      <div class="test-case">
+        <span class="test-input">pzzx</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">配置中心 | 会员日历</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">iqy</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">爱奇艺</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">peizhi</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">配置中心 | 会员日历</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">bilibili</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">哔哩哔哩（中英文均可匹配）</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">wy</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">网易云音乐 | 网易邮箱 | ...</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">zhifubao</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">支付宝</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">tb</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">淘宝</span>
+      </div>
+      <div class="test-case">
+        <span class="test-input">dyzx</span>
+        <span class="test-arrow">→</span>
+        <span class="test-expect">电影资讯 | 抖音直播</span>
+      </div>
+    </div>
+
+    <!-- 推荐方案 -->
+    <div class="recommendation">
+      <h3>推荐方案：方案A (pinyin-match)</h3>
+      <ul>
+        <li><strong>体积最优</strong>：仅 27KB，gzip 后 19KB，不影响扩展加载速度</li>
+        <li><strong>功能匹配</strong>：支持首字母、全拼、混合拼音搜索，正好满足书签搜索需求</li>
+        <li><strong>位置信息</strong>：返回匹配位置 [start, end]，可直接用于搜索结果高亮</li>
+        <li><strong>零依赖</strong>：纯 JS 实现，一个文件引入即可</li>
+        <li><strong>多音字</strong>：内置多音字支持，如 "长" (cháng/zhǎng)</li>
+        <li><strong>集成简单</strong>：只需在 SearchParser.matchAllKeywords 中增加拼音匹配分支</li>
+      </ul>
+    </div>
+
+    <!-- 实现计划 -->
+    <h2 class="section-title">实现方案预览</h2>
+    <div class="demo-card" style="margin-top:16px;">
+      <h2>集成方式</h2>
+      <pre style="background:#f9fafb;padding:16px;border-radius:8px;font-size:12px;overflow-x:auto;margin-top:12px;line-height:1.8;"><code>// search-parser.js 中的改动示意
+
+static matchAllKeywords(item, exactMatches, keywords, inField, excludeExact, excludeKeywords) {
+  let searchable = ...; // 现有逻辑不变
+
+  // 现有：纯文本匹配
+  for (const kw of keywords) {
+    if (!searchable.includes(kw.toLowerCase())) {
+      // 新增：如果文本不匹配，尝试拼音匹配
+      const title = item.title || '';
+      const pinyinResult = PinyinMatch.match(title, kw);
+      if (!pinyinResult) {
+        return false; // 文本和拼音都不匹配
+      }
+    }
+  }
+  return true;
+}
+
+// HTML 中引入
+&lt;script src="js/lib/pinyin-match.js"&gt;&lt;/script&gt;
+&lt;script src="js/search-parser.js"&gt;&lt;/script&gt;</code></pre>
+    </div>
+  </div>
+
+  <script>
+    // 模拟书签数据
+    const MOCK_BOOKMARKS = [
+      { title: '配置中心 | 会员日历', url: 'https://www.iqiyi.com/config' },
+      { title: '爱奇艺 - 在线视频', url: 'https://www.iqiyi.com' },
+      { title: '哔哩哔哩 (゜-゜)つロ 干杯~', url: 'https://www.bilibili.com' },
+      { title: '淘宝网 - 淘我喜欢', url: 'https://www.taobao.com' },
+      { title: '网易云音乐', url: 'https://music.163.com' },
+      { title: '网易邮箱', url: 'https://mail.163.com' },
+      { title: '支付宝', url: 'https://www.alipay.com' },
+      { title: '知乎 - 有问题就有答案', url: 'https://www.zhihu.com' },
+      { title: '掘金 - 代码不止，掘金不停', url: 'https://juejin.cn' },
+      { title: '腾讯文档', url: 'https://docs.qq.com' },
+      { title: '飞书文档', url: 'https://www.feishu.cn' },
+      { title: '电影资讯 - 豆瓣', url: 'https://movie.douban.com' },
+      { title: '抖音直播', url: 'https://live.douyin.com' },
+      { title: '微信读书', url: 'https://weread.qq.com' },
+      { title: '优酷视频', url: 'https://www.youku.com' },
+      { title: 'GitHub - 开源代码', url: 'https://github.com' },
+      { title: 'Google 翻译', url: 'https://translate.google.com' },
+      { title: '百度翻译', url: 'https://fanyi.baidu.com' },
+      { title: '小红书', url: 'https://www.xiaohongshu.com' },
+      { title: '京东商城', url: 'https://www.jd.com' },
+    ];
+
+    // 简化的拼音字典（演示用，仅覆盖 demo 中用到的汉字）
+    const PINYIN_DICT = {
+      '配': ['pei'], '置': ['zhi'], '中': ['zhong'], '心': ['xin'],
+      '会': ['hui'], '员': ['yuan'], '日': ['ri'], '历': ['li'],
+      '爱': ['ai'], '奇': ['qi'], '艺': ['yi'],
+      '哔': ['bi'], '哩': ['li'],
+      '淘': ['tao'], '宝': ['bao'], '网': ['wang'],
+      '易': ['yi'], '云': ['yun'], '音': ['yin'], '乐': ['le','yue'],
+      '邮': ['you'], '箱': ['xiang'],
+      '支': ['zhi'], '付': ['fu'],
+      '知': ['zhi'], '乎': ['hu'],
+      '掘': ['jue'], '金': ['jin'],
+      '腾': ['teng'], '讯': ['xun'], '文': ['wen'], '档': ['dang'],
+      '飞': ['fei'], '书': ['shu'],
+      '电': ['dian'], '影': ['ying'], '资': ['zi'],
+      '抖': ['dou'], '直': ['zhi'], '播': ['bo'],
+      '微': ['wei'], '信': ['xin'], '读': ['du'],
+      '优': ['you'], '酷': ['ku'], '视': ['shi'], '频': ['pin'],
+      '百': ['bai'], '度': ['du'], '翻': ['fan'], '译': ['yi'],
+      '小': ['xiao'], '红': ['hong'],
+      '京': ['jing'], '东': ['dong'], '商': ['shang'], '城': ['cheng'],
+      '在': ['zai'], '线': ['xian'],
+      '我': ['wo'], '喜': ['xi'], '欢': ['huan'],
+      '有': ['you'], '问': ['wen'], '题': ['ti'], '就': ['jiu'], '答': ['da'], '案': ['an'],
+      '代': ['dai'], '码': ['ma'], '不': ['bu'], '止': ['zhi'], '停': ['ting'],
+      '开': ['kai'], '源': ['yuan'],
+    };
+
+    function getFirstLetters(str) {
+      let result = '';
+      for (const ch of str) {
+        const pinyins = PINYIN_DICT[ch];
+        if (pinyins) {
+          result += pinyins[0][0];
+        } else if (/[a-zA-Z0-9]/.test(ch)) {
+          result += ch.toLowerCase();
+        }
+      }
+      return result;
+    }
+
+    function getFullPinyin(str) {
+      let results = [''];
+      for (const ch of str) {
+        const pinyins = PINYIN_DICT[ch];
+        if (pinyins) {
+          const newResults = [];
+          for (const r of results) {
+            for (const py of pinyins) {
+              newResults.push(r + py);
+            }
+          }
+          results = newResults.slice(0, 4); // 限制组合数
+        } else if (/[a-zA-Z0-9]/.test(ch)) {
+          results = results.map(r => r + ch.toLowerCase());
+        }
+      }
+      return results;
+    }
+
+    function matchPinyinInitials(title, query) {
+      const initials = getFirstLetters(title);
+      const q = query.toLowerCase();
+      const idx = initials.indexOf(q);
+      if (idx !== -1) return { type: 'initials', start: idx, end: idx + q.length - 1 };
+      return null;
+    }
+
+    function matchFullPinyin(title, query) {
+      const pinyins = getFullPinyin(title);
+      const q = query.toLowerCase();
+      for (const py of pinyins) {
+        if (py.startsWith(q) || py.includes(q)) {
+          return { type: 'fullpinyin' };
+        }
+      }
+      return null;
+    }
+
+    function matchText(title, query) {
+      const idx = title.toLowerCase().indexOf(query.toLowerCase());
+      if (idx !== -1) return { type: 'text', start: idx, end: idx + query.length - 1 };
+      return null;
+    }
+
+    function editDistance(a, b) {
+      const m = a.length, n = b.length;
+      const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+      for (let i = 0; i <= m; i++) dp[i][0] = i;
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = Math.min(
+            dp[i-1][j] + 1,
+            dp[i][j-1] + 1,
+            dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)
+          );
+        }
+      }
+      return dp[m][n];
+    }
+
+    function fuzzyMatchPinyin(title, query) {
+      const initials = getFirstLetters(title);
+      const pinyins = getFullPinyin(title);
+      const q = query.toLowerCase();
+      if (q.length <= 2) return null;
+      if (editDistance(initials, q) <= 1) return { type: 'fuzzy-initials' };
+      for (const py of pinyins) {
+        if (py.length > 0 && editDistance(py.substring(0, q.length), q) <= 1) {
+          return { type: 'fuzzy-fullpinyin' };
+        }
+      }
+      return null;
+    }
+
+    function highlightMatch(title, matchResult) {
+      if (!matchResult) return escapeHtml(title);
+      if (matchResult.type === 'text') {
+        const before = title.substring(0, matchResult.start);
+        const match = title.substring(matchResult.start, matchResult.end + 1);
+        const after = title.substring(matchResult.end + 1);
+        return escapeHtml(before) + '<span class="highlight">' + escapeHtml(match) + '</span>' + escapeHtml(after);
+      }
+      if (matchResult.type === 'initials' && matchResult.start !== undefined) {
+        let result = '';
+        const chars = [...title];
+        let charIdx = 0;
+        for (let i = 0; i < chars.length; i++) {
+          if (PINYIN_DICT[chars[i]] || /[a-zA-Z0-9]/.test(chars[i])) {
+            if (charIdx >= matchResult.start && charIdx <= matchResult.end) {
+              result += '<span class="highlight">' + escapeHtml(chars[i]) + '</span>';
+            } else {
+              result += escapeHtml(chars[i]);
+            }
+            charIdx++;
+          } else {
+            result += escapeHtml(chars[i]);
+          }
+        }
+        return result;
+      }
+      return escapeHtml(title);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function renderResults(container, results) {
+      if (results.length === 0) {
+        container.innerHTML = '<div class="no-results">无匹配结果</div>';
+        return;
+      }
+      container.innerHTML = results.map(r => `
+        <div class="result-item">
+          <div>
+            <div class="result-title">${r.highlightedTitle}</div>
+            <div class="result-url">${escapeHtml(r.url)}</div>
+          </div>
+          <span class="match-info">${r.matchType}</span>
+        </div>
+      `).join('');
+    }
+
+    // Demo 1: 首字母搜索
+    document.getElementById('demo1-input').addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      const container = document.getElementById('demo1-results');
+      if (!query) { container.innerHTML = ''; return; }
+      const results = MOCK_BOOKMARKS
+        .map(bm => {
+          const m = matchPinyinInitials(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: highlightMatch(bm.title, m), matchType: '首字母' };
+          return null;
+        })
+        .filter(Boolean);
+      renderResults(container, results);
+    });
+
+    // Demo 2: 全拼搜索
+    document.getElementById('demo2-input').addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      const container = document.getElementById('demo2-results');
+      if (!query) { container.innerHTML = ''; return; }
+      const results = MOCK_BOOKMARKS
+        .map(bm => {
+          const m = matchFullPinyin(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: escapeHtml(bm.title), matchType: '全拼' };
+          return null;
+        })
+        .filter(Boolean);
+      renderResults(container, results);
+    });
+
+    // Demo 3: 混合搜索（文本 + 首字母 + 全拼）
+    document.getElementById('demo3-input').addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      const container = document.getElementById('demo3-results');
+      if (!query) { container.innerHTML = ''; return; }
+      const results = MOCK_BOOKMARKS
+        .map(bm => {
+          // 优先级：文本匹配 > 首字母 > 全拼
+          let m = matchText(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: highlightMatch(bm.title, m), matchType: '文本' };
+          m = matchText(bm.url, query);
+          if (m) return { ...bm, matchResult: null, highlightedTitle: escapeHtml(bm.title), matchType: 'URL' };
+          m = matchPinyinInitials(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: highlightMatch(bm.title, m), matchType: '首字母' };
+          m = matchFullPinyin(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: escapeHtml(bm.title), matchType: '全拼' };
+          return null;
+        })
+        .filter(Boolean);
+      renderResults(container, results);
+    });
+
+    // Demo 4: 模糊容错
+    document.getElementById('demo4-input').addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      const container = document.getElementById('demo4-results');
+      if (!query) { container.innerHTML = ''; return; }
+      const results = MOCK_BOOKMARKS
+        .map(bm => {
+          let m = matchText(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: highlightMatch(bm.title, m), matchType: '精确' };
+          m = matchPinyinInitials(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: highlightMatch(bm.title, m), matchType: '首字母' };
+          m = matchFullPinyin(bm.title, query);
+          if (m) return { ...bm, matchResult: m, highlightedTitle: escapeHtml(bm.title), matchType: '全拼' };
+          m = fuzzyMatchPinyin(bm.title, query);
+          if (m) return { ...bm, matchResult: null, highlightedTitle: escapeHtml(bm.title), matchType: '模糊' };
+          return null;
+        })
+        .filter(Boolean);
+      renderResults(container, results);
+    });
+  </script>
+</body>
+</html>
