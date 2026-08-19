@@ -11,6 +11,7 @@
 - [v1.4.0-多关键字搜索与删除功能](requirements/v1.4.0-multi-keyword-search-and-delete.md)
 - [v1.5.0-书签健康分析](requirements/v1.5.0-bookmark-health-analysis.md)
 - [v1.7.0-标签页分组搜索](requirements/v1.7.0-tab-groups-search.md)
+- [自动更新与自有服务器接入调研及 PRD](requirements/extension-update-and-server-integration-prd-2026-07-17.md)
 
 ### 调研报告 (research/)
 - [Content Script 注入限制调研](research/content-script-limitation-research.md)
@@ -30,4 +31,4 @@
 
 ---
 
-**最后更新**: 2026-03-28
+**最后更新**: 2026-07-17

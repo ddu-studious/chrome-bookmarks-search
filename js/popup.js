@@ -1189,7 +1189,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                   chrome.tabs.create({ url: item.url });
                   break;
                 case 'downloads':
-                  chrome.downloads.open(item.id);
+                  chrome.downloads.show(item.id);
                   break;
               }
               handled = true;

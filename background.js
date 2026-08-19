@@ -316,7 +316,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
       case 'downloads':
         if (item.id) {
-          chrome.downloads.open(item.id);
+          chrome.downloads.show(item.id);
         }
         break;
     }
@@ -1596,6 +1596,61 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ==================== 独立搜索窗口 ====================
+const SEARCH_WINDOW_BOUNDS_STORAGE_KEY = 'searchWindowBounds';
+const SEARCH_WINDOW_DEFAULT_WIDTH = 640;
+const SEARCH_WINDOW_DEFAULT_HEIGHT = 540;
+
+function isValidSearchWindowBounds(bounds) {
+  return bounds
+    && [bounds.width, bounds.height, bounds.left, bounds.top]
+      .every(value => Number.isFinite(value));
+}
+
+function getCenteredSearchWindowBounds(currentWindow) {
+  const width = SEARCH_WINDOW_DEFAULT_WIDTH;
+  const height = SEARCH_WINDOW_DEFAULT_HEIGHT;
+  return {
+    width,
+    height,
+    left: Math.round(currentWindow.left + (currentWindow.width - width) / 2),
+    top: Math.round(currentWindow.top + (currentWindow.height - height) / 2)
+  };
+}
+
+async function saveSearchWindowBounds(win) {
+  if (!isValidSearchWindowBounds(win)) return;
+
+  await chrome.storage.local.set({
+    [SEARCH_WINDOW_BOUNDS_STORAGE_KEY]: {
+      width: win.width,
+      height: win.height,
+      left: win.left,
+      top: win.top
+    }
+  });
+}
+
+async function getSearchWindowBounds(currentWindow) {
+  const stored = await chrome.storage.local.get(SEARCH_WINDOW_BOUNDS_STORAGE_KEY);
+  const bounds = stored[SEARCH_WINDOW_BOUNDS_STORAGE_KEY];
+  return isValidSearchWindowBounds(bounds)
+    ? bounds
+    : getCenteredSearchWindowBounds(currentWindow);
+}
+
+function isInvalidBoundsError(error) {
+  return error && /Invalid value for bounds|Bounds must be/i.test(error.message || '');
+}
+
+async function createSearchWindow(bounds) {
+  return chrome.windows.create({
+    url: 'search-window.html',
+    type: 'popup',
+    ...bounds,
+    focused: true
+  });
+}
+
 async function findExistingSearchWindow() {
   const searchUrl = chrome.runtime.getURL('search-window.html');
   const allWindows = await chrome.windows.getAll({ populate: true, windowTypes: ['popup'] });
@@ -1609,22 +1664,26 @@ async function findExistingSearchWindow() {
 
 async function openSearchWindow() {
   const currentWindow = await chrome.windows.getCurrent();
-  const w = 640, h = 540;
-  const left = Math.round(currentWindow.left + (currentWindow.width - w) / 2);
-  const top = Math.round(currentWindow.top + (currentWindow.height - h) / 2);
+  const bounds = await getSearchWindowBounds(currentWindow);
+  let win;
 
-  const win = await chrome.windows.create({
-    url: 'search-window.html',
-    type: 'popup',
-    width: w,
-    height: h,
-    left: left,
-    top: top,
-    focused: true
-  });
+  try {
+    win = await createSearchWindow(bounds);
+  } catch (error) {
+    if (!isInvalidBoundsError(error)) throw error;
+
+    await chrome.storage.local.remove(SEARCH_WINDOW_BOUNDS_STORAGE_KEY);
+    win = await createSearchWindow(getCenteredSearchWindowBounds(currentWindow));
+  }
 
   searchWindowId = win.id;
 }
+
+// 仅保存独立搜索窗口的已提交尺寸和位置；local 可避免跨设备同步无效的屏幕坐标。
+chrome.windows.onBoundsChanged.addListener((win) => {
+  if (win.id !== searchWindowId) return;
+  saveSearchWindowBounds(win).catch(() => {});
+});
 
 chrome.windows.onRemoved.addListener((windowId) => {
   if (windowId === searchWindowId) {
@@ -1650,6 +1709,7 @@ async function toggleSearchWindow() {
 
   if (existingWin) {
     if (existingWin.focused) {
+      await saveSearchWindowBounds(existingWin);
       await chrome.windows.remove(existingWin.id);
       searchWindowId = null;
     } else {
